@@ -1,0 +1,40 @@
+# Air Concepts Financial Admin Dashboard
+
+Internal financial admin dashboard for the Services, Commercial and HotAS entities. Xero is the ledger and source of truth for invoices. This repository currently holds the project skeleton only.
+
+## Prerequisites
+- Java 25
+- Node.js 26 (see `.nvmrc`)
+- Git
+- Docker, optional: only the Testcontainers PostgreSQL test needs it, and it skips without Docker
+
+## Layout
+- `backend/`: Spring Boot API, Maven Wrapper
+- `frontend/`: React, Vite and TypeScript app
+- `supabase/`: migrations (applied only through CI) and synthetic seed data
+- `infra/`: infrastructure as code placeholder
+- `docs/`: specs, ADRs, spikes and the API snapshot in `docs/api/openapi.json`
+- `scripts/`: check scripts
+
+## Run locally
+Set these in your shell or an untracked `.env.local` file. Never commit values.
+
+Backend, from `backend/`, with `SPRING_PROFILES_ACTIVE=local`:
+- `DATABASE_URL`, `DATABASE_USER`, `DATABASE_PASSWORD`: PostgreSQL connection
+- `SUPABASE_JWT_ISSUER_URI`, `SUPABASE_JWKS_URI`: Supabase Auth endpoints
+- `CORS_ALLOWED_ORIGINS`: optional, defaults to the Vite dev origin
+
+Run: `./mvnw -q spring-boot:run`
+
+Frontend, from `frontend/`:
+- `VITE_API_BASE_URL`, `VITE_SUPABASE_URL`: copy `.env.example` to `.env.local` and fill in
+
+Run: `npm ci` then `npm run dev`
+
+## Checks
+- `./scripts/check-all.sh`: backend verify, frontend checks and the API snapshot check
+- `./scripts/test-backend.sh` and `./scripts/test-frontend.sh`: each part alone
+- `npm run e2e` in `frontend/`: Playwright, not part of check-all
+
+## API contract
+`docs/api/openapi.json` and `frontend/src/api/generated/` are generated, never edited by hand. See `.agents/skills/api-contract/SKILL.md`.

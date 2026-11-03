@@ -1,0 +1,1 @@
+-- Seed data is synthetic only. Never load real customer, supplier or bank data here.

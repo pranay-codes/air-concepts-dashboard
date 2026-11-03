@@ -1,0 +1,6 @@
+# Placeholder values for tests only. The .invalid TLD never resolves, and no test connects to them.
+DATABASE_URL: jdbc:postgresql://localhost:5432/placeholder
+DATABASE_USER: placeholder
+DATABASE_PASSWORD: placeholder
+SUPABASE_JWT_ISSUER_URI: https://placeholder.invalid/auth/v1
+SUPABASE_JWKS_URI: https://placeholder.invalid/auth/v1/.well-known/jwks.json
