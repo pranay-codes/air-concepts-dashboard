@@ -25,9 +25,10 @@
 - Stack: Java 25, Spring Boot and Maven Wrapper; React, Vite and TypeScript; Supabase PostgreSQL and Auth; GitHub Actions on the Free plan; AWS Sydney (EC2 API, S3 and CloudFront frontend).
 - Domain: three entities (Services, Commercial, HotAS), each with its own Xero organisation; Xero is the ledger and source of truth for invoices; vWork stays the field-work tool.
 - Layout: /backend, /frontend, /supabase, /infra, /docs, /scripts.
-- TODO /backend not created: build `./mvnw -q -DskipTests package`; test `./mvnw -q test`; run `./mvnw -q spring-boot:run`.
-- TODO no backend linter chosen: lint command undefined.
-- TODO /frontend not created: build `npm run build --silent`; test `npm test --silent`; lint `npm run lint --silent`; run `npm run dev`.
+- Backend (/backend): build `./mvnw -q -B -DskipTests package`; test `./mvnw -q -B test`; verify `./mvnw -q -B verify`; run `./mvnw -q spring-boot:run` with SPRING_PROFILES_ACTIVE=local. Lint: none chosen; Enforcer runs in verify.
+- Frontend (/frontend): build `npm run build --silent`; test `npm test --silent`; lint `npm run lint --silent`; typecheck `npm run typecheck --silent`; run `npm run dev`; e2e `npm run e2e` (not in check-all).
+- API contract: regenerate the snapshot with `./mvnw -q test -Dopenapi.update=true` (/backend), then `npm run api:generate` (/frontend). Check with `npm run api:check`.
+- Check all: `./scripts/check-all.sh` (backend verify, frontend checks, api:check).
 - Prefer quiet output modes; remove a TODO only after the command has run successfully.
 
 ## 5. Workflow
