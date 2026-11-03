@@ -1,1 +1,27 @@
+# Secrets: env files are never committed, except the example templates
 .env
+.env.*
+!.env.example
+!.env.EXAMPLE
+
+# Build output
+target/
+node_modules/
+dist/
+build/
+
+# Test reports
+test-results/
+playwright-report/
+coverage/
+surefire-reports/
+failsafe-reports/
+
+# Infrastructure parameter files with real values stay local
+infra/params/*.local.json
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.DS_Store
