@@ -12,7 +12,7 @@ Versions checked on 4 November 2026 against the sources listed. Re-check before 
 | Maven Enforcer plugin | 3.7.0 | Maven Central metadata: latest release |
 | Testcontainers | 2.0.5 | Managed by Spring Boot 4.1.2 BOM |
 | PostgreSQL JDBC | 42.7.14 | Managed by Spring Boot 4.1.2 BOM |
-| Node.js | 26 (Active LTS) | nodejs.org release index: 26.13.0 is the newest LTS. Node 24 is Maintenance, 25 is end of life |
+| Node.js | 26 | nodejs.org release index: 26.13.0 is labelled Latest LTS. 25 is end of life. Active vs Maintenance status not confirmed from the schedule page |
 | React, react-dom | 19.3.1 | npm registry |
 | Vite | 8.3.5 | npm registry |
 | @vitejs/plugin-react | 6.2.1 | npm registry (peer: vite ^8) |
@@ -31,7 +31,7 @@ Versions checked on 4 November 2026 against the sources listed. Re-check before 
 
 ## Decisions and deferrals
 - **TypeScript 7 is deferred.** 7.0.2 is the newest stable release, but typescript-eslint 8.72.1 declares a peer range of `<6.1.0` and cannot load the TypeScript 7 native compiler. Revisit when typescript-eslint supports it.
-- **Node 26 is pinned in `.nvmrc`** and `engines`. Node 26 is the Active LTS line.
+- **Node 26 is pinned in `.nvmrc`** and `engines`. It is the newest LTS line. Confirm its Active status in the Node release schedule before relying on it.
 - **Supabase CLI is not installed**, so `supabase init` and `supabase/config.toml` are not created. TODO for the CI prompt: install the CLI in CI and create `config.toml` there.
 
 ## Unverified
