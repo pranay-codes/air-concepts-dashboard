@@ -44,7 +44,7 @@
 
 ## 6. Testing
 - Use JUnit and Mockito, Spring Boot Test, Vitest with React Testing Library, and Playwright for key journeys.
-- Run integration tests on a disposable PostgreSQL; never let destructive tests touch hosted Supabase.
+- Run integration tests on a disposable PostgreSQL. Integration tests may also run against the Supabase Test project after deploy, but only read-only (supabase/tests/). Destructive tests never touch hosted Supabase (ADR-003).
 - Cover negative and security cases.
 - Fix the code; never delete or weaken a test to get green.
 
@@ -58,7 +58,7 @@
 - Never read, print or commit secrets, .env files or production values.
 
 ## 8. Database migrations
-- Treat CI as the only path to hosted databases.
+- Treat CI as the only path to hosted databases. CI applies migrations to the Supabase Test project on merge to main, then runs read-only integration tests against it (ADR-003).
 - Write migration files; never connect to a hosted Supabase project, except where CLAUDE.md allows read-only MCP on Test.
 - Never run supabase db push, supabase link, supabase db reset against a linked project or supabase migration repair; never use Supabase MCP write tools.
 - Keep migrations forward-only and immutable; make changes as new migrations.
