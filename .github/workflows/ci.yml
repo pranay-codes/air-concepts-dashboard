@@ -88,7 +88,10 @@ jobs:
         working-directory: frontend
       - name: Start API
         working-directory: backend
-        run: ./mvnw -q -B spring-boot:start
+        # Compile first: spring-boot:start finds the main class in target/classes, which a clean checkout lacks.
+        run: |
+          ./mvnw -q -B -DskipTests compile
+          ./mvnw -q -B spring-boot:start
       - name: Wait for API
         run: |
           for _ in $(seq 1 60); do
