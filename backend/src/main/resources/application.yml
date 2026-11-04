@@ -6,11 +6,16 @@ spring:
     url: ${DATABASE_URL}
     username: ${DATABASE_USER}
     password: ${DATABASE_PASSWORD}
+    hikari:
+      # Caps connections so concurrent requests cannot exhaust the database.
+      maximum-pool-size: 5
 
 dashboard:
   supabase:
     jwt-issuer-uri: ${SUPABASE_JWT_ISSUER_URI}
     jwks-uri: ${SUPABASE_JWKS_URI}
+    # Supabase signs user access tokens for the "authenticated" audience by default.
+    jwt-audience: ${SUPABASE_JWT_AUDIENCE:authenticated}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
 
@@ -28,6 +33,8 @@ spring:
   config:
     activate:
       on-profile: local
+    # Run from backend/ so the relative path finds the repo-root .env. optional: keeps startup working without it.
+    import: optional:file:../.env[.properties]
 logging:
   level:
     com.airconcepts: debug

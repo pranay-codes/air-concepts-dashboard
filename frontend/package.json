@@ -18,6 +18,7 @@
     "api:check": "node scripts/api-types.mjs --check"
   },
   "dependencies": {
+    "@supabase/supabase-js": "2.118.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },

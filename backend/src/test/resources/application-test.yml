@@ -1,6 +1,8 @@
-# Placeholder values for tests only. The .invalid TLD never resolves, and no test connects to them.
-DATABASE_URL: jdbc:postgresql://localhost:5432/placeholder
+# Placeholder values for tests only. Hosts use the Supabase shape so the Test-project guard passes,
+# and no test connects to them. Nothing here resolves to a real project.
+DATABASE_URL: jdbc:postgresql://placeholder.supabase.co:5432/postgres?sslmode=require
 DATABASE_USER: placeholder
 DATABASE_PASSWORD: placeholder
-SUPABASE_JWT_ISSUER_URI: https://placeholder.invalid/auth/v1
-SUPABASE_JWKS_URI: https://placeholder.invalid/auth/v1/.well-known/jwks.json
+SUPABASE_JWT_ISSUER_URI: https://placeholder.supabase.co/auth/v1
+SUPABASE_JWKS_URI: https://placeholder.supabase.co/auth/v1/.well-known/jwks.json
+SUPABASE_TEST_PROJECT_REF: placeholder
