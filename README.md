@@ -17,17 +17,20 @@ Internal financial admin dashboard for the Services, Commercial and HotAS entiti
 - `scripts/`: check scripts
 
 ## Run locally
-Set these in your shell or an untracked `.env.local` file. Never commit values.
+Copy `.env.EXAMPLE` in the repo root to `.env` and fill in. `.env` is untracked. Never commit values. The backend and the frontend both read it.
 
 Backend, from `backend/`, with `SPRING_PROFILES_ACTIVE=local`:
 - `DATABASE_URL`, `DATABASE_USER`, `DATABASE_PASSWORD`: PostgreSQL connection
 - `SUPABASE_JWT_ISSUER_URI`, `SUPABASE_JWKS_URI`: Supabase Auth endpoints
+- `SUPABASE_TEST_PROJECT_REF`: the Test project ref. Startup fails unless the Supabase and database settings point at it.
+- `SUPABASE_JWT_AUDIENCE`: optional, defaults to `authenticated`
 - `CORS_ALLOWED_ORIGINS`: optional, defaults to the Vite dev origin
+- Environment variables set in your shell take precedence over `.env`
 
 Run: `./mvnw -q spring-boot:run`
 
 Frontend, from `frontend/`:
-- `VITE_API_BASE_URL`, `VITE_SUPABASE_URL`: copy `.env.example` to `.env.local` and fill in
+- `VITE_API_BASE_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`: read from the root `.env`
 
 Run: `npm ci` then `npm run dev`
 

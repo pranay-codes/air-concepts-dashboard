@@ -1,9 +1,14 @@
 export interface AppEnv {
   apiBaseUrl: string;
   supabaseUrl: string;
+  supabasePublishableKey: string;
 }
 
-const REQUIRED = ["VITE_API_BASE_URL", "VITE_SUPABASE_URL"] as const;
+const REQUIRED = [
+  "VITE_API_BASE_URL",
+  "VITE_SUPABASE_URL",
+  "VITE_SUPABASE_PUBLISHABLE_KEY",
+] as const;
 
 /** Throws one error that names every missing setting. Takes a plain object so tests need no build env. */
 export function readEnv(source: Record<string, string | undefined>): AppEnv {
@@ -16,6 +21,7 @@ export function readEnv(source: Record<string, string | undefined>): AppEnv {
   return {
     apiBaseUrl: source.VITE_API_BASE_URL?.trim() ?? "",
     supabaseUrl: source.VITE_SUPABASE_URL?.trim() ?? "",
+    supabasePublishableKey: source.VITE_SUPABASE_PUBLISHABLE_KEY?.trim() ?? "",
   };
 }
 
