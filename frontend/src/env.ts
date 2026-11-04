@@ -10,7 +10,7 @@ export function readEnv(source: Record<string, string | undefined>): AppEnv {
   const missing = REQUIRED.filter((name) => !source[name]?.trim());
   if (missing.length > 0) {
     throw new Error(
-      `Missing required frontend settings: ${missing.join(", ")}. Copy .env.example to .env.local and set them.`,
+      `Missing required frontend settings: ${missing.join(", ")}. Copy .env.EXAMPLE in the repo root to .env and set them.`,
     );
   }
   return {
