@@ -38,3 +38,16 @@ Run: `npm ci` then `npm run dev`
 
 ## API contract
 `docs/api/openapi.json` and `frontend/src/api/generated/` are generated, never edited by hand. See `.agents/skills/api-contract/SKILL.md`.
+
+## Database migrations
+Supabase CLI is the only migration tool. Flyway is not used (ADR-002).
+
+- Create a migration from the repository root: `supabase migration new <name>`, then edit the new file in `supabase/migrations/`.
+- Never edit a migration after it is pushed. Fix forward with a new migration. Roll back with a compensating migration, not a manual change.
+- Migrations are tested on the Supabase Test project (ADR-003). There is no separate dev project. Credentials stay in GitHub environment secrets.
+- Schema integration tests live in `supabase/tests/`. Pull requests run them on a throwaway database. After merge they run read-only against Test.
+- The seed is synthetic only and re-runnable. Never load real customer, supplier or bank data.
+- Pull requests run the `validate` job in `.github/workflows/supabase-migrations.yml`. It uses its own throwaway database and never reaches hosted Test.
+- Merging to `main` runs `deploy-test` in the `test` environment. It applies only new migrations with `supabase db push`, then checks the migration list. The seed is not applied to Test.
+- CI never runs `supabase db reset` against a linked project and never drops or resets Test.
+- CI applies new migrations to Test on merge to `main`, then checks the migration list and runs the read-only integration tests. Live is changed only through the release workflow.
