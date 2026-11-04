@@ -1,0 +1,67 @@
+# CI-001: quality and security checks on pull requests. Test environment only.
+# No AWS credentials, no deployment, and no secrets are used here.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (JDK 25)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+      # Testcontainers starts a disposable PostgreSQL here. No test reaches a hosted project.
+      - run: ./mvnw -q -B verify
+
+  frontend:
+    name: Frontend (Node LTS)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --silent
+      - run: npm run lint --silent
+      - run: npm run typecheck --silent
+      - run: npm test --silent
+      - run: npm run build --silent
+      - run: npm run api:check --silent
+      - run: npm audit --audit-level=high
+
+  security:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history, so gitleaks can scan every commit in the pull request.
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
