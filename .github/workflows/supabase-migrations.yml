@@ -21,9 +21,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: supabase/setup-cli@v1
-        with:
-          version: ${{ env.SUPABASE_CLI_VERSION }}
+      - name: Install Supabase CLI
+        run: |
+          npm install --prefix "$RUNNER_TEMP/supabase-cli" "supabase@$SUPABASE_CLI_VERSION"
+          echo "$RUNNER_TEMP/supabase-cli/node_modules/.bin" >> "$GITHUB_PATH"
+          supabase --version
 
       - name: Start throwaway local database
         run: supabase db start
@@ -64,9 +66,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: supabase/setup-cli@v1
-        with:
-          version: ${{ env.SUPABASE_CLI_VERSION }}
+      - name: Install Supabase CLI
+        run: |
+          npm install --prefix "$RUNNER_TEMP/supabase-cli" "supabase@$SUPABASE_CLI_VERSION"
+          echo "$RUNNER_TEMP/supabase-cli/node_modules/.bin" >> "$GITHUB_PATH"
+          supabase --version
 
       - name: Link Test project
         run: supabase link --project-ref "$SUPABASE_TEST_PROJECT_REF"
