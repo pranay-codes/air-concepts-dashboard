@@ -77,13 +77,14 @@ jobs:
         run: supabase --version
 
       - name: Link Test project
-        run: supabase link --project-ref "$SUPABASE_TEST_PROJECT_REF"
+        run: supabase link --project-ref "$SUPABASE_TEST_PROJECT_REF" --yes
 
+      # db push and migration list default to the local database; --remote targets the linked Test project.
       - name: Apply new migrations to Test
-        run: supabase db push
+        run: supabase db push --remote --yes
 
       - name: Confirm Git and Test migration histories match
-        run: supabase migration list
+        run: supabase migration list --remote
 
       - name: Run schema integration tests against Test (read-only)
         run: supabase db query --remote --read-only -f supabase/tests/schema_integration.sql
