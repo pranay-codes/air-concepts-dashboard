@@ -39,6 +39,12 @@ Run: `npm ci` then `npm run dev`
 - `./scripts/test-backend.sh` and `./scripts/test-frontend.sh`: each part alone
 - `npm run e2e` in `frontend/`: Playwright, not part of check-all
 
+## Run every test (one command)
+- `./scripts/test-all.sh`: backend tests, frontend checks, then Playwright. It starts the API with the `local` profile, so it reads the root `.env`, and stops it when done.
+- Run it from the repo root with `.env` filled in. The Playwright sign-in test calls the API on port 8080, so the API must start.
+- Testcontainers PostgreSQL tests need Docker. Locally they skip when Docker is not running. In GitHub Actions (`CI=true`) they fail instead, so they cannot pass silently.
+- Pull requests run the `e2e` job in `.github/workflows/ci.yml`. It starts the API with placeholder settings (the `ci` profile) and runs Playwright. It never reaches a hosted project.
+
 ## API contract
 `docs/api/openapi.json` and `frontend/src/api/generated/` are generated, never edited by hand. See `.agents/skills/api-contract/SKILL.md`.
 

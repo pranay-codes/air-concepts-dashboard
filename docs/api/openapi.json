@@ -26,6 +26,24 @@
           }
         }
       }
+    },
+    "/api/hello" : {
+      "get" : {
+        "tags" : [ "hello-controller" ],
+        "operationId" : "hello",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HelloResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components" : {
@@ -39,6 +57,14 @@
           "role" : {
             "type" : "string",
             "enum" : [ "DIRECTOR", "FINANCIAL_ADMIN", "STANDARD_USER" ]
+          }
+        }
+      },
+      "HelloResponse" : {
+        "type" : "object",
+        "properties" : {
+          "message" : {
+            "type" : "string"
           }
         }
       }
