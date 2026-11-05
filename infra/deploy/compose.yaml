@@ -1,0 +1,82 @@
+name: air-concepts-${ENVIRONMENT:?Select test or live}
+
+services:
+  api:
+    image: ${BACKEND_REPOSITORY_URI:?Set ECR URI}@sha256:${BACKEND_IMAGE_DIGEST:?Set 64-character digest without prefix}
+    platform: linux/arm64
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    env_file:
+      - path: ./runtime/backend.env
+        required: true
+        format: raw
+    environment:
+      # Spring's test profile disables database health checks; use hosted here.
+      SPRING_PROFILES_ACTIVE: hosted
+      JAVA_TOOL_OPTIONS: >-
+        -XX:InitialRAMPercentage=10 -XX:MaxRAMPercentage=50
+        -XX:MaxMetaspaceSize=128m -XX:MaxDirectMemorySize=32m
+        -Xss512k -XX:+ExitOnOutOfMemoryError
+    mem_limit: ${API_MEMORY_LIMIT:-512m}
+    cpus: 1.5
+    pids_limit: 256
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    stop_grace_period: 30s
+    healthcheck:
+      test:
+        - CMD
+        - /bin/bash
+        - -ec
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/8080;
+          printf 'GET /actuator/health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3;
+          IFS= read -r status <&3;
+          [[ "$$status" == 'HTTP/1.1 200'* ]]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    networks: [api-internal, api-egress]
+
+  caddy:
+    # CI-002 selects and verifies an ARM64 Caddy release digest before release.
+    image: caddy@sha256:${CADDY_IMAGE_DIGEST:?Set verified multi-arch or ARM64 digest}
+    platform: linux/arm64
+    environment:
+      API_HOSTNAME: ${API_HOSTNAME:?Set environment API hostname}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    mem_limit: 96m
+    cpus: 0.5
+    pids_limit: 128
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    networks: [api-internal, caddy-egress]
+
+networks:
+  api-internal:
+    internal: true
+  api-egress: {}
+  caddy-egress: {}
+
+volumes:
+  caddy-data: {}
+  caddy-config: {}

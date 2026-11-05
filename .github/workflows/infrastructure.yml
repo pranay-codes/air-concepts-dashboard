@@ -1,0 +1,84 @@
+name: Infrastructure validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ["infra/**", ".github/workflows/infrastructure.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned Docker Compose
+        # Same release and checksum check as the host bootstrap. Installed under /usr/local so it
+        # takes precedence over the runner's copy and is found even when the tests set DOCKER_CONFIG.
+        env:
+          COMPOSE_VERSION: v2.40.3
+        run: |
+          set -euo pipefail
+          work_dir=$(mktemp -d)
+          cd "$work_dir"
+          base_url="https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}"
+          curl --fail --silent --show-error --location --retry 3 -o docker-compose-linux-x86_64 "$base_url/docker-compose-linux-x86_64"
+          curl --fail --silent --show-error --location --retry 3 -o checksums.txt "$base_url/checksums.txt"
+          grep -E ' \*?docker-compose-linux-x86_64$' checksums.txt | sha256sum --check -
+          sudo install -D -m 0755 docker-compose-linux-x86_64 /usr/local/lib/docker/cli-plugins/docker-compose
+          docker compose version
+      - run: python -m pip install -q -r infra/scripts/requirements-infrastructure.txt
+      - run: python -m unittest discover -s infra/scripts -p test_infrastructure.py -q
+      - run: cfn-lint infra/cloudformation/infrastructure.json --regions ap-southeast-2
+      - name: Validate Compose structure without secrets or images
+        # Prevent reading the runtime secret file during validation.
+        env:
+          ENVIRONMENT: test
+          BACKEND_REPOSITORY_URI: 000000000000.dkr.ecr.ap-southeast-2.amazonaws.com/example
+          BACKEND_IMAGE_DIGEST: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          CADDY_IMAGE_DIGEST: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+          API_HOSTNAME: api.example.invalid
+        # Compose requires the env_file to exist, even with --no-env-resolution. Validate a temporary copy
+        # with a synthetic placeholder, so the runner never needs or reads the real runtime secret file.
+        run: |
+          set -euo pipefail
+          validate_dir=$(mktemp -d)
+          trap 'rm -rf "$validate_dir"' EXIT
+          cp infra/deploy/compose.yaml infra/deploy/Caddyfile "$validate_dir/"
+          mkdir "$validate_dir/runtime"
+          printf '%s\n' 'DATABASE_PASSWORD=synthetic-placeholder' > "$validate_dir/runtime/backend.env"
+          docker compose -f "$validate_dir/compose.yaml" config --no-env-resolution --quiet
+      - name: Prove the container receives literal env_file values
+        # Runs even if earlier steps fail, so the runtime evidence is always recorded.
+        if: always()
+        # Disposable container, synthetic value only. Uses the same raw env_file format as the API.
+        # Compose config output escapes '$', so the running container is the real check.
+        run: |
+          set -euo pipefail
+          probe_dir=$(mktemp -d)
+          trap 'rm -rf "$probe_dir"' EXIT
+          cd "$probe_dir"
+          mkdir runtime
+          cat > runtime/backend.env <<'ENV'
+          DATABASE_PASSWORD=synthetic-$UNDEFINED-${UNDEFINED}-"quoted"-'single'
+          ENV
+          cat > probe.yaml <<'YAML'
+          services:
+            probe:
+              image: busybox:1.37
+              env_file:
+                - path: ./runtime/backend.env
+                  required: true
+                  format: raw
+              command: ["printenv", "DATABASE_PASSWORD"]
+          YAML
+          cat > expected.txt <<'EXPECTED'
+          synthetic-$UNDEFINED-${UNDEFINED}-"quoted"-'single'
+          EXPECTED
+          docker compose -f probe.yaml run --rm -T probe > actual.txt
+          cmp expected.txt actual.txt

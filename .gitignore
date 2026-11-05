@@ -23,6 +23,7 @@ infra/params/*.local.json
 # Python tooling
 __pycache__/
 .pytest_cache/
+.venv-infra/
 
 # IDE
 .idea/
