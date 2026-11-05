@@ -17,6 +17,21 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install pinned Docker Compose
+        # Same release and checksum check as the host bootstrap. Installed under /usr/local so it
+        # takes precedence over the runner's copy and is found even when the tests set DOCKER_CONFIG.
+        env:
+          COMPOSE_VERSION: v2.40.3
+        run: |
+          set -euo pipefail
+          work_dir=$(mktemp -d)
+          cd "$work_dir"
+          base_url="https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}"
+          curl --fail --silent --show-error --location --retry 3 -o docker-compose-linux-x86_64 "$base_url/docker-compose-linux-x86_64"
+          curl --fail --silent --show-error --location --retry 3 -o checksums.txt "$base_url/checksums.txt"
+          grep -E ' \*?docker-compose-linux-x86_64$' checksums.txt | sha256sum --check -
+          sudo install -D -m 0755 docker-compose-linux-x86_64 /usr/local/lib/docker/cli-plugins/docker-compose
+          docker compose version
       - run: python -m pip install -q -r infra/scripts/requirements-infrastructure.txt
       - run: python -m unittest discover -s infra/scripts -p test_infrastructure.py -q
       - run: cfn-lint infra/cloudformation/infrastructure.json --regions ap-southeast-2

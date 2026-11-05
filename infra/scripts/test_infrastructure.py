@@ -283,6 +283,15 @@ class InfrastructureTests(unittest.TestCase):
         # Raw format prevents Compose from interpolating dollars or stripping quotes.
         self.assertIn('format: raw', (ROOT / 'infra/deploy/compose.yaml').read_text())
 
+    def test_INF002_ci_pins_the_compose_release_used_by_bootstrap(self):
+        # CI must exercise the same Compose release as the host bootstrap, not whatever the runner ships.
+        version = self.template['Parameters']['ComposeVersion']['Default']
+        workflow = (ROOT / '.github/workflows/infrastructure.yml').read_text()
+        self.assertIn(f'COMPOSE_VERSION: {version}', workflow)
+        self.assertIn('docker-compose-linux-x86_64', workflow)
+        self.assertIn('sha256sum --check', workflow)
+        self.assertIn('/usr/local/lib/docker/cli-plugins/docker-compose', workflow)
+
 
 if __name__ == '__main__':
     unittest.main()
