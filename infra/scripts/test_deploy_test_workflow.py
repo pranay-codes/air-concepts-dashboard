@@ -146,6 +146,20 @@ class DeployTestWorkflowTests(unittest.TestCase):
         self.assertIn("VITE_API_BASE_URL", self.text)
         self.assertIn("vars.TEST_BUCKET", self.text)
 
+    def test_frontend_build_stops_when_a_public_setting_is_missing(self):
+        # Missing parameters used to build a blank bundle that failed at page load, with the run still green.
+        steps = self.jobs["deploy-frontend"]["steps"]
+        names = [step.get("name", "") for step in steps]
+        read_step = steps[names.index("Read the public frontend settings from Test Parameter Store")]
+        build_index = names.index("Build the frontend")
+        self.assertLess(names.index(read_step["name"]), build_index)
+        script = read_step["run"]
+        for key in ("VITE_API_BASE_URL", "VITE_SUPABASE_URL", "VITE_SUPABASE_PUBLISHABLE_KEY"):
+            with self.subTest(key=key):
+                self.assertIn(key, script)
+        self.assertIn("Missing frontend setting", script)
+        self.assertIn("exit 1", script)
+
     def test_smoke_checks_frontend_and_api_health(self):
         self.assertIn("actuator/health", self.text)
         self.assertIn("vars.TEST_FRONTEND_URL", self.text)

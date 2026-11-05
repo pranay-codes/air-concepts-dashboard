@@ -128,6 +128,7 @@ jobs:
           set -euo pipefail
           aws ssm get-parameters-by-path --path /air-concepts/test/frontend/ --recursive \
             --query 'Parameters[].[Name,Value]' --output text > frontend-params.tsv
+          found=" "
           while IFS=$'\t' read -r name value; do
             case "$name" in
               /air-concepts/test/frontend/api-base-url) key=VITE_API_BASE_URL ;;
@@ -136,8 +137,16 @@ jobs:
               *) continue ;;
             esac
             echo "$key=$value" >> "$GITHUB_ENV"
+            found="$found$key "
           done < frontend-params.tsv
           rm -f frontend-params.tsv
+          # A missing parameter would otherwise build a bundle with blank settings that fails in the browser.
+          for key in VITE_API_BASE_URL VITE_SUPABASE_URL VITE_SUPABASE_PUBLISHABLE_KEY; do
+            case "$found" in
+              *" $key "*) ;;
+              *) echo "Missing frontend setting: $key. Set its /air-concepts/test/frontend/ parameter, then re-run." >&2; exit 1 ;;
+            esac
+          done
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
