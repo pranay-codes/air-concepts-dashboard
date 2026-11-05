@@ -74,6 +74,13 @@ class DeployTestWorkflowTests(unittest.TestCase):
             self.text.index("docker/build-push-action"),
         )
 
+    def test_image_tag_is_unique_per_run_attempt(self):
+        # ECR tags are immutable, and a re-run or a manual run on the same commit must not reuse a tag.
+        tag_lines = [line for line in self.text.splitlines() if "tags:" in line and "ECR_REPOSITORY_URI" in line]
+        self.assertEqual(len(tag_lines), 1)
+        self.assertIn("github.run_id", tag_lines[0])
+        self.assertIn("github.run_attempt", tag_lines[0])
+
     def test_images_are_deployed_by_digest_never_by_latest(self):
         self.assertNotIn(":latest", self.text)
         self.assertIn("needs.build.outputs.image_digest", self.text)
