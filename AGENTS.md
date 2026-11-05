@@ -1,5 +1,9 @@
 # Air Concepts Financial Admin Dashboard: Agent Rules
 
+## Learned Rules
+- Keep infrastructure deployment guidance direct and reusable. Separate identity-management prerequisites from CloudFormation deployment steps; do not turn deployment help into an extended IAM Identity Center setup walkthrough unless the human requests it.
+- For this INF-002 session, read the linked Notion task directly and waive the local spec-pack gate as instructed by the human. Build one reusable Test/Live CloudFormation blueprint with environment configuration; this does not authorise Live deployment or access.
+
 ## 1. Core rules
 - Change one task at a time. One branch and one session per task. — Raise unrelated findings as a new task; do not fix them here.
 - Make a small plan before coding. List files and tests, and wait for human approval when auth, Xero, migrations or entity isolation are involved. — Edit nothing until the plan exists.

@@ -1,0 +1,1531 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "INF-002 Air Concepts isolated Test or Live hosting blueprint. Human provisioning review required; application release belongs to CI-002.",
+  "Parameters": {
+    "Environment": {
+      "Type": "String",
+      "Default": "test",
+      "AllowedValues": [
+        "test",
+        "live"
+      ]
+    },
+    "ExpectedAccountId": {
+      "Type": "String",
+      "AllowedPattern": "[0-9]{12}",
+      "Description": "Required non-secret account guard; checked before resource creation."
+    },
+    "VpcId": {
+      "Type": "AWS::EC2::VPC::Id"
+    },
+    "PublicSubnetId": {
+      "Type": "AWS::EC2::Subnet::Id",
+      "Description": "Existing public subnet with Internet Gateway default route."
+    },
+    "ApiHostname": {
+      "Type": "String",
+      "AllowedPattern": "(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}",
+      "Description": "API DNS name for Caddy; no scheme or path."
+    },
+    "ApiHostedZoneId": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "(^$|Z[A-Z0-9]+)",
+      "Description": "Optional existing Route 53 public zone; otherwise use external DNS."
+    },
+    "InstanceType": {
+      "Type": "String",
+      "Default": "environment-default",
+      "AllowedValues": [
+        "environment-default",
+        "t4g.micro",
+        "t4g.small",
+        "t4g.medium"
+      ]
+    },
+    "RootVolumeSize": {
+      "Type": "Number",
+      "Default": 0,
+      "AllowedValues": [
+        0,
+        10,
+        20,
+        30,
+        40,
+        60,
+        80,
+        100
+      ],
+      "Description": "0 selects Test 10 GiB / Live 20 GiB. Never shrink existing EBS."
+    },
+    "AmiId": {
+      "Type": "AWS::EC2::Image::Id",
+      "Description": "Tested AL2023 ARM64 AMI ID (ami-...) pinned per environment. No default and no moving 'latest' lookup: changing it is a reviewed update that replaces the instance."
+    },
+    "CpuCredits": {
+      "Type": "String",
+      "Default": "standard",
+      "AllowedValues": [
+        "standard",
+        "unlimited"
+      ],
+      "Description": "Standard avoids surplus-credit charges; review costs before unlimited."
+    },
+    "ExistingRepositoryName": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "(^$|[a-z0-9]+([._/-][a-z0-9]+)*)",
+      "Description": "Optional existing ECR repository in this account/region. Empty creates environment-specific repository."
+    },
+    "SsmKmsKeyArn": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "(^$|arn:aws:kms:ap-southeast-2:[0-9]{12}:key/[a-zA-Z0-9-]+)",
+      "Description": "Optional environment-specific customer-managed key; key policy must permit role."
+    },
+    "AlarmEmail": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "(^$|[^@\\s]+@[^@\\s]+\\.[^@\\s]+)",
+      "Description": "Optional SNS email; owner confirms subscription."
+    },
+    "FrontendHostname": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "(^$|([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63})",
+      "Description": "Optional for Test; required for Live. Set DNS externally."
+    },
+    "FrontendCertificateArn": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "(^$|arn:aws:acm:us-east-1:[0-9]{12}:certificate/[a-zA-Z0-9-]+)",
+      "Description": "Issued us-east-1 ACM certificate covering FrontendHostname."
+    },
+    "ComposeVersion": {
+      "Type": "String",
+      "Default": "v2.40.3",
+      "AllowedPattern": "v2\\.[0-9]+\\.[0-9]+",
+      "Description": "Pinned Compose release; bootstrap verifies published SHA256 checksum."
+    },
+    "CloudFrontPriceClass": {
+      "Type": "String",
+      "Default": "PriceClass_All",
+      "AllowedValues": [
+        "PriceClass_All",
+        "PriceClass_200",
+        "PriceClass_100"
+      ],
+      "Description": "All includes Australia/NZ edge locations; restricting price class can increase latency."
+    }
+  },
+  "Mappings": {
+    "Sizing": {
+      "test": {
+        "InstanceType": "t4g.micro",
+        "RootVolumeSize": "10",
+        "Opposite": "live"
+      },
+      "live": {
+        "InstanceType": "t4g.small",
+        "RootVolumeSize": "20",
+        "Opposite": "test"
+      }
+    }
+  },
+  "Rules": {
+    "SydneyOnly": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Equals": [
+              {
+                "Ref": "AWS::Region"
+              },
+              "ap-southeast-2"
+            ]
+          },
+          "AssertDescription": "Use Sydney ap-southeast-2 only."
+        }
+      ]
+    },
+    "ExpectedAccount": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Equals": [
+              {
+                "Ref": "AWS::AccountId"
+              },
+              {
+                "Ref": "ExpectedAccountId"
+              }
+            ]
+          },
+          "AssertDescription": "Account must match explicitly selected account."
+        }
+      ]
+    },
+    "SubnetVpc": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::EachMemberEquals": [
+              {
+                "Fn::ValueOfAll": [
+                  "AWS::EC2::Subnet::Id",
+                  "VpcId"
+                ]
+              },
+              {
+                "Ref": "VpcId"
+              }
+            ]
+          },
+          "AssertDescription": "Every subnet parameter must belong to selected VPC."
+        }
+      ]
+    },
+    "TestInstanceSize": {
+      "RuleCondition": {
+        "Fn::Equals": [
+          {
+            "Ref": "Environment"
+          },
+          "test"
+        ]
+      },
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Contains": [
+              [
+                "environment-default",
+                "t4g.micro",
+                "t4g.small"
+              ],
+              {
+                "Ref": "InstanceType"
+              }
+            ]
+          },
+          "AssertDescription": "Test supports micro or small."
+        }
+      ]
+    },
+    "LiveInstanceSize": {
+      "RuleCondition": {
+        "Fn::Equals": [
+          {
+            "Ref": "Environment"
+          },
+          "live"
+        ]
+      },
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Contains": [
+              [
+                "environment-default",
+                "t4g.small",
+                "t4g.medium"
+              ],
+              {
+                "Ref": "InstanceType"
+              }
+            ]
+          },
+          "AssertDescription": "Live supports small or medium."
+        },
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "RootVolumeSize"
+                  },
+                  10
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "Live root disk must be at least 20 GiB."
+        }
+      ]
+    },
+    "CustomFrontendCertificate": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Or": [
+              {
+                "Fn::And": [
+                  {
+                    "Fn::Equals": [
+                      {
+                        "Ref": "FrontendHostname"
+                      },
+                      ""
+                    ]
+                  },
+                  {
+                    "Fn::Equals": [
+                      {
+                        "Ref": "FrontendCertificateArn"
+                      },
+                      ""
+                    ]
+                  }
+                ]
+              },
+              {
+                "Fn::And": [
+                  {
+                    "Fn::Not": [
+                      {
+                        "Fn::Equals": [
+                          {
+                            "Ref": "FrontendHostname"
+                          },
+                          ""
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "Fn::Not": [
+                      {
+                        "Fn::Equals": [
+                          {
+                            "Ref": "FrontendCertificateArn"
+                          },
+                          ""
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "Provide frontend hostname and certificate together."
+        }
+      ]
+    },
+    "LiveFrontendDomain": {
+      "RuleCondition": {
+        "Fn::Equals": [
+          {
+            "Ref": "Environment"
+          },
+          "live"
+        ]
+      },
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "FrontendHostname"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "Live requires its own frontend hostname and issued ACM certificate."
+        }
+      ]
+    }
+  },
+  "Conditions": {
+    "DefaultInstanceType": {
+      "Fn::Equals": [
+        {
+          "Ref": "InstanceType"
+        },
+        "environment-default"
+      ]
+    },
+    "DefaultRootVolumeSize": {
+      "Fn::Equals": [
+        {
+          "Ref": "RootVolumeSize"
+        },
+        0
+      ]
+    },
+    "ManageApiDns": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "ApiHostedZoneId"
+            },
+            ""
+          ]
+        }
+      ]
+    },
+    "ExistingRepositoryUri": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "ExistingRepositoryName"
+            },
+            ""
+          ]
+        }
+      ]
+    },
+    "CreateRepository": {
+      "Fn::Equals": [
+        {
+          "Ref": "ExistingRepositoryName"
+        },
+        ""
+      ]
+    },
+    "CustomerKmsKey": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "SsmKmsKeyArn"
+            },
+            ""
+          ]
+        }
+      ]
+    },
+    "EmailAlarms": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "AlarmEmail"
+            },
+            ""
+          ]
+        }
+      ]
+    },
+    "CustomFrontend": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "FrontendHostname"
+            },
+            ""
+          ]
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "AirConceptsApiSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": {
+          "Fn::Sub": "Air Concepts ${Environment} API HTTPS and ACME only"
+        },
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "ACME HTTP-01 and redirect"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Caddy HTTPS"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "SSM ECR updates DNS Supabase TLS and external APIs; review monitored egress"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "client",
+            "Value": "air-concepts"
+          },
+          {
+            "Key": "environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "air-concepts"
+          },
+          {
+            "Key": "requirement",
+            "Value": "INF-002"
+          },
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "air-concepts-${Environment}-api-sg"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "AirConceptsApiRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
+          }
+        ],
+        "Policies": [
+          {
+            "PolicyName": "EnvironmentBackendRead",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "ReadBackendParameters",
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetParameter",
+                    "ssm:GetParameters"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/air-concepts/${Environment}/backend/*"
+                  }
+                },
+                {
+                  "Sid": "DenyParameterReadsOutsideBackend",
+                  "Effect": "Deny",
+                  "Action": [
+                    "ssm:GetParameter",
+                    "ssm:GetParameters",
+                    "ssm:GetParametersByPath",
+                    "ssm:GetParameterHistory"
+                  ],
+                  "NotResource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/air-concepts/${Environment}/backend/*"
+                  }
+                },
+                {
+                  "Sid": "DenyOtherEnvironment",
+                  "Effect": "Deny",
+                  "Action": "ssm:*",
+                  "Resource": {
+                    "Fn::Sub": [
+                      "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/air-concepts/${OppositeEnvironment}/*",
+                      {
+                        "OppositeEnvironment": {
+                          "Fn::FindInMap": [
+                            "Sizing",
+                            {
+                              "Ref": "Environment"
+                            },
+                            "Opposite"
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "Sid": "EcrToken",
+                  "Effect": "Allow",
+                  "Action": "ecr:GetAuthorizationToken",
+                  "Resource": "*"
+                },
+                {
+                  "Sid": "PullBackendImage",
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecr:BatchCheckLayerAvailability",
+                    "ecr:GetDownloadUrlForLayer",
+                    "ecr:BatchGetImage"
+                  ],
+                  "Resource": {
+                    "Fn::If": [
+                      "CreateRepository",
+                      {
+                        "Fn::GetAtt": [
+                          "AirConceptsBackendRepository",
+                          "Arn"
+                        ]
+                      },
+                      {
+                        "Fn::Sub": "arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/${ExistingRepositoryName}"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "Fn::If": [
+                    "CustomerKmsKey",
+                    {
+                      "Sid": "DecryptEnvironmentParameters",
+                      "Effect": "Allow",
+                      "Action": "kms:Decrypt",
+                      "Resource": {
+                        "Ref": "SsmKmsKeyArn"
+                      },
+                      "Condition": {
+                        "StringEquals": {
+                          "kms:ViaService": {
+                            "Fn::Sub": "ssm.${AWS::Region}.${AWS::URLSuffix}"
+                          }
+                        },
+                        "StringLike": {
+                          "kms:EncryptionContext:PARAMETER_ARN": {
+                            "Fn::Sub": "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/air-concepts/${Environment}/backend/*"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "Ref": "AWS::NoValue"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "client",
+            "Value": "air-concepts"
+          },
+          {
+            "Key": "environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "air-concepts"
+          },
+          {
+            "Key": "requirement",
+            "Value": "INF-002"
+          },
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "air-concepts-${Environment}-api-role"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "AirConceptsApiInstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Roles": [
+          {
+            "Ref": "AirConceptsApiRole"
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "AirConceptsApiLaunchTemplate": {
+      "Type": "AWS::EC2::LaunchTemplate",
+      "Properties": {
+        "LaunchTemplateData": {
+          "MetadataOptions": {
+            "HttpTokens": "required",
+            "HttpEndpoint": "enabled",
+            "HttpPutResponseHopLimit": 1,
+            "InstanceMetadataTags": "disabled"
+          },
+          "TagSpecifications": [
+            {
+              "ResourceType": "instance",
+              "Tags": [
+                {
+                  "Key": "client",
+                  "Value": "air-concepts"
+                },
+                {
+                  "Key": "environment",
+                  "Value": {
+                    "Ref": "Environment"
+                  }
+                },
+                {
+                  "Key": "project",
+                  "Value": "air-concepts"
+                },
+                {
+                  "Key": "requirement",
+                  "Value": "INF-002"
+                },
+                {
+                  "Key": "Name",
+                  "Value": "air-concepts-backend"
+                }
+              ]
+            },
+            {
+              "ResourceType": "volume",
+              "Tags": [
+                {
+                  "Key": "client",
+                  "Value": "air-concepts"
+                },
+                {
+                  "Key": "environment",
+                  "Value": {
+                    "Ref": "Environment"
+                  }
+                },
+                {
+                  "Key": "project",
+                  "Value": "air-concepts"
+                },
+                {
+                  "Key": "requirement",
+                  "Value": "INF-002"
+                },
+                {
+                  "Key": "Name",
+                  "Value": {
+                    "Fn::Sub": "air-concepts-${Environment}-api-root-volume"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "TagSpecifications": [
+          {
+            "ResourceType": "launch-template",
+            "Tags": [
+              {
+                "Key": "client",
+                "Value": "air-concepts"
+              },
+              {
+                "Key": "environment",
+                "Value": {
+                  "Ref": "Environment"
+                }
+              },
+              {
+                "Key": "project",
+                "Value": "air-concepts"
+              },
+              {
+                "Key": "requirement",
+                "Value": "INF-002"
+              },
+              {
+                "Key": "Name",
+                "Value": {
+                  "Fn::Sub": "air-concepts-${Environment}-api-launch-template"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "AirConceptsBackend": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "ImageId": {
+          "Ref": "AmiId"
+        },
+        "InstanceType": {
+          "Fn::If": [
+            "DefaultInstanceType",
+            {
+              "Fn::FindInMap": [
+                "Sizing",
+                {
+                  "Ref": "Environment"
+                },
+                "InstanceType"
+              ]
+            },
+            {
+              "Ref": "InstanceType"
+            }
+          ]
+        },
+        "LaunchTemplate": {
+          "LaunchTemplateId": {
+            "Ref": "AirConceptsApiLaunchTemplate"
+          },
+          "Version": {
+            "Fn::GetAtt": [
+              "AirConceptsApiLaunchTemplate",
+              "LatestVersionNumber"
+            ]
+          }
+        },
+        "IamInstanceProfile": {
+          "Ref": "AirConceptsApiInstanceProfile"
+        },
+        "NetworkInterfaces": [
+          {
+            "DeviceIndex": "0",
+            "AssociatePublicIpAddress": true,
+            "SubnetId": {
+              "Ref": "PublicSubnetId"
+            },
+            "GroupSet": [
+              {
+                "Ref": "AirConceptsApiSecurityGroup"
+              }
+            ]
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/xvda",
+            "Ebs": {
+              "Encrypted": true,
+              "VolumeType": "gp3",
+              "VolumeSize": {
+                "Fn::If": [
+                  "DefaultRootVolumeSize",
+                  {
+                    "Fn::FindInMap": [
+                      "Sizing",
+                      {
+                        "Ref": "Environment"
+                      },
+                      "RootVolumeSize"
+                    ]
+                  },
+                  {
+                    "Ref": "RootVolumeSize"
+                  }
+                ]
+              },
+              "DeleteOnTermination": true
+            }
+          }
+        ],
+        "CreditSpecification": {
+          "CPUCredits": {
+            "Ref": "CpuCredits"
+          }
+        },
+        "Monitoring": false,
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Sub": "#!/bin/bash\nset -euo pipefail\n# No credentials or application secrets in bootstrap or cloud-init output.\nLOG=/var/log/air-concepts-bootstrap.log\ninstall -m 0600 /dev/null \"$LOG\"\nexec > >(tee -a \"$LOG\") 2>&1\nstamp() { date -u +%Y-%m-%dT%H:%M:%SZ; }\nstep() { echo \"[$(stamp)] STEP $*\"; }\non_error() { echo \"[$(stamp)] FAILED at line $1 (exit $2): $3\"; }\nwork_dir=\"\"\nsignal_result() {\n  result=$?\n  trap - EXIT\n  if [ -n \"$work_dir\" ]; then rm -rf -- \"$work_dir\"; fi\n  if [ \"$result\" -eq 0 ]; then\n    echo \"[$(stamp)] DONE bootstrap succeeded; signalling SUCCESS\"\n  else\n    echo \"[$(stamp)] DONE bootstrap failed with exit $result; signalling FAILURE. Log: $LOG\"\n  fi\n  /opt/aws/bin/cfn-signal -e \"$result\" --stack '${AWS::StackName}' --resource AirConceptsBackend --region '${AWS::Region}' || true\n  exit \"$result\"\n}\nset -o errtrace\ntrap signal_result EXIT\ntrap 'on_error \"$LINENO\" \"$?\" \"$BASH_COMMAND\"' ERR\nstep \"1/7 check CPU architecture is aarch64\"\ntest \"$(uname -m)\" = aarch64\nstep \"2/7 install docker, cfn-bootstrap and dnf-automatic\"\ndnf install -y docker aws-cfn-bootstrap dnf-automatic\nstep \"3/7 start docker and the SSM agent\"\nsystemctl enable --now docker amazon-ssm-agent\nstep \"4/7 create runtime directories\"\ninstall -d -m 0700 /opt/air-concepts\ninstall -d -m 0700 /opt/air-concepts/runtime\ninstall -d -m 0755 /usr/local/lib/docker/cli-plugins\nwork_dir=$(mktemp -d)\ncd \"$work_dir\"\nbase_url='https://github.com/docker/compose/releases/download/${ComposeVersion}'\nstep \"5/7 download Docker Compose ${ComposeVersion} and verify its checksum\"\ncurl --fail --silent --show-error --location --retry 3 -o docker-compose-linux-aarch64 \"$base_url/docker-compose-linux-aarch64\"\ncurl --fail --silent --show-error --location --retry 3 -o checksums.txt \"$base_url/checksums.txt\"\ntest -s checksums.txt\ngrep -E ' \\*?docker-compose-linux-aarch64$' checksums.txt | sha256sum --check -\ninstall -m 0755 docker-compose-linux-aarch64 /usr/local/lib/docker/cli-plugins/docker-compose\nstep \"6/7 check Docker Compose runs\"\ndocker compose version\nstep \"7/7 enable security updates without automatic reboot and check services\"\nsed -i 's/^upgrade_type =.*/upgrade_type = security/; s/^apply_updates =.*/apply_updates = yes/' /etc/dnf/automatic.conf\nsystemctl enable --now dnf-automatic-install.timer\nsystemctl is-active --quiet docker amazon-ssm-agent\n"
+          }
+        },
+        "Tags": [
+          {
+            "Key": "client",
+            "Value": "air-concepts"
+          },
+          {
+            "Key": "environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "air-concepts"
+          },
+          {
+            "Key": "requirement",
+            "Value": "INF-002"
+          },
+          {
+            "Key": "Name",
+            "Value": "air-concepts-backend"
+          }
+        ]
+      },
+      "CreationPolicy": {
+        "ResourceSignal": {
+          "Count": 1,
+          "Timeout": "PT20M"
+        }
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "AirConceptsApiElasticIp": {
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "client",
+            "Value": "air-concepts"
+          },
+          {
+            "Key": "environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "air-concepts"
+          },
+          {
+            "Key": "requirement",
+            "Value": "INF-002"
+          },
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "air-concepts-${Environment}-api-eip"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "AirConceptsApiElasticIpAssociation": {
+      "Type": "AWS::EC2::EIPAssociation",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "AirConceptsApiElasticIp",
+            "AllocationId"
+          ]
+        },
+        "InstanceId": {
+          "Ref": "AirConceptsBackend"
+        }
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "AirConceptsApiDnsRecord": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "HostedZoneId": {
+          "Ref": "ApiHostedZoneId"
+        },
+        "Name": {
+          "Ref": "ApiHostname"
+        },
+        "Type": "A",
+        "TTL": "300",
+        "ResourceRecords": [
+          {
+            "Ref": "AirConceptsApiElasticIp"
+          }
+        ]
+      },
+      "Condition": "ManageApiDns",
+      "DependsOn": "AirConceptsApiElasticIpAssociation",
+      "DeletionPolicy": "Delete"
+    },
+    "AirConceptsBackendRepository": {
+      "Type": "AWS::ECR::Repository",
+      "Properties": {
+        "RepositoryName": {
+          "Fn::Sub": "air-concepts-${Environment}-backend"
+        },
+        "ImageTagMutability": "IMMUTABLE",
+        "ImageScanningConfiguration": {
+          "ScanOnPush": true
+        },
+        "EncryptionConfiguration": {
+          "EncryptionType": "AES256"
+        },
+        "LifecyclePolicy": {
+          "LifecyclePolicyText": "{\"rules\": [{\"rulePriority\": 1, \"description\": \"Expire untagged images after 14 days; keep tagged rollback releases\", \"selection\": {\"tagStatus\": \"untagged\", \"countType\": \"sinceImagePushed\", \"countUnit\": \"days\", \"countNumber\": 14}, \"action\": {\"type\": \"expire\"}}]}"
+        },
+        "Tags": [
+          {
+            "Key": "client",
+            "Value": "air-concepts"
+          },
+          {
+            "Key": "environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "air-concepts"
+          },
+          {
+            "Key": "requirement",
+            "Value": "INF-002"
+          },
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "air-concepts-${Environment}-backend"
+            }
+          }
+        ],
+        "EmptyOnDelete": true
+      },
+      "Condition": "CreateRepository",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete"
+    },
+    "AirConceptsFrontendBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerEnforced"
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "ExpireOldVersions",
+              "Status": "Enabled",
+              "NoncurrentVersionExpiration": {
+                "NoncurrentDays": 30
+              },
+              "AbortIncompleteMultipartUpload": {
+                "DaysAfterInitiation": 7
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "client",
+            "Value": "air-concepts"
+          },
+          {
+            "Key": "environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "air-concepts"
+          },
+          {
+            "Key": "requirement",
+            "Value": "INF-002"
+          },
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "air-concepts-${Environment}-frontend-bucket"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete"
+    },
+    "AirConceptsFrontendOriginAccessControl": {
+      "Type": "AWS::CloudFront::OriginAccessControl",
+      "Properties": {
+        "OriginAccessControlConfig": {
+          "Name": {
+            "Fn::Sub": "${AWS::StackName}-oac"
+          },
+          "OriginAccessControlOriginType": "s3",
+          "SigningBehavior": "always",
+          "SigningProtocol": "sigv4"
+        }
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "AirConceptsFrontendRoutes": {
+      "Type": "AWS::CloudFront::Function",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-spa"
+        },
+        "AutoPublish": true,
+        "FunctionConfig": {
+          "Comment": "SPA extensionless routes; preserve missing asset errors",
+          "Runtime": "cloudfront-js-2.0"
+        },
+        "FunctionCode": "function handler(event) {\n    var request = event.request;\n    var uri = request.uri;\n    if ((request.method === 'GET' || request.method === 'HEAD')\n        && uri.indexOf('/assets/') !== 0\n        && uri.substring(uri.lastIndexOf('/') + 1).indexOf('.') === -1) {\n        request.uri = '/index.html';\n    }\n    return request;\n}"
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "AirConceptsFrontendDistribution": {
+      "Type": "AWS::CloudFront::Distribution",
+      "Properties": {
+        "DistributionConfig": {
+          "Enabled": true,
+          "Comment": {
+            "Fn::Sub": "Air Concepts ${Environment} frontend"
+          },
+          "DefaultRootObject": "index.html",
+          "HttpVersion": "http2and3",
+          "IPV6Enabled": true,
+          "PriceClass": {
+            "Ref": "CloudFrontPriceClass"
+          },
+          "Aliases": {
+            "Fn::If": [
+              "CustomFrontend",
+              [
+                {
+                  "Ref": "FrontendHostname"
+                }
+              ],
+              {
+                "Ref": "AWS::NoValue"
+              }
+            ]
+          },
+          "ViewerCertificate": {
+            "Fn::If": [
+              "CustomFrontend",
+              {
+                "AcmCertificateArn": {
+                  "Ref": "FrontendCertificateArn"
+                },
+                "SslSupportMethod": "sni-only",
+                "MinimumProtocolVersion": "TLSv1.2_2021"
+              },
+              {
+                "CloudFrontDefaultCertificate": true
+              }
+            ]
+          },
+          "Origins": [
+            {
+              "Id": "private-s3",
+              "DomainName": {
+                "Fn::GetAtt": [
+                  "AirConceptsFrontendBucket",
+                  "RegionalDomainName"
+                ]
+              },
+              "S3OriginConfig": {
+                "OriginAccessIdentity": ""
+              },
+              "OriginAccessControlId": {
+                "Ref": "AirConceptsFrontendOriginAccessControl"
+              }
+            }
+          ],
+          "DefaultCacheBehavior": {
+            "TargetOriginId": "private-s3",
+            "ViewerProtocolPolicy": "redirect-to-https",
+            "AllowedMethods": [
+              "GET",
+              "HEAD",
+              "OPTIONS"
+            ],
+            "CachedMethods": [
+              "GET",
+              "HEAD"
+            ],
+            "Compress": true,
+            "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
+            "ResponseHeadersPolicyId": "67f7725c-6f97-4210-82d7-5512b31e9d03",
+            "FunctionAssociations": [
+              {
+                "EventType": "viewer-request",
+                "FunctionARN": {
+                  "Fn::GetAtt": [
+                    "AirConceptsFrontendRoutes",
+                    "FunctionARN"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "client",
+            "Value": "air-concepts"
+          },
+          {
+            "Key": "environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "air-concepts"
+          },
+          {
+            "Key": "requirement",
+            "Value": "INF-002"
+          },
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "air-concepts-${Environment}-frontend"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "AirConceptsFrontendBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "AirConceptsFrontendBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "DistributionReadOnly",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudfront.amazonaws.com"
+              },
+              "Action": "s3:GetObject",
+              "Resource": {
+                "Fn::Sub": "${AirConceptsFrontendBucket.Arn}/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "AWS:SourceArn": {
+                    "Fn::Sub": "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${AirConceptsFrontendDistribution}"
+                  }
+                }
+              }
+            },
+            {
+              "Sid": "DenyInsecureTransport",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "AirConceptsFrontendBucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${AirConceptsFrontendBucket.Arn}/*"
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "AirConceptsAlarmTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "Subscription": [
+          {
+            "Protocol": "email",
+            "Endpoint": {
+              "Ref": "AlarmEmail"
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "client",
+            "Value": "air-concepts"
+          },
+          {
+            "Key": "environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "air-concepts"
+          },
+          {
+            "Key": "requirement",
+            "Value": "INF-002"
+          },
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "air-concepts-${Environment}-alarms"
+            }
+          }
+        ]
+      },
+      "Condition": "EmailAlarms",
+      "DeletionPolicy": "Delete"
+    },
+    "AirConceptsStatusCheckAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription": {
+          "Fn::Sub": "INF-002 ${Environment} EC2 status failure; detailed monitoring is INF-005"
+        },
+        "Namespace": "AWS/EC2",
+        "MetricName": "StatusCheckFailed",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": {
+              "Ref": "AirConceptsBackend"
+            }
+          }
+        ],
+        "Statistic": "Maximum",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "DatapointsToAlarm": 2,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "missing",
+        "AlarmActions": {
+          "Fn::If": [
+            "EmailAlarms",
+            [
+              {
+                "Ref": "AirConceptsAlarmTopic"
+              }
+            ],
+            {
+              "Ref": "AWS::NoValue"
+            }
+          ]
+        },
+        "OKActions": {
+          "Fn::If": [
+            "EmailAlarms",
+            [
+              {
+                "Ref": "AirConceptsAlarmTopic"
+              }
+            ],
+            {
+              "Ref": "AWS::NoValue"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "client",
+            "Value": "air-concepts"
+          },
+          {
+            "Key": "environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "air-concepts"
+          },
+          {
+            "Key": "requirement",
+            "Value": "INF-002"
+          },
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "air-concepts-${Environment}-api-status-check"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "AirConceptsAlarmTopicPolicy": {
+      "Type": "AWS::SNS::TopicPolicy",
+      "Condition": "EmailAlarms",
+      "Properties": {
+        "Topics": [
+          {
+            "Ref": "AirConceptsAlarmTopic"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudwatch.amazonaws.com"
+              },
+              "Action": "sns:Publish",
+              "Resource": {
+                "Ref": "AirConceptsAlarmTopic"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                  }
+                },
+                "ArnEquals": {
+                  "aws:SourceArn": {
+                    "Fn::GetAtt": [
+                      "AirConceptsStatusCheckAlarm",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "DeletionPolicy": "Delete"
+    }
+  },
+  "Outputs": {
+    "StackName": {
+      "Value": {
+        "Ref": "AWS::StackName"
+      }
+    },
+    "Environment": {
+      "Value": {
+        "Ref": "Environment"
+      }
+    },
+    "ApiInstanceId": {
+      "Value": {
+        "Ref": "AirConceptsBackend"
+      }
+    },
+    "ApiElasticIp": {
+      "Value": {
+        "Ref": "AirConceptsApiElasticIp"
+      }
+    },
+    "ApiSecurityGroupId": {
+      "Value": {
+        "Ref": "AirConceptsApiSecurityGroup"
+      }
+    },
+    "ApiInstanceRoleArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "AirConceptsApiRole",
+          "Arn"
+        ]
+      }
+    },
+    "FrontendBucketName": {
+      "Value": {
+        "Ref": "AirConceptsFrontendBucket"
+      }
+    },
+    "CloudFrontDistributionId": {
+      "Value": {
+        "Ref": "AirConceptsFrontendDistribution"
+      }
+    },
+    "CloudFrontDomain": {
+      "Value": {
+        "Fn::GetAtt": [
+          "AirConceptsFrontendDistribution",
+          "DomainName"
+        ]
+      }
+    },
+    "FrontendUrl": {
+      "Value": {
+        "Fn::If": [
+          "CustomFrontend",
+          {
+            "Fn::Sub": "https://${FrontendHostname}"
+          },
+          {
+            "Fn::Sub": "https://${AirConceptsFrontendDistribution.DomainName}"
+          }
+        ]
+      }
+    },
+    "EcrRepositoryUri": {
+      "Value": {
+        "Fn::If": [
+          "ExistingRepositoryUri",
+          {
+            "Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.${AWS::URLSuffix}/${ExistingRepositoryName}"
+          },
+          {
+            "Fn::GetAtt": [
+              "AirConceptsBackendRepository",
+              "RepositoryUri"
+            ]
+          }
+        ]
+      }
+    },
+    "ApiUrl": {
+      "Value": {
+        "Fn::Sub": "https://${ApiHostname}"
+      }
+    },
+    "BackendParameterPath": {
+      "Value": {
+        "Fn::Sub": "/air-concepts/${Environment}/backend/"
+      }
+    }
+  }
+}
