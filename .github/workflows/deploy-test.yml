@@ -83,13 +83,16 @@ jobs:
           set -euo pipefail
           test -n "$TEST_INSTANCE_ID"
           test -n "$NEW_BACKEND_DIGEST"
+          # The build output is "sha256:<hex>". The host script and Compose take bare hex.
+          digest="${NEW_BACKEND_DIGEST#sha256:}"
+          [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || { echo "Image digest is not 64 hex characters: $NEW_BACKEND_DIGEST" >&2; exit 1; }
           # The remote command writes the committed Compose and Caddy files and the deploy script
           # to the host, then runs the script. Only public, non-secret values are exported.
           {
             echo 'set -euo pipefail'
             echo 'umask 077'
             echo 'cd /opt/air-concepts'
-            echo "export ENVIRONMENT=test AWS_REGION=$AWS_REGION NEW_BACKEND_DIGEST=$NEW_BACKEND_DIGEST CADDY_IMAGE_DIGEST=$CADDY_IMAGE_DIGEST BACKEND_REPOSITORY_URI=$BACKEND_REPOSITORY_URI API_HOSTNAME=$API_HOSTNAME"
+            echo "export ENVIRONMENT=test AWS_REGION=$AWS_REGION NEW_BACKEND_DIGEST=$digest CADDY_IMAGE_DIGEST=$CADDY_IMAGE_DIGEST BACKEND_REPOSITORY_URI=$BACKEND_REPOSITORY_URI API_HOSTNAME=$API_HOSTNAME"
             echo "echo '$(base64 -w0 infra/deploy/compose.yaml)' | base64 -d > compose.yaml.new && mv -f compose.yaml.new compose.yaml"
             echo "echo '$(base64 -w0 infra/deploy/Caddyfile)' | base64 -d > Caddyfile.new && mv -f Caddyfile.new Caddyfile"
             echo "echo '$(base64 -w0 infra/deploy/deploy-test.sh)' | base64 -d > deploy-test.sh"
