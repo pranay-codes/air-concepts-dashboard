@@ -43,7 +43,16 @@ jobs:
           BACKEND_IMAGE_DIGEST: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
           CADDY_IMAGE_DIGEST: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
           API_HOSTNAME: api.example.invalid
-        run: docker compose -f infra/deploy/compose.yaml config --no-env-resolution --quiet
+        # Compose requires the env_file to exist, even with --no-env-resolution. Validate a temporary copy
+        # with a synthetic placeholder, so the runner never needs or reads the real runtime secret file.
+        run: |
+          set -euo pipefail
+          validate_dir=$(mktemp -d)
+          trap 'rm -rf "$validate_dir"' EXIT
+          cp infra/deploy/compose.yaml infra/deploy/Caddyfile "$validate_dir/"
+          mkdir "$validate_dir/runtime"
+          printf '%s\n' 'DATABASE_PASSWORD=synthetic-placeholder' > "$validate_dir/runtime/backend.env"
+          docker compose -f "$validate_dir/compose.yaml" config --no-env-resolution --quiet
       - name: Prove the container receives literal env_file values
         # Runs even if earlier steps fail, so the runtime evidence is always recorded.
         if: always()
