@@ -58,7 +58,8 @@ jobs:
           context: backend
           platforms: linux/arm64
           push: true
-          tags: ${{ vars.ECR_REPOSITORY_URI }}:${{ github.sha }}
+          # Tags are immutable in ECR, so each run attempt gets its own tag. Deploys use the digest.
+          tags: ${{ vars.ECR_REPOSITORY_URI }}:${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
 
   deploy-backend:
     needs: build
