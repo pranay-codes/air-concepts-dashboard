@@ -269,7 +269,9 @@ class InfrastructureTests(unittest.TestCase):
             self.assertEqual(api['user'], '10001:10001')
             self.assertTrue(api['read_only'])
             self.assertEqual(api['platform'], 'linux/arm64')
-            self.assertEqual(api['environment']['DATABASE_PASSWORD'], password)
+            # `config` escapes '$' as '$$' so its output can be re-interpolated. The container receives the
+            # literal value; the 'Prove the container receives literal env_file values' CI step checks that.
+            self.assertEqual(api['environment']['DATABASE_PASSWORD'].replace('$$', '$'), password)
             self.assertEqual({p['published'] for p in caddy['ports']}, {'80', '443'})
             self.assertTrue(config['networks']['api-internal']['internal'])
             self.assertIn('api-egress', api['networks'])
