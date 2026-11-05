@@ -292,6 +292,13 @@ class InfrastructureTests(unittest.TestCase):
         self.assertIn('sha256sum --check', workflow)
         self.assertIn('/usr/local/lib/docker/cli-plugins/docker-compose', workflow)
 
+    def test_INF002_ci_proves_the_container_receives_literal_secret_values(self):
+        # Compose config output escapes '$'; only a running container shows the value the API will receive.
+        workflow = (ROOT / '.github/workflows/infrastructure.yml').read_text()
+        self.assertIn('format: raw', workflow)
+        self.assertIn('["printenv", "DATABASE_PASSWORD"]', workflow)
+        self.assertIn('cmp expected.txt actual.txt', workflow)
+
 
 if __name__ == '__main__':
     unittest.main()

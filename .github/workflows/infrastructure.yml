@@ -44,3 +44,30 @@ jobs:
           CADDY_IMAGE_DIGEST: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
           API_HOSTNAME: api.example.invalid
         run: docker compose -f infra/deploy/compose.yaml config --no-env-resolution --quiet
+      - name: Prove the container receives literal env_file values
+        # Disposable container, synthetic value only. Uses the same raw env_file format as the API.
+        # Compose config output escapes '$', so the running container is the real check.
+        run: |
+          set -euo pipefail
+          probe_dir=$(mktemp -d)
+          trap 'rm -rf "$probe_dir"' EXIT
+          cd "$probe_dir"
+          mkdir runtime
+          cat > runtime/backend.env <<'ENV'
+          DATABASE_PASSWORD=synthetic-$UNDEFINED-${UNDEFINED}-"quoted"-'single'
+          ENV
+          cat > probe.yaml <<'YAML'
+          services:
+            probe:
+              image: busybox:1.37
+              env_file:
+                - path: ./runtime/backend.env
+                  required: true
+                  format: raw
+              command: ["printenv", "DATABASE_PASSWORD"]
+          YAML
+          cat > expected.txt <<'EXPECTED'
+          synthetic-$UNDEFINED-${UNDEFINED}-"quoted"-'single'
+          EXPECTED
+          docker compose -f probe.yaml run --rm -T probe > actual.txt
+          cmp expected.txt actual.txt
