@@ -39,13 +39,14 @@ AWS_STUB = """#!/usr/bin/env bash
 echo "aws $*" >> "$STUB_LOG"
 case "$1 $2" in
   "ecr get-login-password") echo "stub-token" ;;
-  "ssm get-parameters-by-path")
+  "ssm get-parameters")
     if [ -n "${STUB_OMIT:-}" ]; then grep -v -F "$STUB_OMIT" "$STUB_PARAMS"; else cat "$STUB_PARAMS"; fi ;;
   *) echo "unexpected aws call: $*" >&2; exit 2 ;;
 esac
 """
 
 DOCKER_STUB = """#!/usr/bin/env bash
+echo "config ${DOCKER_CONFIG:-default}" >> "$STUB_LOG"
 echo "docker $* digest=${BACKEND_IMAGE_DIGEST:-none}" >> "$STUB_LOG"
 case "$1" in
   login) cat > /dev/null; exit 0 ;;
@@ -204,6 +205,21 @@ class DeployTestScriptTests(unittest.TestCase):
         for value in PARAMS.values():
             with self.subTest(value=value[:12]):
                 self.assertNotIn(value, output)
+
+    def test_reads_exact_parameter_names_because_the_host_role_cannot_list_a_path(self):
+        text = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("ssm get-parameters --region", text)
+        self.assertNotIn("get-parameters-by-path", text)
+
+    def test_docker_login_uses_a_temporary_config_dir_removed_on_exit(self):
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        configs = [c.split(" ", 1)[1] for c in self.calls() if c.startswith("config ")]
+        self.assertTrue(configs, "docker was never called")
+        for config in configs:
+            with self.subTest(config=config):
+                self.assertNotEqual(config, "default")
+                self.assertFalse(os.path.exists(config), "ECR token directory was not removed")
 
     def test_script_never_enables_shell_tracing(self):
         text = SCRIPT.read_text(encoding="utf-8")

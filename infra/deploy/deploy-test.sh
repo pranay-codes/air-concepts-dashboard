@@ -17,6 +17,18 @@ env_new="$runtime_dir/backend.env.new"
 env_prev="$runtime_dir/backend.env.prev"
 digest_file="$air_dir/current-digest"
 
+# SSM key suffix -> env var name. The host role may read these exact names, but cannot list a path.
+declare -A key_for=(
+  [db/jdbc-url]=DATABASE_URL
+  [db/username]=DATABASE_USER
+  [db/password]=DATABASE_PASSWORD
+  [supabase/project-ref]=SUPABASE_TEST_PROJECT_REF
+  [supabase/jwt-issuer-uri]=SUPABASE_JWT_ISSUER_URI
+  [supabase/jwks-uri]=SUPABASE_JWKS_URI
+  [cors/allowed-origins]=CORS_ALLOWED_ORIGINS
+)
+docker_config=""
+
 fail() {
   echo "REFUSED: $*" >&2
   exit 1
@@ -24,6 +36,9 @@ fail() {
 
 cleanup() {
   rm -f -- "$env_new"
+  if [ -n "$docker_config" ]; then
+    rm -rf -- "$docker_config"
+  fi
 }
 trap cleanup EXIT
 
@@ -50,14 +65,21 @@ fi
 
 mkdir -p -- "$runtime_dir"
 
+# Keep the ECR token out of /root/.docker: use a private config dir, removed on exit.
+docker_config="$(mktemp -d)"
+export DOCKER_CONFIG="$docker_config"
 aws ecr get-login-password --region "$region" \
   | docker login --username AWS --password-stdin "$registry" > /dev/null
 
 # Builds $env_new from the Test backend parameters. Refuses before any container changes.
 write_env_file() {
+  local -a names=()
   local raw name value short key required seen=" "
-  raw="$(aws ssm get-parameters-by-path --region "$region" --path "$param_root" --recursive \
-    --with-decryption --query 'Parameters[].[Name,Value]' --output text)" \
+  for short in "${!key_for[@]}"; do
+    names+=("$param_root$short")
+  done
+  raw="$(aws ssm get-parameters --region "$region" --names "${names[@]}" --with-decryption \
+    --query 'Parameters[].[Name,Value]' --output text)" \
     || fail "could not read backend parameters from SSM"
   [ "$raw" = "None" ] && raw=""
 
@@ -65,16 +87,8 @@ write_env_file() {
   while IFS=$'\t' read -r name value; do
     [ -n "$name" ] || continue
     short="${name#"$param_root"}"
-    case "$short" in
-      db/jdbc-url) key=DATABASE_URL ;;
-      db/username) key=DATABASE_USER ;;
-      db/password) key=DATABASE_PASSWORD ;;
-      supabase/project-ref) key=SUPABASE_TEST_PROJECT_REF ;;
-      supabase/jwt-issuer-uri) key=SUPABASE_JWT_ISSUER_URI ;;
-      supabase/jwks-uri) key=SUPABASE_JWKS_URI ;;
-      cors/allowed-origins) key=CORS_ALLOWED_ORIGINS ;;
-      *) continue ;;
-    esac
+    key="${key_for[$short]:-}"
+    [ -n "$key" ] || continue
     [ -n "$value" ] || fail "$key is empty"
     case "$value" in
       *$'\r'*) fail "$key contains a carriage return" ;;
