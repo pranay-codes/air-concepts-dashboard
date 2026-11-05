@@ -51,10 +51,19 @@ echo "docker $* digest=${BACKEND_IMAGE_DIGEST:-none}" >> "$STUB_LOG"
 case "$1" in
   login) cat > /dev/null; exit 0 ;;
   compose)
+    case "$2" in
+      ps)
+        if [ "$3" = "-q" ]; then echo "stub-container-id"; else echo "stub-ps-table"; fi
+        exit 0 ;;
+      logs)
+        if [ -n "${STUB_FAIL_LOGS:-}" ]; then echo "stub: logs unavailable" >&2; exit 1; fi
+        echo "stub-api-log-line"; exit 0 ;;
+    esac
     if [ -n "${STUB_FAIL_DIGEST:-}" ] && [ "${BACKEND_IMAGE_DIGEST:-}" = "$STUB_FAIL_DIGEST" ]; then
       echo "stub: container unhealthy" >&2; exit 1
     fi
     exit 0 ;;
+  inspect) echo '{"Status":"unhealthy","FailingStreak":3}'; exit 0 ;;
   *) echo "unexpected docker call: $*" >&2; exit 2 ;;
 esac
 """
@@ -68,6 +77,12 @@ def _write_stub(directory, name, body):
     path = Path(directory) / name
     path.write_text(body, encoding="utf-8", newline="\n")
     path.chmod(path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+
+
+def _function_body(text, name):
+    start = text.index(f"{name}() {{")
+    end = text.index("\n}\n", start)
+    return text[start:end]
 
 
 class DeployTestScriptTests(unittest.TestCase):
@@ -173,6 +188,51 @@ class DeployTestScriptTests(unittest.TestCase):
         self.assertIn(f"docker compose up -d --wait --wait-timeout 180 digest={PREV}", calls)
         self.assertEqual((self.air / "current-digest").read_text(encoding="utf-8").strip(), PREV)
         self.assertEqual(known_good.read_text(encoding="utf-8"), "DATABASE_URL=known-good\n")
+
+    def test_failed_deploy_prints_api_diagnostics_before_rollback(self):
+        (self.air / "current-digest").write_text(PREV + "\n", encoding="utf-8", newline="\n")
+
+        result = self.run_script(STUB_FAIL_DIGEST=NEW)
+
+        self.assertNotEqual(result.returncode, 0)
+        calls = self.calls()
+        failed_up = calls.index(f"docker compose up -d --wait --wait-timeout 180 digest={NEW}")
+        rollback_up = calls.index(f"docker compose up -d --wait --wait-timeout 180 digest={PREV}")
+        logs = [i for i, c in enumerate(calls) if c.startswith("docker compose logs --no-color --tail 100 api")]
+        inspect = [i for i, c in enumerate(calls) if c.startswith("docker inspect") and "stub-container-id" in c]
+        self.assertTrue(logs, "api logs were not collected")
+        self.assertTrue(inspect, "api health was not inspected")
+        self.assertTrue(failed_up < logs[0] < rollback_up)
+        self.assertTrue(failed_up < inspect[0] < rollback_up)
+        output = result.stdout + result.stderr
+        self.assertIn("stub-api-log-line", output)
+        self.assertIn('"Status":"unhealthy"', output)
+
+    def test_failing_diagnostics_do_not_stop_the_rollback(self):
+        (self.air / "current-digest").write_text(PREV + "\n", encoding="utf-8", newline="\n")
+
+        result = self.run_script(STUB_FAIL_DIGEST=NEW, STUB_FAIL_LOGS="1")
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(f"docker compose up -d --wait --wait-timeout 180 digest={PREV}", self.calls())
+        self.assertEqual((self.air / "current-digest").read_text(encoding="utf-8").strip(), PREV)
+
+    def test_failed_deploy_output_contains_no_secret_values(self):
+        (self.air / "current-digest").write_text(PREV + "\n", encoding="utf-8", newline="\n")
+
+        result = self.run_script(STUB_FAIL_DIGEST=NEW)
+
+        output = result.stdout + result.stderr
+        for value in PARAMS.values():
+            with self.subTest(value=value[:12]):
+                self.assertNotIn(value, output)
+
+    def test_diagnostics_never_read_the_env_file_or_print_resolved_config(self):
+        body = _function_body(SCRIPT.read_text(encoding="utf-8"), "show_api_diagnostics")
+        self.assertNotIn("backend.env", body)
+        self.assertNotIn("env_file", body)
+        self.assertNotIn("compose config", body)
+        self.assertNotIn("inspect --format '{{json .Config", body)
 
     def test_missing_required_setting_preserves_known_good_config(self):
         known_good = self.air / "runtime" / "backend.env"

@@ -111,6 +111,21 @@ write_env_file() {
   chmod 600 -- "$env_new"
 }
 
+# Prints why the API did not start, to stderr, so the SSM output shows the cause. It prints only the
+# Compose status, the container health state and the last 100 log lines. It never reads backend.env
+# and never runs `compose config`, because that prints resolved values. Failures here do not stop
+# the rollback.
+show_api_diagnostics() {
+  local cid
+  echo "Diagnostics for the API container (last 100 log lines; no environment values are printed):" >&2
+  docker compose ps >&2 || true
+  cid="$(docker compose ps -q api 2>/dev/null || true)"
+  if [ -n "$cid" ]; then
+    docker inspect --format '{{json .State.Health}}' "$cid" >&2 || true
+  fi
+  docker compose logs --no-color --tail 100 api >&2 || true
+}
+
 # Starts the stack with one digest and waits for the health check.
 deploy_digest() {
   local digest="$1"
@@ -118,7 +133,7 @@ deploy_digest() {
     cd "$air_dir"
     export ENVIRONMENT BACKEND_REPOSITORY_URI API_HOSTNAME CADDY_IMAGE_DIGEST
     export BACKEND_IMAGE_DIGEST="$digest"
-    docker compose up -d --wait --wait-timeout 180
+    docker compose up -d --wait --wait-timeout 180 || { show_api_diagnostics; exit 1; }
   )
 }
 
