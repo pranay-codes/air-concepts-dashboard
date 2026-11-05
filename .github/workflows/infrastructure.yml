@@ -45,6 +45,8 @@ jobs:
           API_HOSTNAME: api.example.invalid
         run: docker compose -f infra/deploy/compose.yaml config --no-env-resolution --quiet
       - name: Prove the container receives literal env_file values
+        # Runs even if earlier steps fail, so the runtime evidence is always recorded.
+        if: always()
         # Disposable container, synthetic value only. Uses the same raw env_file format as the API.
         # Compose config output escapes '$', so the running container is the real check.
         run: |
