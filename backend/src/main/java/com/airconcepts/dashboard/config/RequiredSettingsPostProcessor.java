@@ -2,6 +2,7 @@ package com.airconcepts.dashboard.config;
 
 import java.net.URI;
 import java.util.List;
+import java.util.regex.Pattern;
 
 import org.springframework.boot.EnvironmentPostProcessor;
 import org.springframework.boot.SpringApplication;
@@ -48,13 +49,24 @@ public class RequiredSettingsPostProcessor implements EnvironmentPostProcessor, 
     }
 
     String databaseUrl = environment.getProperty("DATABASE_URL");
-    if (!databaseUrl.contains(projectRef)) {
+    String databaseUser = environment.getProperty("DATABASE_USER");
+    if (!databaseUrl.contains(projectRef) && !isTestPooler(databaseUrl, databaseUser, projectRef)) {
       throw new IllegalStateException("Refusing to start: DATABASE_URL does not point at the Test project"
           + " named by SUPABASE_TEST_PROJECT_REF.");
     }
     if (!databaseUrl.contains("sslmode=require")) {
       throw new IllegalStateException("Refusing to start: DATABASE_URL must require TLS (sslmode=require).");
     }
+  }
+
+  // Supabase's shared pooler host does not contain the project ref. The project is selected by the
+  // username, postgres.<ref>. Accept only a Supabase pooler host together with that exact username.
+  private static final Pattern SUPABASE_POOLER_URL = Pattern.compile(
+      "^jdbc:postgresql://aws-\\d+-[a-z0-9-]+\\.pooler\\.supabase\\.com:\\d+/");
+
+  private static boolean isTestPooler(String databaseUrl, String databaseUser, String projectRef) {
+    return SUPABASE_POOLER_URL.matcher(databaseUrl).find()
+        && ("postgres." + projectRef).equals(databaseUser);
   }
 
   private static String hostOf(String uri) {

@@ -9,6 +9,9 @@ import org.springframework.mock.env.MockEnvironment;
 
 class RequiredSettingsPostProcessorTest {
 
+  private static final String POOLER_URL =
+      "jdbc:postgresql://aws-0-ap-southeast-2.pooler.supabase.com:5432/postgres?sslmode=require";
+
   private final RequiredSettingsPostProcessor processor = new RequiredSettingsPostProcessor();
 
   @Test
@@ -80,6 +83,61 @@ class RequiredSettingsPostProcessorTest {
   void rejectsDatabaseConnectionWithoutTls() {
     MockEnvironment environment = allRequiredSettings();
     environment.setProperty("DATABASE_URL", "jdbc:postgresql://placeholder.supabase.co:5432/postgres");
+
+    assertThatThrownBy(() -> processor.postProcessEnvironment(environment, new SpringApplication()))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("sslmode=require");
+  }
+
+  @Test
+  void acceptsTestPoolerWhenUserCarriesTheTestProjectRef() {
+    MockEnvironment environment = allRequiredSettings();
+    environment.setProperty("DATABASE_URL", POOLER_URL);
+    environment.setProperty("DATABASE_USER", "postgres.placeholder");
+
+    assertThatCode(() -> processor.postProcessEnvironment(environment, new SpringApplication()))
+        .doesNotThrowAnyException();
+  }
+
+  @Test
+  void rejectsTestPoolerWhenUserCarriesAnotherProjectRef() {
+    MockEnvironment environment = allRequiredSettings();
+    environment.setProperty("DATABASE_URL", POOLER_URL);
+    environment.setProperty("DATABASE_USER", "postgres.live-project");
+
+    assertThatThrownBy(() -> processor.postProcessEnvironment(environment, new SpringApplication()))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Test project");
+  }
+
+  @Test
+  void rejectsPoolerWithPlainPostgresUser() {
+    MockEnvironment environment = allRequiredSettings();
+    environment.setProperty("DATABASE_URL", POOLER_URL);
+    environment.setProperty("DATABASE_USER", "postgres");
+
+    assertThatThrownBy(() -> processor.postProcessEnvironment(environment, new SpringApplication()))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Test project");
+  }
+
+  @Test
+  void rejectsLookalikePoolerHostEvenWithTheTestUser() {
+    MockEnvironment environment = allRequiredSettings();
+    environment.setProperty("DATABASE_URL",
+        "jdbc:postgresql://aws-0-ap-southeast-2.pooler.supabase.com.example.org:5432/postgres?sslmode=require");
+    environment.setProperty("DATABASE_USER", "postgres.placeholder");
+
+    assertThatThrownBy(() -> processor.postProcessEnvironment(environment, new SpringApplication()))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Test project");
+  }
+
+  @Test
+  void rejectsPoolerWithoutTls() {
+    MockEnvironment environment = allRequiredSettings();
+    environment.setProperty("DATABASE_URL", "jdbc:postgresql://aws-0-ap-southeast-2.pooler.supabase.com:5432/postgres");
+    environment.setProperty("DATABASE_USER", "postgres.placeholder");
 
     assertThatThrownBy(() -> processor.postProcessEnvironment(environment, new SpringApplication()))
         .isInstanceOf(IllegalStateException.class)
