@@ -81,6 +81,12 @@ class DeployTestWorkflowTests(unittest.TestCase):
         self.assertIn("github.run_id", tag_lines[0])
         self.assertIn("github.run_attempt", tag_lines[0])
 
+    def test_digest_prefix_is_removed_before_the_host_script(self):
+        # docker/build-push-action outputs "sha256:<hex>"; the host script and Compose take bare hex.
+        self.assertIn('digest="${NEW_BACKEND_DIGEST#sha256:}"', self.text)
+        self.assertIn("NEW_BACKEND_DIGEST=$digest", self.text)
+        self.assertNotIn("NEW_BACKEND_DIGEST=$NEW_BACKEND_DIGEST", self.text)
+
     def test_images_are_deployed_by_digest_never_by_latest(self):
         self.assertNotIn(":latest", self.text)
         self.assertIn("needs.build.outputs.image_digest", self.text)
