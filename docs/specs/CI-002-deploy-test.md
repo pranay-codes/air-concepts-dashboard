@@ -1,7 +1,7 @@
 # Spec pack: CI-002 Deploy Test from GitHub Actions
 
-- Status: draft
-- Approved by / date: (pending, human)
+- Status: approved
+- Approved by / date: user, 2026-11-06, "it's approved". Approved as drafted. The user did not answer open questions 1 to 7 individually; the proposed decisions above are the working defaults, and the plan lists each one for confirmation.
 - Notion page URL: https://app.notion.com/p/pranay-narotam/CI-002-Deploy-Test-from-GitHub-Actions-40b5eb9488648193ad3ec6ce721db3fe
 - Notion last-edited date: 2026-11-05T20:41:02Z (from the Notion fetch metadata)
 - Source text: the CI-002 page was read by Claude Code from Notion at the user's request on 2026-11-06, using the link the user gave. AGENTS.md §2 says agents never read Notion directly, and the INF-002 waiver does not name CI-002. A human must confirm this read is acceptable, or re-paste the page text.
@@ -73,6 +73,7 @@ No tests were run for this table.
 - Changing `ci.yml`.
 
 ## Open questions (any open question blocks approval)
+Status 2026-11-06: the spec is approved; the user confirmed the Test OIDC role exists and the infrastructure template is on `main`. Requirement IDs (question 1) remain TBD, so the PR must say so, as QA-001 did.
 1. **Requirement IDs.** Which IDs does CI-002 link to? Owner: human. Blocks approval.
 2. **Artifact.** Confirm Docker image on EC2 from ECR (the approved path), not a bare jar as the original request said. Owner: human. Blocks approval.
 3. **Migrations.** Keep `supabase-migrations.yml` separate, with no enforced ordering before the deploy (recommended), or move migrations into this workflow? Owner: human. Blocks approval.

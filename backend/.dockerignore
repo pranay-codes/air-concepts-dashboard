@@ -1,0 +1,5 @@
+# Keep secrets and source out of the build context. The workflow packages target/*.jar first.
+.git
+.env
+.env.*
+src

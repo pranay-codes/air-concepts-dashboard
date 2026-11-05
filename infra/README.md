@@ -142,6 +142,25 @@ Teardown requires human review. Policy: stack deletion removes every resource. A
 
 AWS references: [rule assertions](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/rules-section-structure.html), [IMDS options](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-IMDS-new-instances.html), [SSM managed policy](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AmazonSSMManagedInstanceCore.html), [managed cache policy IDs](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-cache-policies.html), [security headers policy](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-response-headers-policies.html), [CloudFront certificates](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-cloudfront-distribution-viewercertificate.html), [Compose installation](https://docs.docker.com/compose/install/linux/), [raw env-file format](https://docs.docker.com/reference/compose-file/services/#format).
 
+## Test deploy workflow (CI-002)
+
+`.github/workflows/deploy-test.yml` deploys to Test after a merge to `main`, and can also be started by hand. It only deploys when started from `main`. Four jobs run in order:
+
+1. `build`: packages the jar and builds the `linux/arm64` backend image, then pushes it to ECR under the commit SHA.
+2. `deploy-backend`: sends `infra/deploy/compose.yaml`, `Caddyfile` and `deploy-test.sh` to the Test host through SSM Run Command, then runs the script. No SSH.
+3. `deploy-frontend`: builds the frontend, uploads it to the Test bucket and invalidates CloudFront.
+4. `smoke`: checks the frontend URL and `https://<API hostname>/actuator/health`.
+
+The script on the host reads the backend parameters under `/air-concepts/test/backend/`, writes `runtime/backend.env` with mode 0600, and starts Compose with the new digest. If the new container is not healthy within 180 seconds, it restores the previous digest and previous `backend.env`, then fails the job.
+
+Repository variables, set by a human in GitHub. They are not secrets: `TEST_DEPLOY_ROLE_ARN`, `ECR_REPOSITORY_URI`, `TEST_INSTANCE_ID`, `TEST_API_HOSTNAME`, `TEST_FRONTEND_URL`, `TEST_BUCKET`, `TEST_DISTRIBUTION_ID`.
+
+The Test deploy role needs: `ecr:GetAuthorizationToken` and push to the Test repository; `ssm:SendCommand` on the Test instance with `AWS-RunShellScript`; `ssm:GetCommandInvocation` (the wait uses it, and `ssm:ListCommandInvocations` may also be needed); `ssm:GetParametersByPath` on `/air-concepts/test/frontend/*`; S3 list, put and delete on the Test bucket; and `cloudfront:CreateInvalidation` on the Test distribution. A human checks these in AWS. The workflow does not verify them, and the first run confirms them.
+
+The `Caddy` digest is pinned in the workflow, and the Temurin digest is pinned in `backend/Dockerfile`. The build job checks that both include `linux/arm64` before it pushes.
+
+Manual rollback is not yet decided. Re-running an older workflow run rebuilds that commit and pushes its SHA tag again, which fails with immutable tags and overwrites the tag otherwise. See [docs/plans/CI-002.md](../docs/plans/CI-002.md).
+
 ## Parameter Store setup (Test)
 
 `scripts/setup-test-parameters.py` asks you for each value and writes it to AWS Systems Manager Parameter Store under `/air-concepts/test/` in `ap-southeast-2`. It covers the backend API and the frontend. Parameter list, IAM and policy JSON: [docs/security-access.md](../docs/security-access.md).
