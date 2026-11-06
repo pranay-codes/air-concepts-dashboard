@@ -1,6 +1,8 @@
 # Air Concepts Financial Admin Dashboard: Agent Rules
 
 ## Learned Rules
+- For UI/UX work, enforce the existing design specification; treat Services, Commercial and HotAS as the client's current organisation configuration, with generic support for many organisations.
+- Write UI/UX specifications as standalone instructions for the intended interface, with concrete design standards and behaviour rather than PDF observations or analysis framing.
 - Keep infrastructure deployment guidance direct and reusable. Separate identity-management prerequisites from CloudFormation deployment steps; do not turn deployment help into an extended IAM Identity Center setup walkthrough unless the human requests it.
 - For this INF-002 session, read the linked Notion task directly and waive the local spec-pack gate as instructed by the human. Build one reusable Test/Live CloudFormation blueprint with environment configuration; this does not authorise Live deployment or access.
 
@@ -27,7 +29,7 @@
 
 ## 4. Stack, layout and commands
 - Stack: Java 25, Spring Boot and Maven Wrapper; React, Vite and TypeScript; Supabase PostgreSQL and Auth; GitHub Actions on the Free plan; AWS Sydney (EC2 API, S3 and CloudFront frontend).
-- Domain: three entities (Services, Commercial, HotAS), each with its own Xero organisation; Xero is the ledger and source of truth for invoices; vWork stays the field-work tool.
+- Domain: the client currently has three entities (Services, Commercial, HotAS), each with its own Xero organisation; the application supports a variable number of authorised organisations. Xero is the ledger and source of truth for invoices; vWork stays the field-work tool.
 - Layout: /backend, /frontend, /supabase, /infra, /docs, /scripts.
 - Backend (/backend): build `./mvnw -q -B -DskipTests package`; test `./mvnw -q -B test`; verify `./mvnw -q -B verify`; run `./mvnw -q spring-boot:run` with SPRING_PROFILES_ACTIVE=local. Lint: none chosen; Enforcer runs in verify.
 - Frontend (/frontend): build `npm run build --silent`; test `npm test --silent`; lint `npm run lint --silent`; typecheck `npm run typecheck --silent`; run `npm run dev`; e2e `npm run e2e` (not in check-all).
@@ -94,3 +96,10 @@
 ## 13. Definition of done
 - Requirement and acceptance criteria linked; failing tests written first; tests passing including negative and security cases; CI green.
 - Docs and traceability updated; other agent reviewed; Test acceptance passed where relevant; rollback impact recorded for deployment changes.
+
+## 14. UI/UX and frontend standards
+- Before planning, implementing or reviewing frontend components, layouts, navigation, forms, tables, charts or UI states, read and follow [UI/UX Design Specification](docs/ui-ux-design-specification.md). It is the shared UI/UX standard; approved task specifications govern business capabilities and permissions. Raise conflicts before implementation.
+- Preserve the wireframes' light-only visual direction and shared design tokens. Apply the specification's responsive, WCAG 2.2 AA, financial-data, feedback and recovery standards across all relevant states.
+- Use the approved React/Vite/strict TypeScript architecture and the specification's component, state, API and cache boundaries. Select optional libraries only for demonstrated needs; recommendations do not authorise dependency or architecture changes.
+- Populate organisation selection from authorised server data and isolate organisation-specific requests, state and caches using stable IDs. Verify switching, stale responses and permission changes; backend authorisation remains mandatory.
+- Before claiming UI work complete, apply the specification's Definition of Done and record relevant lint, typecheck, test, build, accessibility, responsive/browser and performance evidence. Report checks not run and measurement gaps explicitly.
