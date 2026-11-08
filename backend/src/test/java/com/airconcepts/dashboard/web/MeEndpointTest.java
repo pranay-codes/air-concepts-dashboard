@@ -23,13 +23,15 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.airconcepts.dashboard.TestJwts;
 import com.airconcepts.dashboard.security.Role;
 import com.airconcepts.dashboard.security.RoleLookup;
+import com.airconcepts.dashboard.staff.*;
+import java.util.UUID;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class MeEndpointTest {
 
-  private static final String SUBJECT = "user-123";
+  private static final String SUBJECT = UUID.randomUUID().toString();
 
   @Autowired
   private MockMvc mockMvc;
@@ -39,6 +41,12 @@ class MeEndpointTest {
 
   @MockitoBean
   private RoleLookup roleLookup;
+  @MockitoBean private StaffRepository staff;
+
+  private void profile(Role role) {
+    when(staff.findById(UUID.fromString(SUBJECT))).thenReturn(Optional.of(new StaffMember(
+        UUID.fromString(SUBJECT), "staff@example.invalid", "Dashboard staff", role, true)));
+  }
 
   @Test
   void rejectsRequestWithoutToken() throws Exception {
@@ -56,17 +64,20 @@ class MeEndpointTest {
 
   @Test
   void returnsSubjectAndServerSideRoleForValidToken() throws Exception {
+    profile(Role.FINANCIAL_ADMIN);
     when(jwtDecoder.decode(TestJwts.TOKEN)).thenReturn(TestJwts.forSubject(SUBJECT));
     when(roleLookup.findRole(SUBJECT)).thenReturn(Optional.of(Role.FINANCIAL_ADMIN));
 
     mockMvc.perform(get("/api/v1/me").header(AUTHORIZATION, "Bearer " + TestJwts.TOKEN))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.subject").value(SUBJECT))
-        .andExpect(jsonPath("$.role").value("FINANCIAL_ADMIN"));
+        .andExpect(jsonPath("$.role").value("FINANCIAL_ADMIN"))
+        .andExpect(jsonPath("$.displayName").value("Dashboard staff"));
   }
 
   @Test
   void ignoresRoleClaimInTokenAndUsesServerLookup() throws Exception {
+    profile(Role.STANDARD_USER);
     when(jwtDecoder.decode(TestJwts.TOKEN))
         .thenReturn(TestJwts.forSubject(SUBJECT, Map.of("role", "DIRECTOR")));
     when(roleLookup.findRole(SUBJECT)).thenReturn(Optional.of(Role.STANDARD_USER));
@@ -77,12 +88,22 @@ class MeEndpointTest {
   }
 
   @Test
-  void roleIsNullWhenNoRoleIsAssigned() throws Exception {
+  void frUc15_18_inactiveOrUnregisteredSessionCannotReadProtectedProfile() throws Exception {
     when(jwtDecoder.decode(TestJwts.TOKEN)).thenReturn(TestJwts.forSubject(SUBJECT));
     when(roleLookup.findRole(anyString())).thenReturn(Optional.empty());
 
     mockMvc.perform(get("/api/v1/me").header(AUTHORIZATION, "Bearer " + TestJwts.TOKEN))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.role").doesNotExist());
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  void frUc15_18_existingJwtLosesAccessAsSoonAsServerRoleIsRevoked() throws Exception {
+    profile(Role.STANDARD_USER);
+    when(jwtDecoder.decode(TestJwts.TOKEN)).thenReturn(TestJwts.forSubject(SUBJECT));
+    when(roleLookup.findRole(SUBJECT)).thenReturn(Optional.of(Role.STANDARD_USER), Optional.empty());
+    mockMvc.perform(get("/api/v1/me").header(AUTHORIZATION, "Bearer " + TestJwts.TOKEN))
+        .andExpect(status().isOk());
+    mockMvc.perform(get("/api/v1/me").header(AUTHORIZATION, "Bearer " + TestJwts.TOKEN))
+        .andExpect(status().isForbidden());
   }
 }

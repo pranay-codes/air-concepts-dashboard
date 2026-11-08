@@ -25,6 +25,12 @@ declare -A key_for=(
   [supabase/project-ref]=SUPABASE_TEST_PROJECT_REF
   [supabase/jwt-issuer-uri]=SUPABASE_JWT_ISSUER_URI
   [supabase/jwks-uri]=SUPABASE_JWKS_URI
+  [supabase/service-role-key]=SUPABASE_SERVICE_ROLE_KEY
+  [xero/client-id]=XERO_CLIENT_ID
+  [xero/client-secret]=XERO_CLIENT_SECRET
+  [xero/redirect-uri]=XERO_REDIRECT_URI
+  [xero/frontend-callback-uri]=XERO_FRONTEND_CALLBACK_URI
+  [xero/token-encryption-key]=XERO_TOKEN_ENCRYPTION_KEY
   [cors/allowed-origins]=CORS_ALLOWED_ORIGINS
 )
 docker_config=""
@@ -74,14 +80,17 @@ aws ecr get-login-password --region "$region" \
 # Builds $env_new from the Test backend parameters. Refuses before any container changes.
 write_env_file() {
   local -a names=()
-  local raw name value short key required seen=" "
+  local raw="" chunk name value short key required offset seen=" "
   for short in "${!key_for[@]}"; do
     names+=("$param_root$short")
   done
-  raw="$(aws ssm get-parameters --region "$region" --names "${names[@]}" --with-decryption \
-    --query 'Parameters[].[Name,Value]' --output text)" \
-    || fail "could not read backend parameters from SSM"
-  [ "$raw" = "None" ] && raw=""
+  # GetParameters accepts at most ten names. No values enter logs or shell tracing.
+  for ((offset=0; offset<${#names[@]}; offset+=10)); do
+    chunk="$(aws ssm get-parameters --region "$region" --names "${names[@]:offset:10}" --with-decryption \
+      --query 'Parameters[].[Name,Value]' --output text)" \
+      || fail "could not read backend parameters from SSM"
+    if [ -n "$chunk" ] && [ "$chunk" != "None" ]; then raw+="$chunk"$'\n'; fi
+  done
 
   : > "$env_new"
   while IFS=$'\t' read -r name value; do

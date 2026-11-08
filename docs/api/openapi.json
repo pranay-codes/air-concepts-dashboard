@@ -9,10 +9,411 @@
     "description" : "Generated server url"
   } ],
   "paths" : {
+    "/api/v1/xero/attempts/{attemptId}/connection" : {
+      "put" : {
+        "tags" : [ "xero-connection-controller" ],
+        "summary" : "Confirm a freshly discovered organisation for the attempt's entity",
+        "operationId" : "confirmXeroConnection",
+        "parameters" : [ {
+          "name" : "attemptId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SelectConnection"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/XeroConnection"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/invoices/{invoiceId}/assignment" : {
+      "put" : {
+        "tags" : [ "invoice-controller" ],
+        "summary" : "Assign or unassign a verified sales invoice; Director or Financial Admin only",
+        "operationId" : "assignSalesInvoice",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "invoiceId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "type",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : "ACCREC",
+            "enum" : [ "ACCREC", "ACCPAY" ]
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AssignInvoice"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SalesAssignment"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/users" : {
+      "get" : {
+        "tags" : [ "staff-controller" ],
+        "summary" : "List staff including inactive accounts (Director only)",
+        "operationId" : "listUsers",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/StaffMember"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "staff-controller" ],
+        "summary" : "Provision a registered staff account (Director only)",
+        "operationId" : "createUser",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateStaff"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "description" : "Created",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StaffMember"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities" : {
+      "get" : {
+        "tags" : [ "entity-controller" ],
+        "summary" : "List every configured entity accessible to active staff",
+        "operationId" : "listEntities",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/Entity"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "entity-controller" ],
+        "summary" : "Create a dashboard entity (Director only)",
+        "operationId" : "createEntity",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateEntity"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "description" : "Created",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Entity"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/xero/authorization" : {
+      "post" : {
+        "tags" : [ "xero-connection-controller" ],
+        "summary" : "Start a Director-owned Xero authorisation attempt",
+        "operationId" : "startXeroAuthorization",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/XeroAuthorizationStart"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/users/{userId}" : {
+      "get" : {
+        "tags" : [ "staff-controller" ],
+        "summary" : "View a dashboard staff account (Director only)",
+        "operationId" : "getUser",
+        "parameters" : [ {
+          "name" : "userId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StaffMember"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      },
+      "patch" : {
+        "tags" : [ "staff-controller" ],
+        "summary" : "Change a staff name, role or active status (Director only)",
+        "operationId" : "updateUser",
+        "parameters" : [ {
+          "name" : "userId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateStaff"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StaffMember"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/xero/callback" : {
+      "get" : {
+        "tags" : [ "xero-connection-controller" ],
+        "summary" : "Receive a single-use Xero OAuth callback and redirect without credentials",
+        "operationId" : "xeroCallback",
+        "parameters" : [ {
+          "name" : "state",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "code",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "error",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "303" : {
+            "description" : "See Other"
+          }
+        }
+      }
+    },
+    "/api/v1/xero/attempts/{attemptId}" : {
+      "get" : {
+        "tags" : [ "xero-connection-controller" ],
+        "summary" : "Read the current Director's result and authorised organisation choices",
+        "operationId" : "getXeroAuthorizationAttempt",
+        "parameters" : [ {
+          "name" : "attemptId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/XeroAuthorizationAttempt"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/staff" : {
+      "get" : {
+        "tags" : [ "staff-controller" ],
+        "summary" : "List active assignment choices (Director or Financial Admin)",
+        "operationId" : "listAssignableStaff",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/StaffOption"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
     "/api/v1/me" : {
       "get" : {
         "tags" : [ "me-controller" ],
-        "operationId" : "me",
+        "summary" : "Read the current active staff identity and server-side role",
+        "operationId" : "getCurrentUser",
         "responses" : {
           "200" : {
             "description" : "OK",
@@ -24,7 +425,361 @@
               }
             }
           }
-        }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}" : {
+      "get" : {
+        "tags" : [ "entity-controller" ],
+        "summary" : "View a configured entity by its stable dashboard ID",
+        "operationId" : "getEntity",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Entity"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/xero" : {
+      "get" : {
+        "tags" : [ "xero-connection-controller" ],
+        "summary" : "Read safe connection metadata for the selected entity",
+        "operationId" : "getXeroConnection",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/XeroConnection"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/invoices" : {
+      "get" : {
+        "tags" : [ "invoice-controller" ],
+        "summary" : "Read a live filtered Xero invoice page; supplier bills require Director or Financial Admin",
+        "operationId" : "listInvoices",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "type",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : "ACCREC",
+            "enum" : [ "ACCREC", "ACCPAY" ]
+          }
+        }, {
+          "name" : "search",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : ""
+          }
+        }, {
+          "name" : "status",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "DRAFT", "SUBMITTED", "AUTHORISED", "PAID", "VOIDED", "DELETED" ]
+          }
+        }, {
+          "name" : "overdue",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean",
+            "default" : false
+          }
+        }, {
+          "name" : "dateField",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : "INVOICE_DATE",
+            "enum" : [ "INVOICE_DATE", "DUE_DATE" ]
+          }
+        }, {
+          "name" : "from",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        }, {
+          "name" : "to",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        }, {
+          "name" : "sort",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : "DATE",
+            "enum" : [ "DATE", "DUE_DATE", "AMOUNT", "STATUS", "CONTACT" ]
+          }
+        }, {
+          "name" : "direction",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : "DESC",
+            "enum" : [ "ASC", "DESC" ]
+          }
+        }, {
+          "name" : "page",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 1
+          }
+        }, {
+          "name" : "pageSize",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 25
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvoicePage"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/invoices/{invoiceId}" : {
+      "get" : {
+        "tags" : [ "invoice-controller" ],
+        "summary" : "Read a live Xero invoice or supplier bill, including lines and payments",
+        "operationId" : "getInvoice",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "invoiceId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "type",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : "ACCREC",
+            "enum" : [ "ACCREC", "ACCPAY" ]
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvoiceDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/invoices/{invoiceId}/attachments" : {
+      "get" : {
+        "tags" : [ "attachment-controller" ],
+        "summary" : "Read attachment metadata after verifying the entity and document type",
+        "operationId" : "listInvoiceAttachments",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "invoiceId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "type",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : "ACCREC",
+            "enum" : [ "ACCREC", "ACCPAY" ]
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/InvoiceAttachment"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/invoices/{invoiceId}/attachments/{attachmentId}/file" : {
+      "get" : {
+        "tags" : [ "attachment-controller" ],
+        "summary" : "Download a verified bounded file; safe PDF/raster content may be requested inline",
+        "operationId" : "downloadInvoiceAttachment",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "invoiceId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "attachmentId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "type",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : "ACCREC",
+            "enum" : [ "ACCREC", "ACCPAY" ]
+          }
+        }, {
+          "name" : "preview",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean",
+            "default" : false
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/octet-stream" : {
+                "schema" : {
+                  "type" : "string",
+                  "format" : "byte"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
       }
     },
     "/api/hello" : {
@@ -48,6 +803,239 @@
   },
   "components" : {
     "schemas" : {
+      "SelectConnection" : {
+        "type" : "object",
+        "properties" : {
+          "connectionId" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        },
+        "required" : [ "connectionId" ]
+      },
+      "XeroConnection" : {
+        "type" : "object",
+        "properties" : {
+          "entityId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "CONNECTED", "NOT_CONNECTED", "NEEDS_RECONNECTION" ]
+          },
+          "organisationName" : {
+            "type" : "string"
+          },
+          "lastConfirmedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "errorCode" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "entityId", "status" ]
+      },
+      "AssignInvoice" : {
+        "type" : "object",
+        "properties" : {
+          "assigneeId" : {
+            "type" : [ "string", "null" ],
+            "format" : "uuid",
+            "description" : "Active staff ID; omit or use null to unassign"
+          }
+        }
+      },
+      "InvoiceOwner" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "active" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "active", "displayName", "id" ]
+      },
+      "SalesAssignment" : {
+        "type" : "object",
+        "properties" : {
+          "invoiceId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "owner" : {
+            "$ref" : "#/components/schemas/InvoiceOwner"
+          }
+        },
+        "required" : [ "invoiceId" ]
+      },
+      "CreateStaff" : {
+        "type" : "object",
+        "properties" : {
+          "email" : {
+            "type" : "string",
+            "format" : "email",
+            "maxLength" : 254,
+            "minLength" : 0
+          },
+          "displayName" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
+          },
+          "role" : {
+            "type" : "string",
+            "enum" : [ "DIRECTOR", "FINANCIAL_ADMIN", "STANDARD_USER" ]
+          }
+        },
+        "required" : [ "displayName", "email", "role" ]
+      },
+      "StaffMember" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "email" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "role" : {
+            "type" : "string",
+            "enum" : [ "DIRECTOR", "FINANCIAL_ADMIN", "STANDARD_USER" ]
+          },
+          "active" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "active", "displayName", "email", "id", "role" ]
+      },
+      "CreateEntity" : {
+        "type" : "object",
+        "properties" : {
+          "displayName" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
+          }
+        },
+        "required" : [ "displayName" ]
+      },
+      "Entity" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "displayName" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "displayName", "id" ]
+      },
+      "XeroAuthorizationStart" : {
+        "type" : "object",
+        "properties" : {
+          "attemptId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "authorizationUrl" : {
+            "type" : "string"
+          },
+          "expiresAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        },
+        "required" : [ "attemptId", "authorizationUrl", "expiresAt" ]
+      },
+      "UpdateStaff" : {
+        "type" : "object",
+        "properties" : {
+          "displayName" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
+          },
+          "role" : {
+            "type" : "string",
+            "enum" : [ "DIRECTOR", "FINANCIAL_ADMIN", "STANDARD_USER" ]
+          },
+          "active" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "active", "displayName", "role" ]
+      },
+      "XeroAuthorizationAttempt" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "entityId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "state" : {
+            "type" : "string",
+            "enum" : [ "AWAITING_CALLBACK", "PROCESSING", "READY", "FAILED", "COMPLETED" ]
+          },
+          "errorCode" : {
+            "type" : "string"
+          },
+          "upstreamStatus" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "choices" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/XeroTenantChoice"
+            }
+          }
+        },
+        "required" : [ "choices", "entityId", "id", "state" ]
+      },
+      "XeroTenantChoice" : {
+        "type" : "object",
+        "properties" : {
+          "connectionId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "connectionId", "name" ]
+      },
+      "StaffOption" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "displayName" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "displayName", "id" ]
+      },
       "MeResponse" : {
         "type" : "object",
         "properties" : {
@@ -57,8 +1045,200 @@
           "role" : {
             "type" : "string",
             "enum" : [ "DIRECTOR", "FINANCIAL_ADMIN", "STANDARD_USER" ]
+          },
+          "displayName" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "displayName", "role", "subject" ]
+      },
+      "InvoicePage" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/InvoiceSummary"
+            }
+          },
+          "page" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "pageSize" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "pageCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "itemCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        },
+        "required" : [ "itemCount", "items", "page", "pageCount", "pageSize" ]
+      },
+      "InvoiceSummary" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "type" : {
+            "type" : "string",
+            "enum" : [ "ACCREC", "ACCPAY" ]
+          },
+          "number" : {
+            "type" : "string"
+          },
+          "reference" : {
+            "type" : "string"
+          },
+          "contact" : {
+            "type" : "string"
+          },
+          "date" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "dueDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "total" : {
+            "type" : "string",
+            "format" : "decimal"
+          },
+          "amountDue" : {
+            "type" : "string",
+            "format" : "decimal"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "DRAFT", "SUBMITTED", "AUTHORISED", "PAID", "VOIDED", "DELETED" ]
+          },
+          "overdue" : {
+            "type" : "boolean"
+          },
+          "owner" : {
+            "$ref" : "#/components/schemas/InvoiceOwner"
+          }
+        },
+        "required" : [ "contact", "date", "id", "overdue", "status", "type" ]
+      },
+      "InvoiceDetail" : {
+        "type" : "object",
+        "properties" : {
+          "invoice" : {
+            "$ref" : "#/components/schemas/InvoiceSummary"
+          },
+          "subtotal" : {
+            "type" : "string",
+            "format" : "decimal"
+          },
+          "tax" : {
+            "type" : "string",
+            "format" : "decimal"
+          },
+          "amountPaid" : {
+            "type" : "string",
+            "format" : "decimal"
+          },
+          "amountCredited" : {
+            "type" : "string",
+            "format" : "decimal"
+          },
+          "lines" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/InvoiceLine"
+            }
+          },
+          "payments" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/InvoicePayment"
+            }
+          },
+          "taxBasis" : {
+            "type" : "string",
+            "enum" : [ "EXCLUSIVE", "INCLUSIVE", "NO_TAX" ]
+          }
+        },
+        "required" : [ "invoice", "lines", "payments" ]
+      },
+      "InvoiceLine" : {
+        "type" : "object",
+        "properties" : {
+          "description" : {
+            "type" : "string"
+          },
+          "quantity" : {
+            "type" : "string",
+            "format" : "decimal"
+          },
+          "unitAmount" : {
+            "type" : "string",
+            "format" : "decimal"
+          },
+          "lineAmount" : {
+            "type" : "string",
+            "format" : "decimal"
+          },
+          "taxAmount" : {
+            "type" : "string",
+            "format" : "decimal"
           }
         }
+      },
+      "InvoicePayment" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "date" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "amount" : {
+            "type" : "string",
+            "format" : "decimal"
+          },
+          "reference" : {
+            "type" : "string"
+          }
+        }
+      },
+      "InvoiceAttachment" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "fileName" : {
+            "type" : "string"
+          },
+          "contentType" : {
+            "type" : "string"
+          },
+          "size" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "previewable" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "contentType", "fileName", "id", "previewable", "size" ]
       },
       "HelloResponse" : {
         "type" : "object",
@@ -67,6 +1247,13 @@
             "type" : "string"
           }
         }
+      }
+    },
+    "securitySchemes" : {
+      "bearerAuth" : {
+        "type" : "http",
+        "scheme" : "bearer",
+        "bearerFormat" : "JWT"
       }
     }
   }

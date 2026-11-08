@@ -9,5 +9,5 @@ test("dashboard shell loads and shows the sign-in screen when signed out", async
   ).toBeVisible();
   await expect(page.getByRole("form", { name: "Sign in" })).toBeVisible();
   await expect(page.getByLabel("Email")).toBeVisible();
-  await expect(page.getByLabel("Password")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Send code", exact: true })).toBeVisible();
 });

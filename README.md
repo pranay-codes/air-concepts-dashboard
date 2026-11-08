@@ -37,13 +37,15 @@ Run: `npm ci` then `npm run dev`
 ## Checks
 - `./scripts/check-all.sh`: backend verify, frontend checks and the API snapshot check
 - `./scripts/test-backend.sh` and `./scripts/test-frontend.sh`: each part alone
-- `npm run e2e` in `frontend/`: Playwright, not part of check-all
+- `npm run e2e` in `frontend/`: production-build Playwright journeys in Chromium, not part of check-all. Install it first with `npx playwright install chromium`. The suite supplies synthetic public Auth/API settings; it does not require hosted credentials. Chrome/Chromium is the agreed UC5 browser acceptance scope.
 
 ## Run every test (one command)
 - `./scripts/test-all.sh`: backend tests, frontend checks, then Playwright. It starts the API with the `local` profile, so it reads the root `.env`, and stops it when done.
-- Run it from the repo root with `.env` filled in. The Playwright sign-in test calls the API on port 8080, so the API must start.
+- Run it from the repo root with `.env` filled in. The local API is needed for the unauthenticated-request boundary check; OTP/workspace journeys use controlled synthetic API/Auth responses. For standalone Playwright with a running API, set `E2E_LOCAL_API=true` (optional `E2E_LOCAL_API_PORT`, default 8080). Without this opt-in, that one API check is explicitly skipped.
 - Testcontainers PostgreSQL tests need Docker. Locally they skip when Docker is not running. In GitHub Actions (`CI=true`) they fail instead, so they cannot pass silently.
 - Pull requests run the `e2e` job in `.github/workflows/ci.yml`. It starts the API with placeholder settings (the `ci` profile) and runs Playwright. It never reaches a hosted project.
+
+UC5 implementation evidence and remaining hosted/runtime checks: [green-lane verification](docs/uc5-green-lane-verification.md), [requirement coverage](docs/requirements/UC5-coverage.md) and [independent review](docs/requirements/UC5-review.md).
 
 ## API contract
 `docs/api/openapi.json` and `frontend/src/api/generated/` are generated, never edited by hand. See `.agents/skills/api-contract/SKILL.md`.

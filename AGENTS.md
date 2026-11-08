@@ -1,6 +1,10 @@
 # Air Concepts Financial Admin Dashboard: Agent Rules
 
 ## Learned Rules
+- For UC5 browser acceptance, use Chrome/Chromium testing as requested by the human on 8 November; Firefox and WebKit execution are outside this task's acceptance scope.
+- For the current UC5 green lane, finish Director/Entities/Xero/Users settings, sales assignment, application integration, workspace layout and invoice checks. Defer the attachment panel/viewer to a project-linked Notion task; retain existing secure attachment backend work.
+- For UC5, the human will create the commit. Stop retrying Git writes; finish the implementation, verification and worktree handoff without treating commit creation as a blocker.
+- For UC5, the human authorises reading linked Notion sources, documenting requirements and the plan, making implementation decisions with best judgement, and implementing backend functionality before UI/UX without additional approval pauses. This does not authorise Live operations.
 - For UI/UX work, enforce the existing design specification; treat Services, Commercial and HotAS as the client's current organisation configuration, with generic support for many organisations.
 - Write UI/UX specifications as standalone instructions for the intended interface, with concrete design standards and behaviour rather than PDF observations or analysis framing.
 - Keep infrastructure deployment guidance direct and reusable. Separate identity-management prerequisites from CloudFormation deployment steps; do not turn deployment help into an extended IAM Identity Center setup walkthrough unless the human requests it.

@@ -27,7 +27,7 @@ if ! ./mvnw -q -B spring-boot:start >"$log" 2>&1; then
 fi
 api_started=1
 
-# The e2e sign-in journey calls the API on port 8080. Wait until it answers before Playwright runs.
+# The unauthenticated-request check calls the local API; browser journeys use synthetic boundaries.
 for _ in $(seq 1 60); do
   if [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/v1/me)" != "000" ]; then
     break
@@ -36,6 +36,7 @@ for _ in $(seq 1 60); do
 done
 
 cd "$root/frontend"
+export E2E_LOCAL_API=true
 if ! npm run e2e --silent >"$log" 2>&1; then
   cat "$log"
   echo "FAIL: e2e (Playwright)" >&2
