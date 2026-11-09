@@ -79,16 +79,34 @@ def nobody_asked(_key):
     raise AssertionError("the script asked for a value it should not have asked for")
 
 
-def run_cli(args, *, ssm=None, account=ACCOUNT, ask=None):
+def run_cli(args, *, ssm=None, account=ACCOUNT, ask=None, custom=None):
     """Run the CLI in-process. Returns (exit code, fake SSM, refusal message)."""
     ssm = ssm if ssm is not None else FakeSSM()
     session = FakeSession(ssm, account)
     try:
         code = setup.run(args, session_factory=lambda profile, region: session,
-                         ask_fn=ask if ask is not None else (lambda key: ""))
+                         ask_fn=ask if ask is not None else (lambda key: ""),
+                         custom_key_fn=custom if custom is not None else nobody_asked_for_custom)
     except setup.Refused as err:
         return setup.EXIT_REFUSED, ssm, str(err)
     return code, ssm, ""
+
+
+def nobody_asked_for_custom(_taken):
+    raise AssertionError("the script asked for a custom parameter it should not have asked for")
+
+
+def custom_keys(*entries):
+    """Return a custom_key_fn that yields the given (name, kind) pairs in order, then finishes."""
+    queue = list(entries)
+
+    def fn(_taken):
+        if not queue:
+            return None
+        name, kind = queue.pop(0)
+        return setup.Key(name, kind, used_by="custom parameter", required=False)
+
+    return fn
 
 
 def puts_by_name(ssm):
@@ -228,6 +246,134 @@ def test_a_failed_write_is_reported_and_the_rest_still_run(capsys):
     assert code == setup.EXIT_FAILED
     assert "failed" in out and "ThrottlingException" in out
     assert setup.ROOT + "backend/db/password" in puts_by_name(ssm)
+
+
+# --- Custom parameters (--add-custom) ---------------------------------------------------------
+
+CUSTOM_SECRET = "test-only-custom-SECRET-456"
+
+
+def test_add_custom_writes_each_entered_key_with_its_type_and_value():
+    entries = [("app/feature/export-limit", "String"), ("app/partner/api-token", "SecureString")]
+    code, ssm, _ = run_cli(BASE + ["--apply", "--add-custom"], ask=lambda key: "test-custom-" + key.path,
+                           custom=custom_keys(*entries))
+    assert code == setup.EXIT_OK
+    written = puts_by_name(ssm)
+    assert written[setup.ROOT + "app/feature/export-limit"]["Type"] == "String"
+    assert written[setup.ROOT + "app/feature/export-limit"]["Value"] == "test-custom-app/feature/export-limit"
+    assert written[setup.ROOT + "app/partner/api-token"]["Type"] == "SecureString"
+    assert written[setup.ROOT + "app/partner/api-token"]["Overwrite"] is False
+
+
+def test_custom_secure_string_gets_the_kms_key_and_plain_string_does_not():
+    code, ssm, _ = run_cli(BASE + ["--apply", "--add-custom", "--kms-key-id", "alias/test-ssm"],
+                           ask=lambda key: "test-custom-value",
+                           custom=custom_keys(("app/one", "String"), ("app/two", "SecureString")))
+    written = puts_by_name(ssm)
+    assert written[setup.ROOT + "app/two"]["KeyId"] == "alias/test-ssm"
+    assert "KeyId" not in written[setup.ROOT + "app/one"]
+
+
+def test_custom_secret_value_is_never_printed(capsys):
+    code, ssm, _ = run_cli(BASE + ["--apply", "--add-custom"], ask=lambda key: CUSTOM_SECRET,
+                           custom=custom_keys(("app/partner/api-token", "SecureString")))
+    captured = capsys.readouterr()
+    assert code == setup.EXIT_OK
+    assert ssm.puts and CUSTOM_SECRET not in captured.out + captured.err
+
+
+def test_custom_blank_value_is_skipped():
+    code, ssm, _ = run_cli(BASE + ["--apply", "--add-custom"], ask=lambda key: "  ",
+                           custom=custom_keys(("app/one", "String")))
+    assert code == setup.EXIT_OK
+    assert ssm.puts == []
+
+
+def test_add_custom_in_a_dry_run_asks_nothing_and_writes_nothing(capsys):
+    code, ssm, _ = run_cli(BASE + ["--add-custom"], ask=nobody_asked, custom=nobody_asked_for_custom)
+    out = capsys.readouterr().out
+    assert code == setup.EXIT_OK
+    assert ssm.puts == []
+    assert "--add-custom works with --apply" in out
+
+
+def test_existing_custom_key_is_kept_without_overwrite(capsys):
+    existing = {setup.ROOT + "app/one": "String"}
+    code, ssm, _ = run_cli(BASE + ["--apply", "--add-custom"], ssm=FakeSSM(existing),
+                           ask=lambda key: "test-custom-value", custom=custom_keys(("app/one", "String")))
+    assert code == setup.EXIT_OK
+    assert setup.ROOT + "app/one" not in puts_by_name(ssm)
+    assert "kept" in capsys.readouterr().out
+
+
+def test_existing_custom_key_is_replaced_with_overwrite():
+    existing = {setup.ROOT + "app/one": "String"}
+    code, ssm, _ = run_cli(BASE + ["--apply", "--add-custom", "--overwrite"], ssm=FakeSSM(existing),
+                           ask=lambda key: "test-custom-value", custom=custom_keys(("app/one", "String")))
+    assert puts_by_name(ssm)[setup.ROOT + "app/one"]["Overwrite"] is True
+
+
+def test_custom_key_cannot_reuse_a_built_in_name():
+    taken = {setup.ROOT + "backend/db/username"}
+    with pytest.raises(setup.Refused):
+        setup.check_custom_name(setup.ROOT + "backend/db/username", taken)
+
+
+def test_custom_key_cannot_be_entered_twice_in_one_run(capsys):
+    code, ssm, _ = run_cli(BASE + ["--apply", "--add-custom"], ask=lambda key: "test-custom-value",
+                           custom=custom_keys(("app/one", "String"), ("app/one", "String")))
+    assert code == setup.EXIT_OK
+    names = [request["Name"] for request in ssm.puts]
+    assert names.count(setup.ROOT + "app/one") == 1
+    assert len(names) == len(setup.KEYS) + 1
+    assert "refused" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("name", [
+    "live/app/token",
+    "app/live/token",
+    "app/prod/token",
+    "app/production/token",
+    "../app/token",
+    "app/../token",
+    "app//token",
+    "/app/token",
+    "app/token/",
+    "app/token name",
+    "app/token;rm",
+    "",
+])
+def test_custom_name_rules_refuse_unsafe_or_non_test_names(name):
+    with pytest.raises(setup.Refused):
+        setup.check_custom_name(setup.ROOT + name, set())
+
+
+def test_custom_name_rules_accept_a_plain_nested_name():
+    setup.check_custom_name(setup.ROOT + "app/feature-flags/export.limit_v2", set())
+
+
+def test_prompt_reprompts_after_a_bad_name_and_bad_type(capsys):
+    answers_in = iter(["live/app/token", "app/token", "text", "securestring"])
+    entered = setup.prompt_custom_key(set(), input_fn=lambda label: next(answers_in))
+    assert entered.path == "app/token"
+    assert entered.kind == "SecureString"
+    assert entered.required is False
+    out = capsys.readouterr().out
+    assert "String or SecureString" in out
+
+
+def test_prompt_defaults_type_to_string_and_blank_name_finishes():
+    answers_in = iter(["app/token", ""])
+    entered = setup.prompt_custom_key(set(), input_fn=lambda label: next(answers_in))
+    assert entered.kind == "String"
+    assert setup.prompt_custom_key(set(), input_fn=lambda label: "") is None
+
+
+def test_prompt_treats_end_of_input_as_finish():
+    def eof(_label):
+        raise EOFError
+
+    assert setup.prompt_custom_key(set(), input_fn=eof) is None
 
 
 # --- Drift checks against the application code -----------------------------------------------
