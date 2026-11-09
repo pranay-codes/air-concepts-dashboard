@@ -171,6 +171,7 @@ How it works:
 - With `--apply` it asks for each key that is not set. Type the value and press Enter. Secret values are hidden as you type. A blank answer skips that key.
 - Existing keys are kept. `--overwrite` asks for them too and replaces them. In a dry run it shows them as `would replace`.
 - Values are never printed or saved to a file.
+- `--add-custom` (with `--apply`) asks after the built-in keys for your own parameter names under `/air-concepts/test/`, such as `app/feature/limit`. For each name, choose `String` or `SecureString`, then type the value. A blank name finishes. Names may use letters, digits, `-`, `_`, `.` and `/`. A name that is already listed, or that names `live`, is refused.
 - The script stops before anything is written if the caller is not in `--expected-account-id`, or if a path is outside `/air-concepts/test/` or names `live`.
 
 The script does not check the values. A wrong value is written as typed. A required key left blank means the API may not start, so check the values before the next deploy.
@@ -201,6 +202,9 @@ python infra/scripts/setup-test-parameters.py --profile <test-profile> --expecte
 
 # 4. Replace existing values as well (asks for every key)
 python infra/scripts/setup-test-parameters.py --profile <test-profile> --expected-account-id 923079246426 --apply --overwrite
+
+# 5. Enter values for the built-in keys, then your own parameters
+python infra/scripts/setup-test-parameters.py --profile <test-profile> --expected-account-id 923079246426 --apply --add-custom
 ```
 
 Exit codes: `0` success or dry run, `1` a write failed, `2` refused by a safety check. Nothing is written on exit `2`.
