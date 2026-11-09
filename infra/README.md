@@ -208,3 +208,15 @@ python infra/scripts/setup-test-parameters.py --profile <test-profile> --expecte
 ```
 
 Exit codes: `0` success or dry run, `1` a write failed, `2` refused by a safety check. Nothing is written on exit `2`.
+
+### Listing parameters (read-only)
+
+`infra/scripts/list-parameters.py` prints the parameters under `/air-concepts/test/`, `/air-concepts/live/`, or both. String values are printed. SecureString values are never requested or printed; only their names show.
+
+```bash
+python infra/scripts/list-parameters.py --profile <profile> --expected-account-id 923079246426 --environment test
+python infra/scripts/list-parameters.py --profile <profile> --expected-account-id 923079246426 --environment live
+python infra/scripts/list-parameters.py --profile <profile> --expected-account-id 923079246426 --environment all --format json
+```
+
+Test and Live share account `923079246426`, so the environment is chosen by the path prefix. Live reads need a profile that the human has authorised for Live. The script only calls `sts:GetCallerIdentity` and `ssm:GetParametersByPath`.
