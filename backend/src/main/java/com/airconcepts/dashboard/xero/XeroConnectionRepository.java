@@ -78,10 +78,13 @@ public class XeroConnectionRepository {
   }
 
   public Optional<StoredConnection> connection(UUID entity) {
-    return jdbc.query("select c.*,case when c.read_upstream_status in (401,403) then 'NEEDS_RECONNECTION' else g.status end as status,"
-        + "coalesce(g.error_code,c.read_error_code) as error_code from public.xero_entity_connections c join public.xero_grants g on g.id=c.grant_id where c.entity_id=?",
+    return jdbc.query("select c.entity_id,c.grant_id,c.tenant_id,c.tenant_name,c.verified_at,c.read_updated_at,"
+        + "u.display_name as connected_by_name,case when c.read_upstream_status in (401,403) then 'NEEDS_RECONNECTION' else g.status end as status,"
+        + "coalesce(g.error_code,c.read_error_code) as error_code from public.xero_entity_connections c "
+        + "join public.xero_grants g on g.id=c.grant_id left join public.staff_users u on u.id=c.connected_by where c.entity_id=?",
         (r, n) -> new StoredConnection(r.getObject("entity_id", UUID.class), r.getObject("grant_id", UUID.class),
             r.getObject("tenant_id", UUID.class), r.getString("tenant_name"), r.getTimestamp("verified_at").toInstant(),
+            r.getString("connected_by_name"), instant(r, "read_updated_at"),
             GrantState.valueOf(r.getString("status")), r.getString("error_code")), entity).stream().findFirst();
   }
 
@@ -100,11 +103,11 @@ public class XeroConnectionRepository {
     Integer duplicate = jdbc.queryForObject("select count(*) from public.xero_entity_connections where tenant_id=? and entity_id<>?",
         Integer.class, selected.tenantId(), attempt.entityId());
     if (duplicate != null && duplicate > 0) throw conflict("This Xero organisation is already mapped to another entity.");
-    jdbc.update("insert into public.xero_entity_connections(entity_id,grant_id,tenant_id,connection_id,tenant_name,verified_at) values(?,?,?,?,?,?) "
+    jdbc.update("insert into public.xero_entity_connections(entity_id,grant_id,tenant_id,connection_id,tenant_name,verified_at,connected_by) values(?,?,?,?,?,?,?) "
         + "on conflict(entity_id) do update set grant_id=excluded.grant_id,tenant_id=excluded.tenant_id,connection_id=excluded.connection_id,"
-        + "tenant_name=excluded.tenant_name,verified_at=excluded.verified_at,read_error_code=null,read_upstream_status=null,"
+        + "tenant_name=excluded.tenant_name,verified_at=excluded.verified_at,connected_by=excluded.connected_by,read_error_code=null,read_upstream_status=null,"
         + "read_retry_at=null,read_updated_at=null", attempt.entityId(), attempt.grantId(), selected.tenantId(),
-        selected.connectionId(), selected.name(), Timestamp.from(now));
+        selected.connectionId(), selected.name(), Timestamp.from(now), attempt.directorId());
     for (var tenant : authorised) {
       jdbc.update("update public.xero_entity_connections set grant_id=?,connection_id=?,tenant_name=?,verified_at=?,"
           + "read_error_code=null,read_upstream_status=null,read_retry_at=null,read_updated_at=null where tenant_id=?",

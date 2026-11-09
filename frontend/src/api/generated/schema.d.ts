@@ -86,6 +86,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/entities/{entityId}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive a dashboard entity (Director only). Records and the Xero grant are kept. */
+        post: operations["archiveEntity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/{userId}": {
         parameters: {
             query?: never;
@@ -102,6 +119,24 @@ export interface paths {
         head?: never;
         /** Change a staff name, role or active status (Director only) */
         patch: operations["updateUser"];
+        trace?: never;
+    };
+    "/api/v1/entities/{entityId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** View a configured entity by its stable dashboard ID */
+        get: operations["getEntity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename a dashboard entity (Director only) */
+        patch: operations["renameEntity"];
         trace?: never;
     };
     "/api/v1/xero/callback": {
@@ -164,23 +199,6 @@ export interface paths {
         };
         /** Read the current active staff identity and server-side role */
         get: operations["getCurrentUser"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/entities/{entityId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** View a configured entity by its stable dashboard ID */
-        get: operations["getEntity"];
         put?: never;
         post?: never;
         delete?: never;
@@ -304,8 +322,12 @@ export interface components {
             /** @enum {string} */
             status: "CONNECTED" | "NOT_CONNECTED" | "NEEDS_RECONNECTION";
             organisationName?: string;
+            maskedTenantId?: string;
+            connectedBy?: string;
             /** Format: date-time */
             lastConfirmedAt?: string;
+            /** Format: date-time */
+            lastCheckedAt?: string;
             errorCode?: string;
         };
         AssignInvoice: {
@@ -362,6 +384,9 @@ export interface components {
             /** @enum {string} */
             role: "DIRECTOR" | "FINANCIAL_ADMIN" | "STANDARD_USER";
             active: boolean;
+        };
+        RenameEntity: {
+            displayName: string;
         };
         XeroAuthorizationAttempt: {
             /** Format: uuid */
@@ -645,6 +670,26 @@ export interface operations {
             };
         };
     };
+    archiveEntity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entityId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getUser: {
         parameters: {
             query?: never;
@@ -689,6 +734,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StaffMember"];
+                };
+            };
+        };
+    };
+    getEntity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entityId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Entity"];
+                };
+            };
+        };
+    };
+    renameEntity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entityId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameEntity"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Entity"];
                 };
             };
         };
@@ -773,28 +866,6 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["MeResponse"];
-                };
-            };
-        };
-    };
-    getEntity: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                entityId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Entity"];
                 };
             };
         };

@@ -111,16 +111,18 @@ export async function greenLane(page: Page, role: Role = "DIRECTOR") {
             : state.users.find((u) => u.id === path.split("/").at(-1));
     } else if (path.includes("/attempts/")) {
       if (method === "PUT") state.confirmed = true;
+      // The attempt belongs to the entity most recently added in this session, as the real flow does.
+      const attemptEntity = state.entities.at(-1)?.id ?? ENTITY_A;
       result =
         method === "PUT"
           ? {
-              entityId: ENTITY_A,
+              entityId: attemptEntity,
               status: "CONNECTED",
               organisationName: "Synthetic Xero organisation",
             }
           : {
               id: ATTEMPT,
-              entityId: ENTITY_A,
+              entityId: attemptEntity,
               state: state.confirmed ? "COMPLETED" : "READY",
               choices: [{ connectionId: CONNECTION, name: "Synthetic Xero organisation" }],
             };

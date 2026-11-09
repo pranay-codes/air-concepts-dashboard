@@ -24,9 +24,17 @@ public final class ConnectionViews {
       @Schema(requiredMode = Schema.RequiredMode.REQUIRED) OAuthAttempt.State state,
       String errorCode, Integer upstreamStatus,
       @Schema(requiredMode = Schema.RequiredMode.REQUIRED) List<Choice> choices) {}
+  /** maskedTenantId shows only the first and last four characters of the Xero tenant ID. */
   @Schema(name = "XeroConnection")
   @JsonInclude(JsonInclude.Include.NON_NULL)
   public record Connection(@Schema(requiredMode = Schema.RequiredMode.REQUIRED) UUID entityId,
       @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Status status,
-      String organisationName, Instant lastConfirmedAt, String errorCode) {}
+      String organisationName, String maskedTenantId, String connectedBy,
+      Instant lastConfirmedAt, Instant lastCheckedAt, String errorCode) {}
+
+  /** Returns a display form such as b41e…7c21. The full tenant ID never leaves the server. */
+  public static String maskTenant(UUID tenantId) {
+    String value = tenantId.toString();
+    return value.substring(0, 4) + "…" + value.substring(value.length() - 4);
+  }
 }
