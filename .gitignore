@@ -13,6 +13,7 @@ build/
 # Test reports
 test-results/
 playwright-report/
+output/playwright/
 coverage/
 surefire-reports/
 failsafe-reports/

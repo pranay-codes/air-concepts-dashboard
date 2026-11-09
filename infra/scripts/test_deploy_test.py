@@ -32,7 +32,7 @@ PARAMS = {
     "supabase/jwt-issuer-uri": "https://testref123.supabase.co/auth/v1",
     "supabase/jwks-uri": "https://testref123.supabase.co/auth/v1/.well-known/jwks.json",
     "cors/allowed-origins": "https://d111example.cloudfront.net",
-    "xero/client-secret": "xero-secret-IGNORED",
+    "unrelated/client-secret": "unrelated-secret-IGNORED",
 }
 
 AWS_STUB = """#!/usr/bin/env bash
@@ -40,7 +40,19 @@ echo "aws $*" >> "$STUB_LOG"
 case "$1 $2" in
   "ecr get-login-password") echo "stub-token" ;;
   "ssm get-parameters")
-    if [ -n "${STUB_OMIT:-}" ]; then grep -v -F "$STUB_OMIT" "$STUB_PARAMS"; else cat "$STUB_PARAMS"; fi ;;
+    names=(); collecting=0
+    for arg in "$@"; do
+      if [ "$arg" = "--names" ]; then collecting=1; continue; fi
+      if [ "$collecting" = 1 ] && [[ "$arg" == --* ]]; then collecting=0; fi
+      if [ "$collecting" = 1 ]; then names+=("$arg"); fi
+    done
+    [ "${#names[@]}" -le 10 ] || { echo "stub: more than ten parameter names" >&2; exit 1; }
+    while IFS=$'\\t' read -r name value; do
+      [ -n "${STUB_OMIT:-}" ] && [[ "$name" == *"$STUB_OMIT"* ]] && continue
+      for wanted in "${names[@]}"; do
+        if [ "$name" = "$wanted" ]; then printf '%s\\t%s\\n' "$name" "$value"; fi
+      done
+    done < "$STUB_PARAMS" ;;
   *) echo "unexpected aws call: $*" >&2; exit 2 ;;
 esac
 """
@@ -89,7 +101,9 @@ class DeployTestScriptTests(unittest.TestCase):
     def setUp(self):
         # Without the script every refusal test would pass for the wrong reason.
         self.assertTrue(SCRIPT.exists(), f"missing {SCRIPT}")
-        self._tmp = tempfile.TemporaryDirectory()
+        test_root = ROOT / "build" / "deploy-script-tests"
+        test_root.mkdir(parents=True, exist_ok=True)
+        self._tmp = tempfile.TemporaryDirectory(dir=test_root)
         self.tmp = Path(self._tmp.name)
         self.bin = self.tmp / "bin"
         self.bin.mkdir()
@@ -107,6 +121,7 @@ class DeployTestScriptTests(unittest.TestCase):
         )
 
     def tearDown(self):
+        self.assertTrue(self.tmp.resolve().is_relative_to((ROOT / "build" / "deploy-script-tests").resolve()))
         self._tmp.cleanup()
 
     def env(self, **overrides):
@@ -118,9 +133,10 @@ class DeployTestScriptTests(unittest.TestCase):
             "CADDY_IMAGE_DIGEST": CADDY,
             "BACKEND_REPOSITORY_URI": REPO,
             "API_HOSTNAME": "api.test.example",
-            "AIR_CONCEPTS_DIR": str(self.air),
-            "STUB_LOG": str(self.log),
-            "STUB_PARAMS": str(self.params),
+            "AIR_CONCEPTS_DIR": self.air.as_posix(),
+            "STUB_LOG": self.log.as_posix(),
+            "STUB_PARAMS": self.params.as_posix(),
+            "TMPDIR": self.tmp.as_posix(),
         }
         values.update(overrides)
         return {k: v for k, v in values.items() if v is not None}
@@ -159,6 +175,36 @@ class DeployTestScriptTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("CADDY_IMAGE_DIGEST", result.stdout + result.stderr)
         self.assertEqual(self.calls(), [])
+
+    def test_uc5_admin_key_is_server_only_and_never_printed(self):
+        admin_key = "synthetic-uc5-admin-key-private"
+        with self.params.open("a", encoding="utf-8", newline="\n") as output:
+            output.write(f"{PARAM_PREFIX}supabase/service-role-key\t{admin_key}\n")
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        runtime = (self.air / "runtime" / "backend.env").read_text(encoding="utf-8")
+        self.assertIn("SUPABASE_SERVICE_ROLE_KEY=" + admin_key, runtime)
+        self.assertNotIn(admin_key, result.stdout + result.stderr)
+
+    def test_uc5_xero_settings_are_batched_and_only_reach_private_backend_runtime(self):
+        settings = {
+            "xero/client-id": "synthetic-client",
+            "xero/client-secret": "synthetic-xero-private-secret",
+            "xero/redirect-uri": "https://api.test.example/api/v1/xero/callback",
+            "xero/frontend-callback-uri": "https://app.test.example/settings/entities",
+            "xero/token-encryption-key": "synthetic-xero-private-key",
+        }
+        with self.params.open("a", encoding="utf-8", newline="\n") as output:
+            for key, value in settings.items():
+                output.write(f"{PARAM_PREFIX}{key}\t{value}\n")
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        runtime = (self.air / "runtime" / "backend.env").read_text(encoding="utf-8")
+        self.assertIn("XERO_CLIENT_SECRET=synthetic-xero-private-secret", runtime)
+        self.assertIn("XERO_TOKEN_ENCRYPTION_KEY=synthetic-xero-private-key", runtime)
+        self.assertEqual(sum("ssm get-parameters" in call for call in self.calls()), 2)
+        self.assertNotIn(settings["xero/client-secret"], result.stdout + result.stderr)
+        self.assertNotIn(settings["xero/token-encryption-key"], result.stdout + result.stderr)
 
     def test_healthy_path_writes_state_and_reports_success(self):
         result = self.run_script()

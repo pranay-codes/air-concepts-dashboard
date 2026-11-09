@@ -33,6 +33,7 @@ class SecurityConfig {
             .requestMatchers("/actuator/health").permitAll()
             // QA-001 AC-4: exact path only. requestMatchers("/api/hello") does not match /api/hello/extra.
             .requestMatchers(HttpMethod.GET, "/api/hello").permitAll()
+            .requestMatchers(HttpMethod.GET, "/api/v1/xero/callback").permitAll()
             .anyRequest().authenticated())
         .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
         .build();

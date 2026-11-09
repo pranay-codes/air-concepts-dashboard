@@ -1,9 +1,18 @@
 /** Sign-in failure whose message is safe to show to the user. */
-export class AuthError extends Error {}
+export class AuthError extends Error {
+  constructor(
+    message: string,
+    readonly retryAfterSeconds?: number,
+  ) {
+    super(message);
+  }
+}
 
-/** The browser's view of Supabase Auth. Tokens stay inside this module and the Supabase client. */
+/** Browser Auth boundary. Supabase session tokens authorise API requests; Xero tokens never enter the browser. */
 export interface AuthService {
   getAccessToken(): Promise<string | null>;
-  signIn(email: string, password: string): Promise<void>;
+  requestCode(email: string): Promise<void>;
+  verifyCode(email: string, code: string): Promise<void>;
   signOut(): Promise<void>;
+  onSessionChange(listener: (token: string | null) => void): () => void;
 }

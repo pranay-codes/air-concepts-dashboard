@@ -1,23 +1,27 @@
 import { expect, test } from "@playwright/test";
+import { greenLane, signIn } from "./support/green-lane";
 
-// Requirement R8. Needs the synthetic Test user and the local API on port 8080.
-// Credentials come from the environment and are never committed.
-const email = process.env.E2E_TEST_EMAIL;
-const password = process.env.E2E_TEST_PASSWORD;
-
-test("signed-in user reaches the protected API and sees their profile", async ({ page }) => {
-  test.skip(!email || !password, "Set E2E_TEST_EMAIL and E2E_TEST_PASSWORD to run this journey.");
-
-  await page.goto("/");
-  await page.getByLabel("Email").fill(email!);
-  await page.getByLabel("Password").fill(password!);
-  await page.getByRole("button", { name: "Sign in" }).click();
-
-  await expect(page.getByText(/^Signed in as [0-9a-f-]{36}$/)).toBeVisible();
+test("FR-UC15-17 OTP reaches the workspace and sign-out clears it", async ({ page }) => {
+  const state = await greenLane(page);
+  await signIn(page);
+  await expect(page.getByText("Alex Example", { exact: true }).first()).toBeVisible();
+  expect(state.otpBody).toMatchObject({ email: "alex@example.invalid", create_user: false });
+  expect(state.requests.filter((r) => r.path.startsWith("/api/")).every((r) => r.authorized)).toBe(
+    true,
+  );
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await expect(page.getByLabel("Email", { exact: true })).toBeVisible();
+  await expect(page.getByText("INV-001", { exact: true })).toHaveCount(0);
 });
 
-test("unauthenticated request to the protected API is rejected", async ({ request }) => {
-  const response = await request.get("http://localhost:8080/api/v1/me");
+test("unauthenticated request to a running local API is rejected", async ({ request }) => {
+  test.skip(
+    process.env.E2E_LOCAL_API !== "true",
+    "Opt in with E2E_LOCAL_API=true when the local API is running.",
+  );
+  const port = Number(process.env.E2E_LOCAL_API_PORT ?? "8080");
+  expect(Number.isInteger(port) && port > 0 && port <= 65535).toBe(true);
+  const response = await request.get(`http://127.0.0.1:${port}/api/v1/me`);
 
   expect(response.status()).toBe(401);
 });

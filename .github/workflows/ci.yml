@@ -103,6 +103,8 @@ jobs:
           exit 1
       - run: npm run e2e
         working-directory: frontend
+        env:
+          E2E_LOCAL_API: "true"
       - name: Stop API
         if: always()
         working-directory: backend
