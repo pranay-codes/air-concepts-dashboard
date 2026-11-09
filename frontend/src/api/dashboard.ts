@@ -23,6 +23,17 @@ export class DashboardApi {
       body: { displayName },
     });
   }
+  async renameEntity(entity: string, displayName: string, signal?: AbortSignal): Promise<c.Entity> {
+    const result = await this.client.json(root(entity), c.isEntity, signal, {
+      method: "PATCH",
+      body: { displayName },
+    });
+    if (result.id !== entity) throw new ApiError(502, "INVALID_RESPONSE");
+    return result;
+  }
+  archiveEntity(entity: string, signal?: AbortSignal) {
+    return this.client.noContent(`${root(entity)}/archive`, signal, { method: "POST" });
+  }
   async invoices(
     entity: string,
     query: c.InvoiceQuery,

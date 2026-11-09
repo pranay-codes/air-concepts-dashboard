@@ -135,6 +135,14 @@ export class ApiClient {
     });
   }
 
+  /** For commands that succeed with 204 No Content; any other success response is rejected. */
+  noContent(path: string, signal?: AbortSignal, options: JsonOptions = {}): Promise<void> {
+    return this.execute(path, signal, options, "application/json", async (response) => {
+      if (response.status !== 204) throw new ApiError(502, "INVALID_RESPONSE");
+      await response.body?.cancel();
+    });
+  }
+
   private async execute<T>(
     path: string,
     signal: AbortSignal | undefined,

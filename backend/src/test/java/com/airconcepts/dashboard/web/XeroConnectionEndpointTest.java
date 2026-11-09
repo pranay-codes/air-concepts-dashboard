@@ -100,11 +100,14 @@ class XeroConnectionEndpointTest {
     when(repository.ownedAttempt(ATTEMPT, DIRECTOR)).thenReturn(Optional.of(ownedAttempt));
     when(grants.access(GRANT)).thenReturn(new XeroAccess(GRANT, "synthetic-access"));
     when(provider.connections("synthetic-access")).thenReturn(List.of(tenant));
-    when(repository.connection(ENTITY)).thenReturn(Optional.of(new StoredConnection(ENTITY, GRANT, tenant.tenantId(), tenant.name(), Instant.now(), GrantState.ACTIVE, null)));
+    when(repository.connection(ENTITY)).thenReturn(Optional.of(new StoredConnection(ENTITY, GRANT, tenant.tenantId(), tenant.name(),
+        Instant.now(), "Doc", null, GrantState.ACTIVE, null)));
     mvc.perform(put("/api/v1/xero/attempts/" + ATTEMPT + "/connection").header("Authorization", bearer())
         .contentType(MediaType.APPLICATION_JSON).content("{\"connectionId\":\"" + tenant.connectionId() + "\",\"tenantId\":\"" + UUID.randomUUID() + "\"}"))
         .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CONNECTED"))
-        .andExpect(jsonPath("$.organisationName").value(tenant.name())).andExpect(jsonPath("$.tenantId").doesNotExist())
+        .andExpect(jsonPath("$.organisationName").value(tenant.name()))
+        .andExpect(jsonPath("$.maskedTenantId").value(ConnectionViews.maskTenant(tenant.tenantId())))
+        .andExpect(jsonPath("$.connectedBy").value("Doc")).andExpect(jsonPath("$.tenantId").doesNotExist())
         .andExpect(jsonPath("$.accessToken").doesNotExist());
     verify(repository).completeMapping(eq(ownedAttempt), eq(tenant), eq(List.of(tenant)), any());
   }

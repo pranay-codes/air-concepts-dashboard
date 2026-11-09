@@ -249,6 +249,30 @@
         } ]
       }
     },
+    "/api/v1/entities/{entityId}/archive" : {
+      "post" : {
+        "tags" : [ "entity-controller" ],
+        "summary" : "Archive a dashboard entity (Director only). Records and the Xero grant are kept.",
+        "operationId" : "archiveEntity",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
     "/api/v1/users/{userId}" : {
       "get" : {
         "tags" : [ "staff-controller" ],
@@ -309,6 +333,76 @@
               "application/json" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/StaffMember"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}" : {
+      "get" : {
+        "tags" : [ "entity-controller" ],
+        "summary" : "View a configured entity by its stable dashboard ID",
+        "operationId" : "getEntity",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Entity"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      },
+      "patch" : {
+        "tags" : [ "entity-controller" ],
+        "summary" : "Rename a dashboard entity (Director only)",
+        "operationId" : "renameEntity",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RenameEntity"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Entity"
                 }
               }
             }
@@ -421,37 +515,6 @@
               "*/*" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/MeResponse"
-                }
-              }
-            }
-          }
-        },
-        "security" : [ {
-          "bearerAuth" : [ ]
-        } ]
-      }
-    },
-    "/api/v1/entities/{entityId}" : {
-      "get" : {
-        "tags" : [ "entity-controller" ],
-        "summary" : "View a configured entity by its stable dashboard ID",
-        "operationId" : "getEntity",
-        "parameters" : [ {
-          "name" : "entityId",
-          "in" : "path",
-          "required" : true,
-          "schema" : {
-            "type" : "string",
-            "format" : "uuid"
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/Entity"
                 }
               }
             }
@@ -827,7 +890,17 @@
           "organisationName" : {
             "type" : "string"
           },
+          "maskedTenantId" : {
+            "type" : "string"
+          },
+          "connectedBy" : {
+            "type" : "string"
+          },
           "lastConfirmedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "lastCheckedAt" : {
             "type" : "string",
             "format" : "date-time"
           },
@@ -978,6 +1051,17 @@
           }
         },
         "required" : [ "active", "displayName", "role" ]
+      },
+      "RenameEntity" : {
+        "type" : "object",
+        "properties" : {
+          "displayName" : {
+            "type" : "string",
+            "maxLength" : 160,
+            "minLength" : 0
+          }
+        },
+        "required" : [ "displayName" ]
       },
       "XeroAuthorizationAttempt" : {
         "type" : "object",

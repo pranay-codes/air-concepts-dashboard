@@ -65,11 +65,13 @@ describe("App", () => {
     };
     backend();
     render(<App auth={auth} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
-    const draft = await screen.findByLabelText("New entity name");
+    // Session loading and the lazily loaded Settings screen can exceed the default wait on a cold run.
+    fireEvent.click(await screen.findByRole("button", { name: "Settings" }, { timeout: 5000 }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add entity" }, { timeout: 5000 }));
+    const draft = await screen.findByLabelText("Entity name", undefined, { timeout: 5000 });
     fireEvent.change(draft, { target: { value: "Unsaved entity" } });
     act(() => changed("synthetic-token"));
-    expect(screen.getByLabelText("New entity name")).toHaveValue("Unsaved entity");
+    expect(screen.getByLabelText("Entity name")).toHaveValue("Unsaved entity");
   });
   it("shows the dashboard heading and the placeholder layout region", () => {
     render(<App />);

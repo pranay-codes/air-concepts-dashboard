@@ -112,18 +112,20 @@ test("FR-UC15-01_16 Director entity, Xero callback and user administration", asy
   const state = await greenLane(page);
   await signIn(page);
   await page.getByRole("button", { name: "Settings", exact: true }).click();
-  await page.getByLabel("New entity name").fill("Fourth entity");
   await page.getByRole("button", { name: "Add entity", exact: true }).click();
-  await expect(page.getByText("Added Fourth entity. Connect it to Xero below.")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Fourth entity", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Reconnect First entity", exact: true }).click();
-  await page
-    .getByLabel("Xero organisation", { exact: true })
-    .selectOption({ label: "Synthetic Xero organisation" });
-  await page.getByRole("button", { name: "Confirm connection", exact: true }).click();
+  await page.getByLabel("Entity name", { exact: true }).fill("Fourth entity");
+  await page.getByRole("button", { name: "Continue to Xero", exact: true }).click();
+  // The synthetic Xero redirect returns with the attempt, which opens the organisation choice.
+  const dialog = page.getByRole("dialog", { name: /Connect Fourth entity/ });
+  await dialog.getByLabel("Xero organisation", { exact: true }).selectOption({
+    label: "Synthetic Xero organisation",
+  });
+  await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+  await dialog.getByRole("button", { name: "Confirm connection", exact: true }).click();
   await expect(
-    page.getByText("Connection confirmed. Current connection details are shown below."),
+    page.getByText("Connected Fourth entity to Synthetic Xero organisation."),
   ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Fourth entity", exact: true })).toBeVisible();
   expect(state.confirmed).toBe(true);
   await page.getByRole("button", { name: "Users", exact: true }).click();
   await page.getByLabel("User email").fill("new@example.invalid");
