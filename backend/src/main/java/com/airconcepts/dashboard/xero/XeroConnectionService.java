@@ -89,8 +89,9 @@ public class XeroConnectionService {
     entities.get(user, entity);
     return repository.connection(entity).map(c -> new ConnectionViews.Connection(entity,
         c.grantState() == GrantState.NEEDS_RECONNECTION ? ConnectionViews.Status.NEEDS_RECONNECTION : ConnectionViews.Status.CONNECTED,
-        c.tenantName(), c.verifiedAt(), c.errorCode())).orElseGet(() ->
-        new ConnectionViews.Connection(entity, ConnectionViews.Status.NOT_CONNECTED, null, null, null));
+        c.tenantName(), ConnectionViews.maskTenant(c.tenantId()), c.connectedBy(), c.verifiedAt(), c.lastCheckedAt(), c.errorCode()))
+        .orElseGet(() -> new ConnectionViews.Connection(entity, ConnectionViews.Status.NOT_CONNECTED,
+            null, null, null, null, null, null));
   }
 
   public TenantAccess authorisedAccess(CurrentUser user, UUID entity) {

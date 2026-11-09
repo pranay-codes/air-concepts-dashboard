@@ -109,4 +109,77 @@ class EntityEndpointTest {
     }
     verifyNoInteractions(entities);
   }
+
+  @Test
+  void frUc15_01_directorCanRenameAnEntityAndNameIsStripped() throws Exception {
+    as(Role.DIRECTOR);
+    var id = UUID.randomUUID();
+    when(entities.rename(id, "Renamed")).thenReturn(Optional.of(new Entity(id, "Renamed")));
+    mvc.perform(patch("/api/v1/entities/" + id).header("Authorization", "Bearer " + TestJwts.TOKEN)
+        .contentType(MediaType.APPLICATION_JSON).content("{\"displayName\":\"  Renamed  \"}"))
+        .andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"))
+        .andExpect(jsonPath("$.displayName").value("Renamed"));
+    verify(entities).rename(id, "Renamed");
+  }
+
+  @Test
+  void frUc15_01_renameOfUnknownOrArchivedEntityIsNotFound() throws Exception {
+    as(Role.DIRECTOR);
+    var id = UUID.randomUUID();
+    when(entities.rename(id, "Name")).thenReturn(Optional.empty());
+    mvc.perform(patch("/api/v1/entities/" + id).header("Authorization", "Bearer " + TestJwts.TOKEN)
+        .contentType(MediaType.APPLICATION_JSON).content("{\"displayName\":\"Name\"}"))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  void frUc15_01_otherRolesCannotRenameOrArchive() throws Exception {
+    var id = UUID.randomUUID();
+    for (var role : List.of(Role.STANDARD_USER, Role.FINANCIAL_ADMIN)) {
+      as(role);
+      mvc.perform(patch("/api/v1/entities/" + id).header("Authorization", "Bearer " + TestJwts.TOKEN)
+          .contentType(MediaType.APPLICATION_JSON).content("{\"displayName\":\"Name\"}"))
+          .andExpect(status().isForbidden());
+      mvc.perform(post("/api/v1/entities/" + id + "/archive").header("Authorization", "Bearer " + TestJwts.TOKEN))
+          .andExpect(status().isForbidden());
+    }
+    verifyNoInteractions(entities);
+  }
+
+  @Test
+  void frUc15_02_invalidRenameNeverReachesRepository() throws Exception {
+    as(Role.DIRECTOR);
+    var id = UUID.randomUUID();
+    for (String name : List.of("", " ", "a".repeat(161))) {
+      mvc.perform(patch("/api/v1/entities/" + id).header("Authorization", "Bearer " + TestJwts.TOKEN)
+          .contentType(MediaType.APPLICATION_JSON).content("{\"displayName\":\"" + name + "\"}"))
+          .andExpect(status().isBadRequest());
+    }
+    verifyNoInteractions(entities);
+  }
+
+  @Test
+  void frUc15_01_directorArchivesEntityAndRepeatedArchiveSucceeds() throws Exception {
+    as(Role.DIRECTOR);
+    var active = UUID.randomUUID();
+    var archived = UUID.randomUUID();
+    when(entities.archive(active)).thenReturn(true);
+    when(entities.archive(archived)).thenReturn(false);
+    when(entities.exists(archived)).thenReturn(true);
+    mvc.perform(post("/api/v1/entities/" + active + "/archive").header("Authorization", "Bearer " + TestJwts.TOKEN))
+        .andExpect(status().isNoContent());
+    mvc.perform(post("/api/v1/entities/" + archived + "/archive").header("Authorization", "Bearer " + TestJwts.TOKEN))
+        .andExpect(status().isNoContent());
+    verify(entities).archive(active);
+  }
+
+  @Test
+  void frUc15_01_archiveOfUnknownEntityIsNotFound() throws Exception {
+    as(Role.DIRECTOR);
+    var unknown = UUID.randomUUID();
+    when(entities.archive(unknown)).thenReturn(false);
+    when(entities.exists(unknown)).thenReturn(false);
+    mvc.perform(post("/api/v1/entities/" + unknown + "/archive").header("Authorization", "Bearer " + TestJwts.TOKEN))
+        .andExpect(status().isNotFound());
+  }
 }

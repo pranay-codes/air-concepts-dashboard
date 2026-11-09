@@ -149,4 +149,19 @@ describe("UC5 authenticated API boundary", () => {
     ).rejects.toMatchObject({ status: 401, code: "SESSION_ENDED" });
     expect(fetcher).not.toHaveBeenCalled();
   });
+  it("FR-UC15-01 accepts only 204 No Content for commands without a response body", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }));
+    const api = new ApiClient("https://api.example.invalid", auth(), fetcher);
+    await expect(
+      api.noContent("/api/v1/entities/x/archive", undefined, { method: "POST" }),
+    ).resolves.toBeUndefined();
+    expect(fetcher.mock.calls[0]?.[1]?.method).toBe("POST");
+  });
+  it("FR-UC15-01 rejects a successful command response that carries a body", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(json({ unexpected: true }, 200));
+    const api = new ApiClient("https://api.example.invalid", auth(), fetcher);
+    await expect(
+      api.noContent("/api/v1/entities/x/archive", undefined, { method: "POST" }),
+    ).rejects.toMatchObject({ status: 502, code: "INVALID_RESPONSE" });
+  });
 });

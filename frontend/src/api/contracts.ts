@@ -173,8 +173,11 @@ export function isConnection(value: unknown): value is Connection {
     text(value.status) &&
     connectionStates.has(value.status) &&
     optionalText(value.organisationName) &&
+    optionalText(value.maskedTenantId) &&
+    optionalText(value.connectedBy) &&
     optionalText(value.errorCode) &&
-    (value.lastConfirmedAt === undefined || instant(value.lastConfirmedAt))
+    (value.lastConfirmedAt === undefined || instant(value.lastConfirmedAt)) &&
+    (value.lastCheckedAt === undefined || instant(value.lastCheckedAt))
   );
 }
 export function isAuthorization(value: unknown): value is Authorization {

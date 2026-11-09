@@ -1,123 +1,180 @@
-import { useCallback, useState, type FormEvent } from "react";
-import { ApiError, isAccessFailure } from "../api/client";
+import { useCallback, useState } from "react";
+import { isAccessFailure } from "../api/client";
+import type { Entity } from "../api/contracts";
 import { isUuid } from "../api/contracts";
-import { useAction } from "../api/useAction";
+import type { DashboardApi } from "../api/dashboard";
 import { useResource } from "../api/useResource";
 import { Failure, Loading, Notice } from "../ui/Feedback";
-import { formatFetchTime } from "../ui/format";
+import { ArchiveEntityDialog, RenameEntityDialog } from "./EntityActions";
+import { EntityDialog, type EntityDialogMode } from "./EntityDialog";
 import type { SettingsProps } from "./Settings";
 
+type Dialog =
+  | EntityDialogMode
+  | { kind: "rename"; entity: Entity }
+  | { kind: "archive"; entity: Entity; organisationName: string | null };
+
+const zone = "Pacific/Auckland";
+const dateFormat = new Intl.DateTimeFormat("en-NZ", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: zone,
+});
+const timeFormat = new Intl.DateTimeFormat("en-NZ", {
+  hour: "numeric",
+  minute: "2-digit",
+  timeZone: zone,
+});
+
+/** Card dates are shown in the business time zone. Values that are not dates are reported as unknown. */
+function connectedDate(value: string | undefined): string | null {
+  const date = value ? new Date(value) : null;
+  return date && Number.isFinite(date.getTime()) ? dateFormat.format(date) : null;
+}
+function lastChecked(value: string | null | undefined): string {
+  const date = value ? new Date(value) : null;
+  if (!date || !Number.isFinite(date.getTime())) return "Not checked yet";
+  const day = dateFormat.format(date);
+  const time = timeFormat.format(date);
+  return day === dateFormat.format(new Date()) ? `Today, ${time}` : `${day}, ${time}`;
+}
+
+/** Opens the dialog for a return from Xero. Invalid values are reported instead of being used. */
+function initialDialog(): Dialog | null {
+  const attempt = new URLSearchParams(window.location.search).get("xeroAttempt");
+  return attempt && isUuid(attempt) ? { kind: "resume", attemptId: attempt } : null;
+}
+
 export function EntitySettings(props: SettingsProps) {
-  const { api, entities, onDirty, onEntitiesChanged } = props;
-  const [name, setName] = useState("");
-  const [success, setSuccess] = useState("");
+  const { api, entities, onEntitiesChanged, onAccessDenied, openAuthorization } = props;
   const [revision, setRevision] = useState(0);
-  const [attemptId, setAttemptId] = useState(() =>
-    new URLSearchParams(window.location.search).get("xeroAttempt"),
-  );
-  const action = useAction(`create-entity:${props.profile.subject}`);
+  const [success, setSuccess] = useState("");
+  const [invalidReturn] = useState(() => {
+    const attempt = new URLSearchParams(window.location.search).get("xeroAttempt");
+    return attempt !== null && !isUuid(attempt);
+  });
+  const [dialog, setDialog] = useState<Dialog | null>(initialDialog);
+
   function changed() {
     setRevision((value) => value + 1);
     onEntitiesChanged();
   }
-  async function create(event: FormEvent) {
-    event.preventDefault();
-    if (!name.trim() || name.trim().length > 160) return;
-    const result = await action.run(
-      (signal) => api.createEntity(name.trim(), signal),
-      (error) => {
-        if (isAccessFailure(error)) props.onAccessDenied();
-      },
-    );
-    if (result) {
-      setName("");
-      onDirty(false);
-      setSuccess(`Added ${result.displayName}. Connect it to Xero below.`);
-      changed();
-    }
+  function closeDialog() {
+    if (dialog?.kind === "resume") window.history.replaceState(null, "", window.location.pathname);
+    setDialog(null);
   }
+
   return (
     <>
-      <h2>Entities and Xero</h2>
-      <p>Each entity connects to one authorised Xero organisation. Invoice data stays in Xero.</p>
-      <form className="card settings-form" aria-label="Add entity" onSubmit={create}>
-        <label htmlFor="new-entity-name">New entity name</label>
-        <input
-          id="new-entity-name"
-          required
-          maxLength={160}
-          value={name}
-          disabled={action.busy}
-          onChange={(event) => {
-            setName(event.target.value);
-            onDirty(Boolean(event.target.value));
-          }}
-        />
-        <div className="action-row">
-          <button type="submit" className="primary" disabled={action.busy || !name.trim()}>
-            {action.busy ? "Adding entity…" : "Add entity"}
-          </button>
-          <button
-            type="button"
-            disabled={action.busy || !name}
-            onClick={() => {
-              setName("");
-              onDirty(false);
-            }}
-          >
-            Clear name
-          </button>
+      <div className="entities-header">
+        <div>
+          <h2>Entities</h2>
+          <p>
+            Each entity is linked to one Xero organisation. Its invoices, bills and forecast come
+            from there.
+          </p>
         </div>
-        {action.error ? (
-          <>
-            <Failure error={action.error} />
-            <p className="supporting">
-              If creation was interrupted, refresh Entities and check whether it was added before
-              submitting again.
-            </p>
-          </>
-        ) : null}
-      </form>
-      {success ? <Notice tone="success">{success}</Notice> : null}
-      {attemptId ? (
-        isUuid(attemptId) ? (
-          <ConnectionAttempt
-            {...props}
-            attemptId={attemptId}
-            onConfirmed={changed}
-            onClose={() => {
-              setAttemptId(null);
-              window.history.replaceState(null, "", window.location.pathname);
-            }}
-          />
-        ) : (
-          <Notice tone="warning">
-            This authorisation link is invalid. Start a new connection.
-          </Notice>
-        )
+        <button type="button" className="primary" onClick={() => setDialog({ kind: "add" })}>
+          <span aria-hidden="true">+ </span>Add entity
+        </button>
+      </div>
+      {success ? (
+        <Notice tone="success">
+          {success}{" "}
+          <button type="button" onClick={() => setSuccess("")}>
+            Dismiss
+          </button>
+        </Notice>
       ) : null}
-      <div className="entity-cards">
+      {invalidReturn ? (
+        <Notice tone="warning">This authorisation link is invalid. Start a new connection.</Notice>
+      ) : null}
+      <div className="entity-list">
         {entities.map((entity) => (
-          <EntityConnection
+          <EntityCard
             key={`${entity.id}:${revision}`}
-            {...props}
+            api={api}
             entity={entity}
-            blocked={Boolean(name)}
+            onAccessDenied={onAccessDenied}
+            onConnect={() => setDialog({ kind: "connect", entity })}
+            onRename={() => setDialog({ kind: "rename", entity })}
+            onArchive={(organisationName) =>
+              setDialog({ kind: "archive", entity, organisationName })
+            }
           />
         ))}
       </div>
       {!entities.length ? (
         <Notice>Add your first entity, then connect its Xero organisation.</Notice>
       ) : null}
+      <p className="supporting security-note">
+        Xero access keys are stored encrypted on the server and never shown in the browser. Only the
+        Director can add, edit or remove entities.
+      </p>
+      {dialog &&
+      (dialog.kind === "add" || dialog.kind === "connect" || dialog.kind === "resume") ? (
+        <EntityDialog
+          mode={dialog}
+          api={api}
+          entities={entities}
+          onAccessDenied={onAccessDenied}
+          openAuthorization={openAuthorization}
+          onClose={closeDialog}
+          onEntitiesChanged={changed}
+          onConfirmed={(message) => {
+            setSuccess(message);
+            closeDialog();
+            changed();
+          }}
+        />
+      ) : null}
+      {dialog?.kind === "rename" ? (
+        <RenameEntityDialog
+          api={api}
+          entity={dialog.entity}
+          onAccessDenied={onAccessDenied}
+          onClose={closeDialog}
+          onRenamed={() => {
+            setSuccess("Entity name saved.");
+            closeDialog();
+            changed();
+          }}
+        />
+      ) : null}
+      {dialog?.kind === "archive" ? (
+        <ArchiveEntityDialog
+          api={api}
+          entity={dialog.entity}
+          organisationName={dialog.organisationName}
+          onAccessDenied={onAccessDenied}
+          onClose={closeDialog}
+          onArchived={() => {
+            setSuccess(`${dialog.entity.displayName} was removed from the entity list.`);
+            closeDialog();
+            changed();
+          }}
+        />
+      ) : null}
     </>
   );
 }
-function EntityConnection({
+
+function EntityCard({
+  api,
   entity,
-  blocked,
-  ...props
-}: SettingsProps & { entity: SettingsProps["entities"][number]; blocked: boolean }) {
-  const { api, onAccessDenied } = props;
+  onAccessDenied,
+  onConnect,
+  onRename,
+  onArchive,
+}: {
+  api: DashboardApi;
+  entity: Entity;
+  onAccessDenied(): void;
+  onConnect(): void;
+  onRename(): void;
+  onArchive(organisationName: string | null): void;
+}) {
   const load = useCallback(
     async (signal: AbortSignal) => {
       try {
@@ -130,20 +187,29 @@ function EntityConnection({
     [api, entity.id, onAccessDenied],
   );
   const resource = useResource(`entity-settings:${entity.id}`, load);
-  const action = useAction(`connect:${entity.id}`);
-  async function connect() {
-    const result = await action.run(
-      (signal) => props.api.startConnection(entity.id, signal),
-      (error) => {
-        if (isAccessFailure(error)) props.onAccessDenied();
-      },
-    );
-    if (result)
-      (props.openAuthorization ?? ((url) => window.location.assign(url)))(result.authorizationUrl);
-  }
+  const connection = resource.data;
+  const connected = connection?.status === "CONNECTED";
+  const reconnect = connection?.status === "NEEDS_RECONNECTION";
+  const verifiedOn = connectedDate(connection?.lastConfirmedAt);
   return (
-    <article className="card">
-      <h3>{entity.displayName}</h3>
+    <article className="card entity-card">
+      <div className="entity-card-header">
+        <h3>
+          <span className="entity-dot" aria-hidden="true" />
+          {entity.displayName}
+        </h3>
+        {connection ? (
+          connected ? (
+            <span className={`badge ${connection.errorCode ? "warning" : "success"}`}>
+              {connection.errorCode ? "Check connection" : "Connected"}
+            </span>
+          ) : (
+            <span className="badge warning">
+              {reconnect ? "Needs reconnection" : "Not connected"}
+            </span>
+          )
+        ) : null}
+      </div>
       {resource.status === "loading" ? <Loading label="Checking Xero connection…" /> : null}
       {resource.status === "error" ? (
         <Failure
@@ -152,145 +218,50 @@ function EntityConnection({
           label={`Retry ${entity.displayName} connection`}
         />
       ) : null}
-      {resource.data ? (
+      {connection ? (
         <>
-          <p>
-            <span
-              className={`badge ${resource.data.status === "CONNECTED" ? "success" : "warning"}`}
-            >
-              {resource.data.status === "CONNECTED"
-                ? "Connected"
-                : resource.data.status === "NEEDS_RECONNECTION"
-                  ? "Needs reconnection"
-                  : "Not connected"}
-            </span>
-          </p>
-          {resource.data.organisationName ? <p>{resource.data.organisationName}</p> : null}
           <p className="supporting">
-            Last confirmed: {formatFetchTime(resource.data.lastConfirmedAt)}
+            Xero organisation · <strong>{connection.organisationName ?? "Not linked"}</strong>
           </p>
+          <dl className="entity-facts">
+            <div>
+              <dt>Tenant ID</dt>
+              <dd>
+                <code>{connection.maskedTenantId ?? "Not recorded"}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>Connected by</dt>
+              <dd>
+                {connection.connectedBy
+                  ? `${connection.connectedBy}${verifiedOn ? ` · ${verifiedOn}` : ""}`
+                  : "Not recorded"}
+              </dd>
+            </div>
+            <div>
+              <dt>Last checked</dt>
+              <dd>{lastChecked(connection.lastCheckedAt)}</dd>
+            </div>
+          </dl>
         </>
       ) : null}
-      <button type="button" disabled={action.busy || blocked} onClick={() => void connect()}>
-        {action.busy
-          ? "Opening Xero…"
-          : `${resource.data?.status === "CONNECTED" || resource.data?.status === "NEEDS_RECONNECTION" ? "Reconnect" : "Connect"} ${entity.displayName}`}
-      </button>
-      {blocked ? (
-        <p className="supporting">
-          Finish adding the new entity or clear its name before connecting to Xero.
-        </p>
-      ) : null}
-      {action.error ? <Failure error={action.error} /> : null}
-    </article>
-  );
-}
-function ConnectionAttempt({
-  api,
-  entities,
-  onAccessDenied,
-  attemptId,
-  onConfirmed,
-  onClose,
-}: SettingsProps & { attemptId: string; onConfirmed(): void; onClose(): void }) {
-  const [selected, setSelected] = useState("");
-  const [confirmed, setConfirmed] = useState(false);
-  const load = useCallback(
-    async (signal: AbortSignal) => {
-      try {
-        return await api.attempt(attemptId, signal);
-      } catch (error) {
-        if (!signal.aborted && isAccessFailure(error)) onAccessDenied();
-        throw error;
-      }
-    },
-    [api, attemptId, onAccessDenied],
-  );
-  const resource = useResource(`xero-attempt:${attemptId}`, load);
-  const action = useAction(`confirm:${attemptId}`);
-  const attempt = resource.data;
-  const entity = entities.find((entity) => entity.id === attempt?.entityId);
-  async function confirm(event: FormEvent) {
-    event.preventDefault();
-    if (!attempt || !selected) return;
-    const result = await action.run(
-      async (signal) => {
-        const value = await api.confirmConnection(attemptId, selected, signal);
-        if (value.entityId !== attempt.entityId) throw new ApiError(502, "INVALID_RESPONSE");
-        return value;
-      },
-      (error) => {
-        if (isAccessFailure(error)) onAccessDenied();
-      },
-    );
-    if (result) {
-      setConfirmed(true);
-      onConfirmed();
-      resource.refresh();
-    }
-  }
-  return (
-    <section className="card connection-attempt" aria-label="Complete Xero connection">
-      <h3>Complete Xero connection{entity ? ` for ${entity.displayName}` : ""}</h3>
-      {resource.status === "loading" ? <Loading label="Checking authorisation…" /> : null}
-      {resource.status === "error" ? (
-        <Failure
-          error={resource.error}
-          onRetry={resource.refresh}
-          label="Check authorisation again"
-        />
-      ) : null}
-      {confirmed || attempt?.state === "COMPLETED" ? (
-        <Notice tone="success">
-          Connection confirmed. Current connection details are shown below.
-        </Notice>
-      ) : attempt?.state === "READY" ? (
-        attempt.choices.length ? (
-          <form onSubmit={confirm}>
-            <label htmlFor="xero-organisation">Xero organisation</label>
-            <select
-              id="xero-organisation"
-              value={selected}
-              disabled={action.busy}
-              onChange={(event) => setSelected(event.target.value)}
-            >
-              <option value="">Choose an authorised organisation</option>
-              {attempt.choices.map((choice) => (
-                <option key={choice.connectionId} value={choice.connectionId}>
-                  {choice.name}
-                </option>
-              ))}
-            </select>
-            <p className="supporting">
-              Confirm the organisation that belongs to {entity?.displayName ?? "this entity"}. An
-              organisation can be connected to only one entity.
-            </p>
-            <button type="submit" className="primary" disabled={action.busy || !selected}>
-              {action.busy ? "Confirming…" : "Confirm connection"}
-            </button>
-          </form>
-        ) : (
-          <Notice tone="warning">
-            No authorised organisations are available. Start a new connection and grant access in
-            Xero.
-          </Notice>
-        )
-      ) : attempt?.state === "FAILED" ? (
-        <Notice tone="warning">
-          Authorisation failed or expired. Start a new connection for this entity.
-        </Notice>
-      ) : attempt ? (
-        <Notice>
-          Authorisation is still in progress.{" "}
-          <button type="button" onClick={resource.refresh}>
-            Check again
+      <div className="action-row">
+        {connection && !connected ? (
+          <button type="button" className="primary" onClick={onConnect}>
+            {reconnect ? `Reconnect ${entity.displayName}` : `Connect ${entity.displayName}`}
           </button>
-        </Notice>
-      ) : null}
-      {action.error ? <Failure error={action.error} /> : null}
-      <button type="button" disabled={action.busy} onClick={onClose}>
-        Dismiss connection attempt
-      </button>
-    </section>
+        ) : null}
+        <button type="button" onClick={onRename}>
+          Edit
+        </button>
+        <button
+          type="button"
+          className="danger"
+          onClick={() => onArchive(connection?.organisationName ?? null)}
+        >
+          Remove
+        </button>
+      </div>
+    </article>
   );
 }

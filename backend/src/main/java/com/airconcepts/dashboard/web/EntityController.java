@@ -32,6 +32,7 @@ public class EntityController {
   }
 
   public record CreateEntity(@NotBlank @Size(max = 160) String displayName) {}
+  public record RenameEntity(@NotBlank @Size(max = 160) String displayName) {}
 
   @GetMapping
   @Operation(operationId = "listEntities", summary = "List every configured entity accessible to active staff")
@@ -52,5 +53,21 @@ public class EntityController {
     Entity entity = entities.create(users.from(jwt), request.displayName());
     return ResponseEntity.created(URI.create("/api/v1/entities/" + entity.id()))
         .cacheControl(CacheControl.noStore()).body(entity);
+  }
+
+  @PatchMapping("/{entityId}")
+  @Operation(operationId = "renameEntity", summary = "Rename a dashboard entity (Director only)")
+  public ResponseEntity<Entity> rename(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID entityId,
+      @Valid @RequestBody RenameEntity request) {
+    Entity entity = entities.rename(users.from(jwt), entityId, request.displayName());
+    return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(entity);
+  }
+
+  @PostMapping("/{entityId}/archive")
+  @Operation(operationId = "archiveEntity",
+      summary = "Archive a dashboard entity (Director only). Records and the Xero grant are kept.")
+  public ResponseEntity<Void> archive(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID entityId) {
+    entities.archive(users.from(jwt), entityId);
+    return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
   }
 }
