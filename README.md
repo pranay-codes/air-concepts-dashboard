@@ -25,7 +25,10 @@ Backend, from `backend/`, with `SPRING_PROFILES_ACTIVE=local`:
 - `SUPABASE_TEST_PROJECT_REF`: the Test project ref. Startup fails unless the Supabase and database settings point at it.
 - `SUPABASE_JWT_AUDIENCE`: optional, defaults to `authenticated`
 - `CORS_ALLOWED_ORIGINS`: optional, defaults to the Vite dev origin
+- `SUPABASE_SERVICE_ROLE_KEY`: optional, secret; staff administration only
+- `XERO_CLIENT_ID`, `XERO_CLIENT_SECRET`, `XERO_REDIRECT_URI`, `XERO_FRONTEND_CALLBACK_URI`, `XERO_TOKEN_ENCRYPTION_KEY`: optional; Xero connection fails closed while blank
 - Environment variables set in your shell take precedence over `.env`
+- Every setting, its format and its Parameter Store name: [docs/configuration.md](docs/configuration.md)
 
 Run: `./mvnw -q spring-boot:run`
 

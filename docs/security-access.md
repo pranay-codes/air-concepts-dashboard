@@ -1,6 +1,6 @@
 # Security access
 
-This page records who and what may read or write the Test environment's secrets and configuration. It covers AWS Systems Manager Parameter Store for the dashboard API. Live is out of scope here and is released through a separate human-triggered workflow (ADR-001).
+This page records who and what may read or write the Test environment's secrets and configuration. It covers AWS Systems Manager Parameter Store for the dashboard API. Live is out of scope here and is released through a separate human-triggered workflow (ADR-001). Every setting, its format and where it is read: [configuration.md](configuration.md).
 
 ## Parameter Store layout
 
@@ -17,11 +17,14 @@ This page records who and what may read or write the Test environment's secrets 
 | `backend/db/password` | SecureString | API `DATABASE_PASSWORD` | Yes |
 | `backend/supabase/project-ref` | String | API `SUPABASE_TEST_PROJECT_REF` | Yes |
 | `backend/supabase/jwt-issuer-uri` | String | API `SUPABASE_JWT_ISSUER_URI` | Yes |
-| `backend/supabase/jwks-uri` | String | API `SUPABASE_JWKS_URI` | Yes |
+| `backend/supabase/jwks-uri` | String | API `SUPABASE_JWKS_URI`, must end `/.well-known/jwks.json` | Yes |
+| `backend/supabase/service-role-key` | SecureString | API `SUPABASE_SERVICE_ROLE_KEY` (staff administration only) | No |
 | `backend/cors/allowed-origins` | String | API `CORS_ALLOWED_ORIGINS` | No |
-| `backend/xero/client-id` | String | none yet (placeholder) | No |
-| `backend/xero/client-secret` | SecureString | none yet (placeholder) | No |
-| `backend/xero/redirect-uri` | String | none yet (placeholder) | No |
+| `backend/xero/client-id` | String | API `XERO_CLIENT_ID` | No |
+| `backend/xero/client-secret` | SecureString | API `XERO_CLIENT_SECRET` | No |
+| `backend/xero/redirect-uri` | String | API `XERO_REDIRECT_URI` | No |
+| `backend/xero/frontend-callback-uri` | String | API `XERO_FRONTEND_CALLBACK_URI` | No |
+| `backend/xero/token-encryption-key` | SecureString | API `XERO_TOKEN_ENCRYPTION_KEY` | No |
 | `backend/vwork/api-key` | SecureString | none yet (placeholder) | No |
 | `frontend/api-base-url` | String | frontend `VITE_API_BASE_URL` at build time | Yes |
 | `frontend/supabase-url` | String | frontend `VITE_SUPABASE_URL` at build time | Yes |
@@ -30,9 +33,9 @@ This page records who and what may read or write the Test environment's secrets 
 Notes:
 
 - The frontend values are inlined into the browser bundle by Vite at build time. They are public by design, so they are stored as `String`. Never put a service-role key or other secret under `frontend/`.
-- The API reads plain environment variables only. Nothing in the backend reads Parameter Store yet. The deployment step that exports these values to the API process is a separate task.
-- A blank answer in the script skips that key. The API will not start without the required backend keys, so skipping one is a deliberate choice. No Xero or vWork code exists, so no spike note confirms either integration (AGENTS.md section 2).
-- The Supabase service-role key is not stored. No backend code uses it.
+- The API reads plain environment variables only. `infra/deploy/deploy-test.sh` reads these parameters on the Test host through SSM Run Command at deploy time and writes `runtime/backend.env`. The API never calls Parameter Store itself.
+- A blank answer in the script skips that key. The API will not start without the required backend keys, so skipping one is a deliberate choice. Xero code is wired (see [configuration.md](configuration.md)), but no Xero capability counts as implemented until a spike note confirms it. vWork has no code yet (AGENTS.md section 2).
+- The Supabase service-role key is stored as a SecureString at `backend/supabase/service-role-key`. Only the staff administration code (`SupabaseAdminConfig`, `SupabaseAdminClient`) reads it. It is never sent to the browser.
 - Xero access and refresh tokens are never stored as static parameters. They stay server-side and encrypted.
 - The database password must not appear in `backend/db/jdbc-url`. The setup script does not check values, so the operator keeps it out of the URL.
 
@@ -123,4 +126,4 @@ Drop the KMS statement if the AWS default key is used. The explicit deny keeps L
 - Confirm whether Live will move to a separate AWS account. If it does, change the account check to a value per environment and update the policies above.
 - Decide whether to use a customer-managed KMS key. Replace `REPLACE_WITH_KEY_ID` if so.
 - Name the EC2 Test role once it exists, and attach the read policy above.
-- Choose a loader for the API: the deploy step that exports these values as environment variables, or a Spring Cloud AWS dependency. Either is a separate task.
+- Confirm on the Test host that `deploy-test.sh` is the only path that writes `runtime/backend.env`.

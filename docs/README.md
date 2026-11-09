@@ -1,5 +1,9 @@
 # Project documentation
 
+## Configuration
+
+[configuration.md](configuration.md) lists every environment variable and Parameter Store parameter, with where each is read, whether it is required and its format. Keep it in step with `.env.EXAMPLE`, the README and `security-access.md`.
+
 ## INF-002 infrastructure
 
 The [infrastructure guide](../infra/README.md#shared-cloudformation-blueprint)
