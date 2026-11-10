@@ -51,8 +51,27 @@ class XeroForecastClientTest {
         .isEqualTo(LocalDate.of(2026, 11, 16));
   }
 
+  @Test void frUc04_01_emptyFirstPageWithoutPaginationIsZeroRows() {
+    server.expect(anything()).andRespond(withSuccess("{\"Invoices\":[]}", MediaType.APPLICATION_JSON)
+        .header("X-DayLimit-Remaining", "998"));
+    var result = client.page(access, InvoiceType.ACCPAY, 1, null);
+    assertThat(result.documents()).isEmpty();
+    assertThat(result.itemCount()).isZero();
+    assertThat(result.pageCount()).isEqualTo(1);
+    assertThat(result.limits().day()).isEqualTo(998);
+  }
+
+  @Test void frUc04_01_emptyLaterPageWithoutPaginationIsRejected() {
+    server.expect(anything()).andRespond(withSuccess("{\"Invoices\":[]}", MediaType.APPLICATION_JSON));
+    assertThatThrownBy(() -> client.page(access, InvoiceType.ACCREC, 2, null))
+        .isInstanceOfSatisfying(ProviderFailure.class, f -> {
+          assertThat(f.code()).isEqualTo("XERO_INVALID_RESPONSE");
+          assertThat(f.getMessage()).contains("pagination missing");
+        });
+  }
+
   @Test void frUc04_01_rejectsMalformedPaginationDuplicateIdsAndWrongType() {
-    var cases = Map.of("{\"Invoices\":[]}", "pagination missing",
+    var cases = Map.of("{\"Invoices\":[" + invoice("ACCREC") + "]}", "pagination missing",
         page(invoice("ACCREC"), 2), "row count differs from pagination itemCount",
         page(invoice("ACCPAY"), 1), "Type differs from the requested type",
         page(invoice("ACCREC") + "," + invoice("ACCREC"), 2), "duplicate InvoiceID in page",
