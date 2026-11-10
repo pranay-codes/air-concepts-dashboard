@@ -22,7 +22,9 @@ class XeroForecastClientTest {
 
   @Test void frUc04_01_expectedPaymentDateAndExactOutstandingQuery() {
     server.expect(r -> assertThat(r.getURI().getQuery()).contains("Type==\"ACCREC\"", "Status==\"AUTHORISED\"",
-        "AmountDue>0", "UpdatedDateUTC ASC,InvoiceID ASC", "summaryOnly=true", "pageSize=100"))
+        "AmountDue>0", "UpdatedDateUTC ASC,InvoiceID ASC", "pageSize=100"))
+        // summaryOnly=true makes Xero omit the pagination object (observed on Test, 11 Nov 2026), so it is not sent.
+        .andExpect(r -> assertThat(r.getURI().getQuery()).doesNotContain("summaryOnly"))
         .andExpect(header("xero-tenant-id", access.tenantId().toString()))
         .andRespond(withSuccess(page(invoice("ACCREC"), 1), MediaType.APPLICATION_JSON)
             .header("X-DayLimit-Remaining", "999"));

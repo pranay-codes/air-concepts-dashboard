@@ -45,7 +45,7 @@ public class XeroForecastClient {
         ? " AND Status==\"" + ForecastSource.OUTSTANDING_STATUS + "\" AND AmountDue>0" : "");
     var request = api.get().uri(b -> b.path("/api.xro/2.0/Invoices").queryParam("where", "{where}")
         .queryParam("order", "{order}").queryParam("page", page).queryParam("pageSize", PAGE_SIZE)
-        .queryParam("summaryOnly", true).build(Map.of("where", where, "order", "UpdatedDateUTC ASC,InvoiceID ASC")));
+        .build(Map.of("where", where, "order", "UpdatedDateUTC ASC,InvoiceID ASC")));
     if (modifiedSince != null) request.header("If-Modified-Since",
         DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss").withZone(ZoneOffset.UTC).format(modifiedSince));
     var response = call(request, access);
