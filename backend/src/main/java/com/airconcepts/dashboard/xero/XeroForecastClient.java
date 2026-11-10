@@ -50,6 +50,13 @@ public class XeroForecastClient {
         DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss").withZone(ZoneOffset.UTC).format(modifiedSince));
     var response = call(request, access);
     var body = response.getBody(); var p = body.pagination();
+    // Xero may omit the pagination object when the first page matches nothing. An empty first page is zero rows;
+    // a missing pagination object on a later page, or alongside any row, is still rejected below.
+    if (p == null && page == 1 && body.invoices().isEmpty()) {
+      var h0 = response.getHeaders();
+      return new ForecastSource.Page(List.of(), 1, 0, new ForecastSource.Limits(
+          limit(h0, "X-DayLimit-Remaining"), limit(h0, "X-MinLimit-Remaining"), limit(h0, "X-AppMinLimit-Remaining")));
+    }
     if (p == null) throw XeroReadErrors.malformed("pagination missing");
     if (p.page() == null || p.pageSize() == null || p.pageCount() == null || p.itemCount() == null)
       throw XeroReadErrors.malformed("pagination fields missing");
