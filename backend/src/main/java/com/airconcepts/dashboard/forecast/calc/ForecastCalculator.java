@@ -21,14 +21,15 @@ public final class ForecastCalculator {
       if(d.dateConflict()) exceptions.add(new ForecastException("DATE_CONFLICT",d.id(),"Review the split schedule after a Xero change."));
       if(d.excluded()) {exclusions.add(new Exclusion(d.id(),d.number(),d.exclusionReason()));continue;}
       if(!d.splits().isEmpty()) {
-        for(var line:d.splits()) addDocument(data,d,line.expectedDate(),line.amount(),DateRule.SPLIT,line.sequence(),d.splits().size(),contributions,exceptions);
+        for(var line:d.splits()) addDocument(data,d,line.expectedDate(),line.amount(),DateRule.SPLIT,line.sequence(),d.splits().size(),contributions);
       } else {
         LocalDate date=d.overrideDate()!=null?d.overrideDate():d.xeroExpectedDate()!=null?d.xeroExpectedDate():d.dueDate()!=null?d.dueDate():d.issueDate();
         DateRule rule=d.overrideDate()!=null?DateRule.OVERRIDE:d.xeroExpectedDate()!=null?DateRule.XERO_EXPECTED_DATE:d.dueDate()!=null?DateRule.DUE_DATE:DateRule.ISSUE_DATE;
         if(rule==DateRule.ISSUE_DATE) exceptions.add(new ForecastException("MISSING_DUE_DATE",d.id(),"No due date recorded; invoice date used."));
-        addDocument(data,d,date,d.amountDue(),rule,null,null,contributions,exceptions);
+        addDocument(data,d,date,d.amountDue(),rule,null,null,contributions);
       }
     }
+    addOverdueSummaries(data,contributions,exceptions);
     for(var item:data.manualItems()) {
       if(!item.active()) continue;
       if(item.recurrence().equals("ONE_OFF")) {
@@ -64,12 +65,26 @@ public final class ForecastCalculator {
         List.copyOf(contributions),List.copyOf(exclusions));
   }
   private void addDocument(ForecastDataset data,Document d,LocalDate date,BigDecimal amount,DateRule rule,Integer sequence,Integer count,
-      List<Contribution> rows,List<ForecastException> exceptions) {
+      List<Contribution> rows) {
     boolean overdue=date.isBefore(data.today());
     YearMonth bucket=overdue&&overduePolicy==OverduePolicy.CURRENT_MONTH?YearMonth.from(data.today()):YearMonth.from(date);
     rows.add(new Contribution(d.id(),"DOCUMENT",d.type().equals("ACCREC")?"IN":"OUT",d.type(),d.number(),d.contact(),date,bucket,money(amount),rule,overdue,sequence,count));
-    if(overdue&&exceptions.stream().noneMatch(e->e.kind().equals("OVERDUE")&&d.id().equals(e.documentId())))
-      exceptions.add(new ForecastException("OVERDUE",d.id(),"Overdue cash is included using the configured overdue policy."));
+  }
+  /** One planning summary per direction: how much overdue cash is in the forecast, and where it sits. */
+  private void addOverdueSummaries(ForecastDataset data,List<Contribution> rows,List<ForecastException> exceptions) {
+    for(var direction:List.of("IN","OUT")) {
+      var overdue=rows.stream().filter(c->c.overdue()&&c.direction().equals(direction)).toList();
+      if(overdue.isEmpty()) continue;
+      long invoices=overdue.stream().map(Contribution::sourceId).distinct().count();
+      BigDecimal total=overdue.stream().map(Contribution::amount).reduce(ZERO,BigDecimal::add);
+      String noun=direction.equals("IN")?(invoices==1?"receipt":"receipts"):(invoices==1?"payment":"payments");
+      String verb=invoices==1?"is":"are";
+      String placement=overduePolicy==OverduePolicy.CURRENT_MONTH
+          ?"included in "+YearMonth.from(data.today()).format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy",Locale.ENGLISH))
+          :(invoices==1?"shown at its original forecast date":"shown at their original forecast dates");
+      exceptions.add(new ForecastException("OVERDUE",null,
+          invoices+" overdue "+noun+" (NZD "+String.format(Locale.ENGLISH,"%,.2f",total)+") "+verb+" "+placement+"."));
+    }
   }
   private static void addManual(ManualItem item,YearMonth month,List<Contribution> rows) {
     rows.add(new Contribution(item.id(),"MANUAL",item.direction(),item.category(),null,item.description(),day(month,item.dayOfMonth()),month,
