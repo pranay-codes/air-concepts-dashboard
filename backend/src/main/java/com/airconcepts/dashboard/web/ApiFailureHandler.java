@@ -16,6 +16,8 @@ public class ApiFailureHandler {
   ResponseEntity<ProblemDetail> failure(ApiFailure failure) {
     var detail = ProblemDetail.forStatusAndDetail(failure.status(), failure.getMessage());
     detail.setProperty("code", failure.code());
+    if (failure instanceof com.airconcepts.dashboard.forecast.excel.WorkbookFailure workbook) detail.setProperty("problems", workbook.problems());
+    if (failure instanceof com.airconcepts.dashboard.forecast.ForecastValidation.ForecastInputFailure input) detail.setProperty("fieldErrors", input.fieldErrors());
     if (failure instanceof ProviderFailure provider) detail.setProperty("upstreamStatus", provider.upstreamStatus());
     var response = ResponseEntity.status(failure.status()).cacheControl(CacheControl.noStore());
     if (failure instanceof ProviderFailure provider && provider.retryAfterSeconds() != null) {

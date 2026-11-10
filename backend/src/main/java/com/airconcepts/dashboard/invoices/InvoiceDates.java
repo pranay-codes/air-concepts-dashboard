@@ -2,20 +2,19 @@ package com.airconcepts.dashboard.invoices;
 
 import java.math.BigDecimal;
 import java.time.Clock;
+import com.airconcepts.dashboard.time.BusinessTime;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.temporal.TemporalAdjusters;
 
 /** Business calendar rules independent of server time zone and transport. */
 public final class InvoiceDates {
-  private static final ZoneId BUSINESS_ZONE = ZoneId.of("Pacific/Auckland");
   private InvoiceDates() {}
 
   public enum Preset { ALL_DATES, THIS_MONTH, LAST_THREE_MONTHS, THIS_YEAR }
   public record Range(LocalDate from, LocalDate to) {}
 
   public static LocalDate today(Clock clock) {
-    return LocalDate.now(clock.withZone(BUSINESS_ZONE));
+    return BusinessTime.today(clock);
   }
 
   public static boolean isOverdue(InvoiceStatus status, LocalDate dueDate,

@@ -17,8 +17,12 @@ public class XeroConfig {
     return RestClient.builder().baseUrl("https://api.xero.com").requestFactory(requests).build();
   }
   @Bean XeroInvoiceClient xeroInvoiceClient(RestClient xeroAccountingRestClient, Clock clock) { return new XeroInvoiceClient(xeroAccountingRestClient, clock); }
+  @Bean XeroForecastClient xeroForecastClient(RestClient xeroAccountingRestClient, Clock clock, ForecastRequestPacer pacer) {
+    return new XeroForecastClient(xeroAccountingRestClient, clock, pacer);
+  }
   @Bean XeroAttachmentClient xeroAttachmentClient(RestClient xeroAccountingRestClient, Clock clock) { return new XeroAttachmentClient(xeroAccountingRestClient, clock); }
-  @Bean Clock dashboardClock() { return Clock.systemUTC(); }
+  /** Instants are unchanged; a zone-less LocalDate.now(clock) therefore reads the business calendar, Auckland. */
+  @Bean Clock dashboardClock() { return Clock.system(com.airconcepts.dashboard.time.BusinessTime.ZONE); }
   @Bean TokenCipher xeroTokenCipher(@Value("${XERO_TOKEN_ENCRYPTION_KEY:}") String key) { return new TokenCipher(key); }
   @Bean XeroSettings xeroSettings(@Value("${XERO_CLIENT_ID:}") String clientId,
       @Value("${XERO_CLIENT_SECRET:}") String secret, @Value("${XERO_REDIRECT_URI:}") String redirect,

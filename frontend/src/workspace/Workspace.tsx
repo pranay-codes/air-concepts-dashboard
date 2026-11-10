@@ -9,6 +9,7 @@ import { formatFetchTime } from "../ui/format";
 import { EntitySelector } from "./EntitySelector";
 
 const Settings = lazy(() => import("../settings/Settings"));
+const Forecast = lazy(() => import("../forecast/Forecast"));
 interface Props {
   api: DashboardApi;
   profile: Profile;
@@ -53,7 +54,7 @@ export function Workspace({
       id: remembered(profile, entities),
       generation: choice.generation + 1,
     });
-  const [route, setRoute] = useState<"invoices" | "settings">(() =>
+  const [route, setRoute] = useState<"invoices" | "forecast" | "settings">(() =>
     profile.role === "DIRECTOR" && new URLSearchParams(window.location.search).has("xeroAttempt")
       ? "settings"
       : "invoices",
@@ -61,7 +62,11 @@ export function Workspace({
   const [collapsed, setCollapsed] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [accessError, setAccessError] = useState<unknown>(null);
-  const selected = entities.find((entity) => entity.id === choice.id) ?? entities[0];
+  const aggregate =
+    route === "forecast" && profile.role !== "STANDARD_USER" && choice.id === "__all__";
+  const selected = aggregate
+    ? undefined
+    : (entities.find((entity) => entity.id === choice.id) ?? entities[0]);
   const entityId = selected?.id;
   const loadConnection = useCallback(
     async (signal: AbortSignal) => {
@@ -105,13 +110,17 @@ export function Workspace({
       current?.abort();
     };
   }, [api, profile.subject, profile.role, onAccessDenied]);
-  function navigate(next: "invoices" | "settings") {
+  function navigate(next: "invoices" | "forecast" | "settings") {
     if (dirty && !window.confirm("Discard unsaved changes before leaving this page?")) return;
     setDirty(false);
     setRoute(next);
     document.getElementById("workspace-main")?.focus();
   }
-  const currentRoute = profile.role === "DIRECTOR" ? route : "invoices";
+  const currentRoute =
+    (route === "settings" && profile.role !== "DIRECTOR") ||
+    (route === "forecast" && profile.role === "STANDARD_USER")
+      ? "invoices"
+      : route;
   return (
     <div className={`workspace-shell${collapsed ? " navigation-collapsed" : ""}`}>
       <a className="skip-link" href="#workspace-main">
@@ -138,6 +147,15 @@ export function Workspace({
           >
             Invoices
           </button>
+          {profile.role !== "STANDARD_USER" ? (
+            <button
+              type="button"
+              aria-current={currentRoute === "forecast" ? "page" : undefined}
+              onClick={() => navigate("forecast")}
+            >
+              Forecast
+            </button>
+          ) : null}
           {profile.role === "DIRECTOR" ? (
             <button
               type="button"
@@ -162,23 +180,29 @@ export function Workspace({
         <header className="context-bar">
           <EntitySelector
             entities={entities}
-            selectedId={selected?.id ?? null}
+            selectedId={aggregate ? "__all__" : (selected?.id ?? null)}
+            allowAll={currentRoute === "forecast" && profile.role !== "STANDARD_USER"}
             onSelect={(id) => {
               if (dirty && !window.confirm("Discard unsaved changes before switching entity?"))
                 return;
               setDirty(false);
               setChoice((current) => ({ ...current, id, generation: current.generation + 1 }));
               try {
-                localStorage.setItem(
-                  preference(profile.subject),
-                  JSON.stringify({ version: 1, entityId: id }),
-                );
+                if (id !== "__all__")
+                  localStorage.setItem(
+                    preference(profile.subject),
+                    JSON.stringify({ version: 1, entityId: id }),
+                  );
               } catch {
                 /* Storage can be unavailable; selection remains valid in memory. */
               }
             }}
           />
-          <div className="connection-info" aria-label="Selected entity Xero connection">
+          <div
+            className="connection-info"
+            hidden={aggregate}
+            aria-label="Selected entity Xero connection"
+          >
             {connection.status === "loading" ? <p role="status">Checking connection…</p> : null}
             {connection.status === "error" ? (
               <Failure
@@ -234,6 +258,19 @@ export function Workspace({
                   onEntitiesChanged();
                   connection.refresh();
                 }}
+                onAccessDenied={onAccessDenied}
+              />
+            </Suspense>
+          ) : currentRoute === "forecast" ? (
+            <Suspense fallback={<Loading label="Opening Forecast…" />}>
+              <Forecast
+                key={`${profile.subject}:${profile.role}:${aggregate ? "all" : selected?.id}:${choice.generation}`}
+                api={api}
+                profile={profile}
+                entity={selected ?? null}
+                entities={entities}
+                combined={aggregate}
+                onDirty={setDirty}
                 onAccessDenied={onAccessDenied}
               />
             </Suspense>

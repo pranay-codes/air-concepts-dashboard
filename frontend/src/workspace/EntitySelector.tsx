@@ -5,10 +5,12 @@ export function EntitySelector({
   entities,
   selectedId,
   onSelect,
+  allowAll = false,
 }: {
   entities: Entity[];
   selectedId: string | null;
   onSelect(id: string): void;
+  allowAll?: boolean;
 }) {
   const [search, setSearch] = useState("");
   const control = useRef<HTMLSelectElement>(null);
@@ -39,17 +41,19 @@ export function EntitySelector({
       <select
         id="entity-select"
         ref={control}
-        value={current?.id ?? ""}
+        value={allowAll && selectedId === "__all__" ? "__all__" : (current?.id ?? "")}
         disabled={!entities.length}
         onChange={(event) => {
           const id = event.target.value;
-          if (!entities.some((entity) => entity.id === id)) return;
+          if (!(allowAll && id === "__all__") && !entities.some((entity) => entity.id === id))
+            return;
           onSelect(id);
           setSearch("");
           control.current?.focus();
         }}
       >
-        {!current ? (
+        {allowAll ? <option value="__all__">All entities</option> : null}
+        {!current && selectedId !== "__all__" ? (
           <option value="">{entities.length ? "Choose an entity" : "No entities available"}</option>
         ) : null}
         {current && !matches.some((entity) => entity.id === current.id) ? (

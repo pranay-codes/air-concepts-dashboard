@@ -96,6 +96,16 @@ public class XeroConnectionService {
 
   public TenantAccess authorisedAccess(CurrentUser user, UUID entity) {
     entities.get(user, entity);
+    return connectionAccess(entity);
+  }
+
+  /** Scheduled internal forecast work only. No web/controller code may call this method. */
+  public TenantAccess systemAccess(UUID entity) {
+    if (!repository.activeEntity(entity)) throw new ApiFailure(HttpStatus.NOT_FOUND, "ENTITY_UNAVAILABLE", "Entity is unavailable.");
+    return connectionAccess(entity);
+  }
+
+  private TenantAccess connectionAccess(UUID entity) {
     var connection = repository.connection(entity).orElseThrow(() -> new ApiFailure(HttpStatus.CONFLICT,
         "XERO_NOT_CONNECTED", "Ask a Director to connect this entity to Xero in Settings."));
     var access = grants.access(connection.grantId());

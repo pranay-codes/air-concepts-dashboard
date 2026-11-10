@@ -19,6 +19,10 @@ public class XeroConnectionRepository {
 
   public XeroConnectionRepository(JdbcTemplate jdbc) { this.jdbc = jdbc; }
 
+  public boolean activeEntity(UUID entity) {
+    return Boolean.TRUE.equals(jdbc.queryForObject("select exists(select 1 from public.entities where id=? and archived_at is null)", Boolean.class, entity));
+  }
+
   public OAuthAttempt createAttempt(UUID id, UUID director, UUID entity, String hash, Instant expires) {
     int inserted = jdbc.update("insert into public.xero_oauth_attempts(id,director_id,entity_id,state_hash,expires_at,status) "
         + "select ?,?,?,?,?, 'AWAITING_CALLBACK' where exists(select 1 from public.staff_users where id=? and active and role='DIRECTOR')",

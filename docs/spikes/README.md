@@ -18,3 +18,9 @@
 | CI-002: SSM Run Command reaches Test host with the approved template | partial | [ci-002-ssm-run-command.md](ci-002-ssm-run-command.md) |
 | CI-002: official Temurin 25 arm64 image and digest | confirmed | [ci-002-temurin-25-arm64.md](ci-002-temurin-25-arm64.md) |
 | CI-002: official Caddy image arm64 manifest and digest | confirmed | [ci-002-caddy-arm64.md](ci-002-caddy-arm64.md) |
+| UC4 S1: `ExpectedPaymentDate` / `PlannedPaymentDate` in `GET /Invoices` list responses with `summaryOnly` | partial | [uc4-xero-forecast-fields.md](uc4-xero-forecast-fields.md) |
+| UC4 S2: `If-Modified-Since` sees payments, credits and PAID/VOIDED transitions | not confirmed (settlement re-read is mandatory) | [uc4-xero-forecast-fields.md](uc4-xero-forecast-fields.md) |
+| UC4 S3: statuses that can be outstanding (`AUTHORISED and AmountDue > 0`) | confirmed (docs) | [uc4-xero-forecast-fields.md](uc4-xero-forecast-fields.md) |
+| UC4 S4: writing `ExpectedPaymentDate` back to Xero — scope, endpoint, idempotency | partial (deferred, not in first delivery) | [uc4-xero-expected-date-writeback.md](uc4-xero-expected-date-writeback.md) |
+| UC4 S5: Apache POI populates, preserves and evaluates the client's forecast template | confirmed | [uc4-poi-template.md](uc4-poi-template.md) |
+| UC4 S6: Xero rate limits for a daily full-outstanding sync across N organisations | partial | [uc4-xero-rate-limits.md](uc4-xero-rate-limits.md) |

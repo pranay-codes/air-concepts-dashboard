@@ -18,7 +18,7 @@ services:
       JAVA_TOOL_OPTIONS: >-
         -XX:InitialRAMPercentage=10 -XX:MaxRAMPercentage=50
         -XX:MaxMetaspaceSize=128m -XX:MaxDirectMemorySize=32m
-        -Xss512k -XX:+ExitOnOutOfMemoryError
+        -Xss512k -XX:+ExitOnOutOfMemoryError -Duser.timezone=Pacific/Auckland
     mem_limit: ${API_MEMORY_LIMIT:-512m}
     cpus: 1.5
     pids_limit: 256
