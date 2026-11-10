@@ -8,13 +8,17 @@ Every request made through the accounting `RestClient` (invoices, forecast sync,
 
 ## Enable it (Test environment only)
 
-Set these environment variables on the Test backend, then restart it:
+On Test, set these SSM parameters under `/air-concepts/test/`. The Test deploy (`infra/deploy/deploy-test.sh`) writes them to the backend environment, and the backend reads them at startup:
 
-| Variable | Default | Meaning |
-| --- | --- | --- |
-| `DASHBOARD_DIAGNOSTICS_XERO_ENABLED` | `false` | Logs one `XERO_DIAGNOSTIC` line per Xero request. |
-| `DASHBOARD_DIAGNOSTICS_XERO_INCLUDE_BODIES` | `false` | Also logs response bodies, truncated. Synthetic Test data only. |
-| `DASHBOARD_DIAGNOSTICS_XERO_MAX_BODY_CHARS` | `4000` | Truncation length when bodies are included. |
+| SSM parameter | Environment variable | Default | Meaning |
+| --- | --- | --- | --- |
+| `backend/diagnostics/xero-enabled` | `DASHBOARD_DIAGNOSTICS_XERO_ENABLED` | `false` | Logs one `XERO_DIAGNOSTIC` line per Xero request. |
+| `backend/diagnostics/xero-include-bodies` | `DASHBOARD_DIAGNOSTICS_XERO_INCLUDE_BODIES` | `false` | Also logs response bodies, truncated. Synthetic Test data only. |
+| `backend/diagnostics/xero-max-body-chars` | `DASHBOARD_DIAGNOSTICS_XERO_MAX_BODY_CHARS` | `4000` | Truncation length when bodies are included. |
+
+Steps: create or set the parameter, redeploy Test (CI deploys after merge to `main`), then check the backend logs. To turn it off, set `xero-enabled` to `false` and redeploy. For a local run, set the environment variable in the terminal before starting the backend.
+
+The wiring only reaches Test after the branch is merged and deployed. Live is not handled by this script.
 
 Do not enable this on Live. Live is released only through the manually triggered workflow, and this change adds no Live setting.
 
@@ -22,7 +26,7 @@ Do not enable this on Live. Live is released only through the manually triggered
 
 Example shape (values are illustrative):
 
-```
+```text
 XERO_DIAGNOSTIC method=GET path=/api.xro/2.0/Invoices query=[where=present order=UpdatedDateUTC ASC,InvoiceID ASC page=1 pageSize=100 summaryOnly=true] status=200 ms=412 bytes=18211 shape=[fields=2 pagination={page=1,pageSize=100,pageCount=1,itemCount=12} Invoices=array(12)]
 ```
 

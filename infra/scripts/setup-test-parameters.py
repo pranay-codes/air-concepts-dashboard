@@ -61,6 +61,9 @@ KEYS = (
     Key("backend/xero/redirect-uri", "String", "API XERO_REDIRECT_URI", required=False),
     Key("backend/xero/frontend-callback-uri", "String", "API XERO_FRONTEND_CALLBACK_URI", required=False),
     Key("backend/xero/token-encryption-key", "SecureString", "API XERO_TOKEN_ENCRYPTION_KEY (base64 32-byte key)", required=False),
+    Key("backend/diagnostics/xero-enabled", "String", "API DASHBOARD_DIAGNOSTICS_XERO_ENABLED (true or false; Test only)", required=False),
+    Key("backend/diagnostics/xero-include-bodies", "String", "API DASHBOARD_DIAGNOSTICS_XERO_INCLUDE_BODIES (true or false; synthetic Test data only)", required=False),
+    Key("backend/diagnostics/xero-max-body-chars", "String", "API DASHBOARD_DIAGNOSTICS_XERO_MAX_BODY_CHARS (integer)", required=False),
     Key("backend/vwork/api-key", "SecureString", "placeholder, no code reads it yet", required=False),
     # Frontend. Vite inlines these at build time, so they reach the browser and are not secret.
     Key("frontend/api-base-url", "String", "frontend VITE_API_BASE_URL"),
