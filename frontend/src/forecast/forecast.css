@@ -94,25 +94,65 @@
   align-items: center;
   gap: 8px;
 }
-.forecast-detail {
-  border-left: 4px solid var(--primary-accent, #0f6b7f);
-}
 .forecast-overview {
   min-width: 0;
 }
-.forecast-view.has-detail .forecast-overview {
-  display: none;
+.forecast-month-page {
+  min-width: 0;
 }
-@media (min-width: 75rem) {
-  .forecast-view.has-detail {
-    display: grid;
-    grid-template-columns: minmax(0, 1.7fr) minmax(18rem, 1fr);
-    align-items: start;
-    gap: 24px;
-  }
-  .forecast-view.has-detail .forecast-overview {
-    display: block;
-  }
+.forecast-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 16px;
+  margin: 16px 0 24px;
+}
+.forecast-summary-strip div {
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--divider, #e2e7ec);
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+.forecast-summary-strip dt {
+  font-size: 14px;
+}
+.forecast-summary-strip dd {
+  margin: 4px 0 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.forecast-ledger {
+  width: 100%;
+  min-width: 56rem;
+  border-collapse: collapse;
+}
+.forecast-ledger caption {
+  text-align: left;
+  font-size: 14px;
+  padding-bottom: 8px;
+}
+.forecast-ledger td,
+.forecast-ledger th {
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--divider, #e2e7ec);
+  vertical-align: top;
+  text-align: left;
+}
+.forecast-ledger th[scope="col"].money,
+.forecast-ledger .money {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.forecast-ledger tfoot th,
+.forecast-ledger tfoot td {
+  font-weight: 600;
+  border-top: 2px solid var(--divider, #e2e7ec);
+  border-bottom: none;
+}
+.forecast-ledger-region {
+  max-width: 100%;
+  overflow-x: auto;
 }
 .forecast-split-line {
   display: grid;
