@@ -63,6 +63,12 @@ Every taggable resource carries the same tag set:
 
 The stack is tagged with `client` and `environment` when the change set is created, through `--tags` on `create-change-set`. A template cannot set stack tags. The launch template's instance and volume specifications carry the same tags.
 
+## Log time zone
+
+Business time is Pacific/Auckland. The bootstrap log stamps lines in Auckland time with the UTC offset, and the host clock is set to Pacific/Auckland. The API container starts the JVM with `-Duser.timezone=Pacific/Auckland`, so Spring log lines carry Auckland time and offset. Docker's json-file wrapper timestamps (shown by `docker compose logs -t`) are always UTC; the driver cannot change that.
+
+The host zone is set at first boot. An existing instance keeps its clock until it is replaced or until a person runs `sudo timedatectl set-timezone Pacific/Auckland`. Check the change set for replacement before a stack update.
+
 ## Validation and human provisioning
 
 Run these from the repository root in PowerShell. Create the project venv once:

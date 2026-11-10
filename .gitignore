@@ -21,6 +21,9 @@ failsafe-reports/
 # Infrastructure parameter files with real values stay local
 infra/params/*.local.json
 
+# Source workbooks with staff personal data stay out of git; only scrubbed fixtures are committed
+docs/ACSL*.xlsx
+
 # Python tooling
 __pycache__/
 .pytest_cache/

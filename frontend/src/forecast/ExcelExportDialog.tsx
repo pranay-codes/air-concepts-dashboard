@@ -21,7 +21,8 @@ export function ExcelExportDialog(props: ForecastContext & { onClose(): void }) 
     link.href = url;
     link.download = ready.filename;
     link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 0);
+    // Some browsers, Safari among them, cancel the download if the object URL is revoked before navigation starts.
+    setTimeout(() => URL.revokeObjectURL(url), 30_000);
     props.onClose();
   }
   return (

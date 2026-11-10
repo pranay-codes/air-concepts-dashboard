@@ -16,7 +16,7 @@ public class ForecastAssumptionRepository {
   private final JdbcTemplate jdbc;
   private final ObjectMapper mapper;
   public ForecastAssumptionRepository(JdbcTemplate jdbc,ObjectMapper mapper){this.jdbc=jdbc;this.mapper=mapper;}
-  public record OpeningBalance(@JsonFormat(shape=JsonFormat.Shape.STRING) BigDecimal openingBalance,String source) {}
+  public record OpeningBalance(@JsonFormat(shape=JsonFormat.Shape.STRING) @io.swagger.v3.oas.annotations.media.Schema(type="string",format="decimal") BigDecimal openingBalance,String source) {}
   private static YearMonth month(ResultSet r,String key) throws SQLException {var d=r.getDate(key);return d==null?null:YearMonth.from(d.toLocalDate());}
   private static final RowMapper<ManualItem> MANUAL=(r,n)->new ManualItem(r.getObject("id",UUID.class),r.getString("direction"),r.getString("category"),r.getString("description"),
       r.getBigDecimal("amount"),r.getString("recurrence"),r.getObject("day_of_month",Integer.class),month(r,"start_month"),month(r,"end_month"),r.getBoolean("active"));

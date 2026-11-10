@@ -42,6 +42,15 @@ class XeroForecastClientTest {
         .documents().getFirst().expectedDate()).isEqualTo(LocalDate.of(2026, 11, 20));
   }
 
+  @Test void frUc04_01_xeroDatesUseTheAucklandCalendarDate() {
+    // Local midnight on 16 November in Auckland (NZDT, +13:00) is 15 November 11:00 UTC. The business date is 16 November.
+    var localMidnight = Instant.parse("2026-11-15T11:00:00Z").toEpochMilli();
+    var body = invoice("ACCREC").replace("/Date(1794700800000+0000)/", "/Date(" + localMidnight + "+1300)/");
+    server.expect(anything()).andRespond(withSuccess(page(body, 1), MediaType.APPLICATION_JSON));
+    assertThat(client.page(access, InvoiceType.ACCREC, 1, null).documents().getFirst().expectedDate())
+        .isEqualTo(LocalDate.of(2026, 11, 16));
+  }
+
   @Test void frUc04_01_rejectsMalformedPaginationDuplicateIdsAndWrongType() {
     for (String body : List.of("{\"Invoices\":[]}", page(invoice("ACCREC"), 2),
         page(invoice("ACCPAY"), 1), page(invoice("ACCREC") + "," + invoice("ACCREC"), 2),

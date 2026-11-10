@@ -1,6 +1,7 @@
 package com.airconcepts.dashboard.xero;
 
 import com.airconcepts.dashboard.invoices.*;
+import com.airconcepts.dashboard.time.BusinessTime;
 import com.fasterxml.jackson.annotation.*;
 import java.math.BigDecimal;
 import java.time.*;
@@ -118,7 +119,7 @@ public class XeroForecastClient {
     if (value == null) throw XeroReadErrors.malformed();
     try {
       var m = MS_DATE.matcher(value);
-      if (m.matches()) return instant(value).atOffset(ZoneOffset.UTC).toLocalDate();
+      if (m.matches()) return BusinessTime.dateOf(instant(value));
       return value.length() == 10 ? LocalDate.parse(value) : LocalDateTime.parse(value, DateTimeFormatter.ISO_DATE_TIME).toLocalDate();
     } catch (RuntimeException invalid) { throw XeroReadErrors.malformed(); }
   }

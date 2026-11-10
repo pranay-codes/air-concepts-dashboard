@@ -1,6 +1,7 @@
 package com.airconcepts.dashboard.xero;
 
 import com.airconcepts.dashboard.invoices.*;
+import com.airconcepts.dashboard.time.BusinessTime;
 import com.airconcepts.dashboard.web.ProviderFailure;
 import com.fasterxml.jackson.annotation.*;
 import java.math.BigDecimal;
@@ -112,7 +113,7 @@ public class XeroInvoiceClient {
     if (value == null) throw malformed();
     try {
       var matcher = XERO_DATE.matcher(value);
-      if (matcher.matches()) return Instant.ofEpochMilli(Long.parseLong(matcher.group(1))).atOffset(ZoneOffset.UTC).toLocalDate();
+      if (matcher.matches()) return BusinessTime.dateOf(Instant.ofEpochMilli(Long.parseLong(matcher.group(1))));
       if (value.length() == 10) return LocalDate.parse(value);
       return LocalDateTime.parse(value, DateTimeFormatter.ISO_DATE_TIME).toLocalDate();
     } catch (RuntimeException invalid) { throw malformed(); }

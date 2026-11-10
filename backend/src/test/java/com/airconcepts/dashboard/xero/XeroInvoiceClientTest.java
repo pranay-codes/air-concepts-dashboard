@@ -69,6 +69,15 @@ class XeroInvoiceClientTest {
     assertThat(result.taxBasis()).isEqualTo(InvoiceViews.TaxBasis.INCLUSIVE);
   }
 
+  @Test void frUc15_14_xeroDatesUseTheAucklandCalendarDate() {
+    // Local midnight on 16 November in Auckland (NZDT, +13:00) is 15 November 11:00 UTC. The business date is 16 November.
+    var localMidnight = java.time.Instant.parse("2026-11-15T11:00:00Z").toEpochMilli();
+    var body = invoice("ACCREC").replace("/Date(1793491200000+0000)/", "/Date(" + localMidnight + "+1300)/");
+    server.expect(anything()).andRespond(withSuccess("{\"Invoices\":[" + body + "]}", MediaType.APPLICATION_JSON));
+    assertThat(client.detail(access, InvoiceType.ACCREC, id).payments()).singleElement()
+        .satisfies(p -> assertThat(p.date()).isEqualTo(java.time.LocalDate.of(2026, 11, 16)));
+  }
+
   @Test void frUc15_11_requestsFourDecimalUnitPricesForDetail() {
     server.expect(request -> assertThat(request.getURI().getQuery()).isEqualTo("unitdp=4"))
         .andRespond(withSuccess("{\"Invoices\":[" + invoice("ACCREC").replace("\"UnitAmount\":50", "\"UnitAmount\":50.1234") + "]}", MediaType.APPLICATION_JSON));

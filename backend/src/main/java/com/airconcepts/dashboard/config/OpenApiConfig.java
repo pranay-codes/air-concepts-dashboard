@@ -14,8 +14,8 @@ class OpenApiConfig {
   /** Static title and version keep the OpenAPI snapshot stable. */
   @Bean
   OpenAPI dashboardOpenApi() {
-    org.springdoc.core.utils.SpringDocUtils.getConfig().replaceWithSchema(java.math.BigDecimal.class,
-        new io.swagger.v3.oas.models.media.StringSchema().format("decimal"));
+    // Money fields declare type and format per DTO component (@Schema on the field). A global BigDecimal
+    // replacement would silently change every BigDecimal in every contract, including those outside UC4.
     return new OpenAPI().components(new Components().addSecuritySchemes("bearerAuth",
         new SecurityScheme().type(SecurityScheme.Type.HTTP).scheme("bearer").bearerFormat("JWT")))
         .info(new Info()

@@ -154,6 +154,18 @@ class InfrastructureTests(unittest.TestCase):
         for step in range(1, 8):
             self.assertRegex(script, rf'step "{step}/7 ')
 
+    def test_INF002_bootstrap_logs_use_auckland_time(self):
+        # Business time is Pacific/Auckland. Bootstrap stamps and the host clock must match, not UTC.
+        script = self.resources['AirConceptsBackend']['Properties']['UserData']['Fn::Base64']['Fn::Sub']
+        self.assertIn('TZ=Pacific/Auckland date +%Y-%m-%dT%H:%M:%S%z', script)
+        self.assertIn('timedatectl set-timezone Pacific/Auckland', script)
+        self.assertNotIn('date -u', script)
+
+    def test_INF002_api_container_logs_use_auckland_time(self):
+        # The JVM default zone sets the zone on Spring log timestamps; the container must not fall back to UTC.
+        compose = (ROOT / 'infra' / 'deploy' / 'compose.yaml').read_text(encoding='utf-8')
+        self.assertIn('-Duser.timezone=Pacific/Auckland', compose)
+
     def test_INF002_every_resource_is_deleted_with_the_stack(self):
         # Policy: stack deletion removes every resource. No resource may be retained.
         for name, resource in self.resources.items():

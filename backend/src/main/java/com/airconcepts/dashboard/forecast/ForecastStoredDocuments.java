@@ -10,7 +10,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class ForecastStoredDocuments {
   public record StoredDocument(UUID id,String type,String number,String contact,String status,boolean outstanding,LocalDate dueDate,LocalDate xeroExpectedDate,
-      @JsonFormat(shape=JsonFormat.Shape.STRING) BigDecimal amountDue,AdjustmentState adjustment){}
+      @JsonFormat(shape=JsonFormat.Shape.STRING) @io.swagger.v3.oas.annotations.media.Schema(type="string",format="decimal") BigDecimal amountDue,AdjustmentState adjustment){}
   public record DocumentPage(List<StoredDocument> items,int page,int pageSize,long itemCount){}
   private final JdbcTemplate jdbc;private final ForecastAccess access;private final ForecastAdjustmentRepository adjustments;
   public ForecastStoredDocuments(JdbcTemplate jdbc,ForecastAccess access,ForecastAdjustmentRepository adjustments){this.jdbc=jdbc;this.access=access;this.adjustments=adjustments;}

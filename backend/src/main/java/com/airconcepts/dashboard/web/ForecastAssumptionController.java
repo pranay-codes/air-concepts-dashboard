@@ -17,11 +17,11 @@ import org.springframework.web.bind.annotation.*;
 @RestController @SecurityRequirement(name="bearerAuth")
 @RequestMapping("/api/v1/entities/{entityId}/forecast")
 public class ForecastAssumptionController {
-  public record OpeningRequest(BigDecimal openingBalance,String source) {}
-  public record ManualRequest(String direction,String category,String description,BigDecimal amount,String recurrence,Integer dayOfMonth,YearMonth startMonth,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) YearMonth endMonth,Boolean active) {
+  public record OpeningRequest(@io.swagger.v3.oas.annotations.media.Schema(type="string",format="decimal") BigDecimal openingBalance,String source) {}
+  public record ManualRequest(String direction,String category,String description,@io.swagger.v3.oas.annotations.media.Schema(type="string",format="decimal") BigDecimal amount,String recurrence,Integer dayOfMonth,YearMonth startMonth,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) YearMonth endMonth,Boolean active) {
     ManualItem item(UUID id){return new ManualItem(id,direction,category,description,amount,recurrence,dayOfMonth,startMonth,endMonth,active==null||active);}
   }
-  public record StaffingRequest(String label,BigDecimal monthlyCost,Integer payDayOfMonth,YearMonth startMonth,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) YearMonth endMonth,Boolean active) {
+  public record StaffingRequest(String label,@io.swagger.v3.oas.annotations.media.Schema(type="string",format="decimal") BigDecimal monthlyCost,Integer payDayOfMonth,YearMonth startMonth,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) YearMonth endMonth,Boolean active) {
     StaffingLine item(UUID id){return new StaffingLine(id,label,monthlyCost,payDayOfMonth,startMonth,endMonth,active==null||active);}
   }
   private final CurrentUserResolver users;private final ForecastPeriodService periods;private final ManualItemService manual;
