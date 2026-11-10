@@ -1,6 +1,7 @@
 package com.airconcepts.dashboard.xero;
 
 import com.airconcepts.dashboard.web.ProviderFailure;
+import tools.jackson.databind.DatabindException;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.function.Supplier;
@@ -14,7 +15,20 @@ final class XeroReadErrors {
     try { return request.get(); }
     catch (RestClientResponseException e) { throw response(e.getStatusCode().value(), e.getResponseHeaders(), clock); }
     catch (ResourceAccessException e) { throw unavailable(); }
-    catch (RestClientException e) { throw malformed(); }
+    catch (UnknownContentTypeException e) { throw malformed("unexpected content type"); }
+    catch (RestClientException e) { throw malformed(unreadable(e)); }
+  }
+  /** Names the JSON location that could not be bound (keys and indexes only), never a value. */
+  private static String unreadable(Throwable failure) {
+    for (Throwable t = failure, guard = null; t != null && t != guard; guard = t, t = t.getCause()) {
+      if (t instanceof DatabindException mapping) {
+        var path = new StringBuilder("body unreadable at $");
+        for (var ref : mapping.getPath())
+          path.append(ref.getPropertyName() != null ? "." + ref.getPropertyName() : "[" + ref.getIndex() + "]");
+        return path.toString();
+      }
+    }
+    return "body unreadable";
   }
   static ProviderFailure response(int status, HttpHeaders headers, Clock clock) {
     String code = status == 401 ? "XERO_RECONNECT_REQUIRED" : status == 403 ? "XERO_ORGANISATION_ACCESS_DENIED"
@@ -29,6 +43,11 @@ final class XeroReadErrors {
   }
   static ProviderFailure malformed() {
     return new ProviderFailure("XERO_INVALID_RESPONSE", "Xero returned an incomplete or inconsistent response. Retry this request.", 200);
+  }
+  /** The reason is a fixed phrase chosen by our code (which check failed), never provider content. */
+  static ProviderFailure malformed(String reason) {
+    return new ProviderFailure("XERO_INVALID_RESPONSE",
+        "Xero returned an incomplete or inconsistent response (" + reason + "). Retry this request.", 200);
   }
   private static Integer retryAfter(String value, Clock clock) {
     if (value == null) return null;
