@@ -52,12 +52,30 @@ class XeroForecastClientTest {
   }
 
   @Test void frUc04_01_rejectsMalformedPaginationDuplicateIdsAndWrongType() {
-    for (String body : List.of("{\"Invoices\":[]}", page(invoice("ACCREC"), 2),
-        page(invoice("ACCPAY"), 1), page(invoice("ACCREC") + "," + invoice("ACCREC"), 2),
-        page(invoice("ACCREC").replace("115.00", "\"bad\""), 1))) {
+    var cases = Map.of("{\"Invoices\":[]}", "pagination missing",
+        page(invoice("ACCREC"), 2), "row count differs from pagination itemCount",
+        page(invoice("ACCPAY"), 1), "Type differs from the requested type",
+        page(invoice("ACCREC") + "," + invoice("ACCREC"), 2), "duplicate InvoiceID in page",
+        page(invoice("ACCREC").replace("\"Status\":\"AUTHORISED\"", "\"Status\":\"PAID\""), 1), "document is not outstanding",
+        page(invoice("ACCREC").replace("\"AmountDue\":115.00", "\"AmountDue\":115.005"), 1), "AmountDue has more than two decimals",
+        page(invoice("ACCREC").replace("/Date(1794268800000+0000)/", "private-synthetic"), 1), "UpdatedDateUTC unparseable",
+        page(invoice("ACCREC").replace("115.00", "\"bad\""), 1), "body unreadable at $.Invoices[0].Total");
+    cases.forEach((body, reason) -> {
       server.reset(); server.expect(anything()).andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
-      assertThatThrownBy(() -> client.page(access, InvoiceType.ACCREC, 1, null)).isInstanceOf(ProviderFailure.class);
-    }
+      assertThatThrownBy(() -> client.page(access, InvoiceType.ACCREC, 1, null))
+          .isInstanceOfSatisfying(ProviderFailure.class, f -> {
+            assertThat(f.code()).isEqualTo("XERO_INVALID_RESPONSE");
+            // The reason says which check failed and never repeats a provider value.
+            assertThat(f.getMessage()).contains(reason).doesNotContain("bad", "private-synthetic", "115.005", "Synthetic");
+          });
+    });
+  }
+
+  @Test void frUc04_01_updatedDateUtcAcceptsIsoTextAsUtc() {
+    var body = invoice("ACCREC").replace("/Date(1794268800000+0000)/", "2026-11-09T11:00:00");
+    server.expect(anything()).andRespond(withSuccess(page(body, 1), MediaType.APPLICATION_JSON));
+    assertThat(client.page(access, InvoiceType.ACCREC, 1, null).documents().getFirst().updatedAt())
+        .isEqualTo(Instant.parse("2026-11-09T11:00:00Z"));
   }
 
   @Test void frUc04_17_settlementDetailChecksIdAndType() {
