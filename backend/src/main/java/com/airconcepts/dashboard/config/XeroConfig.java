@@ -10,17 +10,20 @@ import org.springframework.web.client.RestClient;
 
 @Configuration
 public class XeroConfig {
-  @Bean RestClient xeroAccountingRestClient() {
+  /** Request diagnostics are off unless dashboard.diagnostics.xero.enabled=true (Test environment only). */
+  @Bean RestClient xeroAccountingRestClient(
+      @Value("${dashboard.diagnostics.xero.enabled:false}") boolean diagnostics,
+      @Value("${dashboard.diagnostics.xero.include-bodies:false}") boolean includeBodies,
+      @Value("${dashboard.diagnostics.xero.max-body-chars:4000}") int maxBodyChars) {
     var http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).followRedirects(HttpClient.Redirect.NEVER).build();
     var requests = new JdkClientHttpRequestFactory(http);
     requests.setReadTimeout(Duration.ofSeconds(20));
-    return RestClient.builder().baseUrl("https://api.xero.com").requestFactory(requests).build();
+    return RestClient.builder().baseUrl("https://api.xero.com").requestFactory(requests)
+        .requestInterceptor(new XeroRequestDiagnostics(diagnostics, includeBodies, maxBodyChars)).build();
   }
   @Bean XeroInvoiceClient xeroInvoiceClient(RestClient xeroAccountingRestClient, Clock clock) { return new XeroInvoiceClient(xeroAccountingRestClient, clock); }
-  // TEMPORARY: set DASHBOARD_XERO_FORECAST_DIAGNOSTICS=true locally to log forecast response shapes (remove after the investigation).
-  @Bean XeroForecastClient xeroForecastClient(RestClient xeroAccountingRestClient, Clock clock, ForecastRequestPacer pacer,
-      @Value("${dashboard.xero.forecast-diagnostics:false}") boolean diagnostics) {
-    return new XeroForecastClient(xeroAccountingRestClient, clock, pacer, diagnostics);
+  @Bean XeroForecastClient xeroForecastClient(RestClient xeroAccountingRestClient, Clock clock, ForecastRequestPacer pacer) {
+    return new XeroForecastClient(xeroAccountingRestClient, clock, pacer);
   }
   @Bean XeroAttachmentClient xeroAttachmentClient(RestClient xeroAccountingRestClient, Clock clock) { return new XeroAttachmentClient(xeroAccountingRestClient, clock); }
   /** Instants are unchanged; a zone-less LocalDate.now(clock) therefore reads the business calendar, Auckland. */

@@ -32,6 +32,10 @@ declare -A key_for=(
   [xero/frontend-callback-uri]=XERO_FRONTEND_CALLBACK_URI
   [xero/token-encryption-key]=XERO_TOKEN_ENCRYPTION_KEY
   [cors/allowed-origins]=CORS_ALLOWED_ORIGINS
+  # Optional Xero request diagnostics (Test only; default off when absent). See docs/xero-diagnostics.md.
+  [diagnostics/xero-enabled]=DASHBOARD_DIAGNOSTICS_XERO_ENABLED
+  [diagnostics/xero-include-bodies]=DASHBOARD_DIAGNOSTICS_XERO_INCLUDE_BODIES
+  [diagnostics/xero-max-body-chars]=DASHBOARD_DIAGNOSTICS_XERO_MAX_BODY_CHARS
 )
 docker_config=""
 
