@@ -17,8 +17,10 @@ public class XeroConfig {
     return RestClient.builder().baseUrl("https://api.xero.com").requestFactory(requests).build();
   }
   @Bean XeroInvoiceClient xeroInvoiceClient(RestClient xeroAccountingRestClient, Clock clock) { return new XeroInvoiceClient(xeroAccountingRestClient, clock); }
-  @Bean XeroForecastClient xeroForecastClient(RestClient xeroAccountingRestClient, Clock clock, ForecastRequestPacer pacer) {
-    return new XeroForecastClient(xeroAccountingRestClient, clock, pacer);
+  // TEMPORARY: set DASHBOARD_XERO_FORECAST_DIAGNOSTICS=true locally to log forecast response shapes (remove after the investigation).
+  @Bean XeroForecastClient xeroForecastClient(RestClient xeroAccountingRestClient, Clock clock, ForecastRequestPacer pacer,
+      @Value("${dashboard.xero.forecast-diagnostics:false}") boolean diagnostics) {
+    return new XeroForecastClient(xeroAccountingRestClient, clock, pacer, diagnostics);
   }
   @Bean XeroAttachmentClient xeroAttachmentClient(RestClient xeroAccountingRestClient, Clock clock) { return new XeroAttachmentClient(xeroAccountingRestClient, clock); }
   /** Instants are unchanged; a zone-less LocalDate.now(clock) therefore reads the business calendar, Auckland. */
