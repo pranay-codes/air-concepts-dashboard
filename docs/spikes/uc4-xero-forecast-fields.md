@@ -43,6 +43,13 @@ Source: `docs/plans/UC4.md` §4. These three questions share the same two docume
 - S2: **partial / not confirmed for payments**. Build the incremental step as optional; never rely on it for settlement. The settlement re-read in §6.3 step 6 is required.
 - S3: **confirmed by documentation** for the rule `AUTHORISED and AmountDue > 0`. Whether SUBMITTED should ever be included remains client question Q3; keep the `OutstandingRule` constant.
 
+## Observed on Test (11 Nov 2026)
+- Runtime diagnostics (`XERO_DIAGNOSTIC`, Test tenant "Demo Company (NZ)", entity e55ef611):
+  - `GET /api.xro/2.0/Invoices` with `summaryOnly=true&pageSize=100` (forecast): status 200, `fields=5`, `Invoices=array(12)`, **no `pagination` object**.
+  - `GET /api.xro/2.0/Invoices` without `summaryOnly`, `pageSize=25` (invoice page): status 200, `pagination={page=1,pageSize=25,pageCount=2,itemCount=47}`.
+- Conclusion: with `summaryOnly=true`, Xero omits `pagination`, so the forecast sync cannot validate paging. The forecast client no longer sends `summaryOnly`.
+- Still to confirm on Test: the expected-date fields (`ExpectedPaymentDate`, `PlannedPaymentDate`) on the non-summary forecast request, and the payload size at `pageSize=100`.
+
 ## Date
 - 2026-11-10
 
