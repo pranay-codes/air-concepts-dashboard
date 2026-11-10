@@ -23,7 +23,7 @@ import com.airconcepts.dashboard.config.CorsProperties;
 class SecurityConfig {
 
   @Bean
-  SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+  SecurityFilterChain securityFilterChain(HttpSecurity http, RoleLookup roles) throws Exception {
     return http
         // Bearer tokens only, no cookies, so CSRF does not apply.
         .csrf(csrf -> csrf.disable())
@@ -34,6 +34,13 @@ class SecurityConfig {
             // QA-001 AC-4: exact path only. requestMatchers("/api/hello") does not match /api/hello/extra.
             .requestMatchers(HttpMethod.GET, "/api/hello").permitAll()
             .requestMatchers(HttpMethod.GET, "/api/v1/xero/callback").permitAll()
+            .requestMatchers("/api/v1/forecast/**", "/api/v1/entities/*/forecast", "/api/v1/entities/*/forecast/**")
+            .access((authentication, context) -> {
+              var principal = authentication.get().getPrincipal();
+              boolean allowed = principal instanceof org.springframework.security.oauth2.jwt.Jwt jwt
+                  && roles.findRole(jwt.getSubject()).filter(role -> role == Role.DIRECTOR || role == Role.FINANCIAL_ADMIN).isPresent();
+              return new org.springframework.security.authorization.AuthorizationDecision(allowed);
+            })
             .anyRequest().authenticated())
         .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
         .build();
@@ -45,6 +52,7 @@ class SecurityConfig {
     configuration.setAllowedOrigins(properties.allowedOrigins());
     configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
     configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+    configuration.setExposedHeaders(List.of("Content-Disposition", "Retry-After", "X-Forecast-Reconciled", "X-Forecast-Generated-At", "X-Forecast-Warnings"));
 
     UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
     source.registerCorsConfiguration("/**", configuration);

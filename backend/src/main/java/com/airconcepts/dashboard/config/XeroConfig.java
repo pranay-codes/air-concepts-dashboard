@@ -17,6 +17,9 @@ public class XeroConfig {
     return RestClient.builder().baseUrl("https://api.xero.com").requestFactory(requests).build();
   }
   @Bean XeroInvoiceClient xeroInvoiceClient(RestClient xeroAccountingRestClient, Clock clock) { return new XeroInvoiceClient(xeroAccountingRestClient, clock); }
+  @Bean XeroForecastClient xeroForecastClient(RestClient xeroAccountingRestClient, Clock clock, ForecastRequestPacer pacer) {
+    return new XeroForecastClient(xeroAccountingRestClient, clock, pacer);
+  }
   @Bean XeroAttachmentClient xeroAttachmentClient(RestClient xeroAccountingRestClient, Clock clock) { return new XeroAttachmentClient(xeroAccountingRestClient, clock); }
   @Bean Clock dashboardClock() { return Clock.systemUTC(); }
   @Bean TokenCipher xeroTokenCipher(@Value("${XERO_TOKEN_ENCRYPTION_KEY:}") String key) { return new TokenCipher(key); }

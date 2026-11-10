@@ -1,6 +1,27 @@
 import type { AuthService } from "../auth/authService";
 
 const messages = {
+  FORECAST_PERIOD_INVALID: "Choose the current month or one of the previous 12 months.",
+  FORECAST_INPUT_INVALID: "Check the highlighted forecast fields.",
+  FORECAST_RECORD_UNAVAILABLE: "This forecast record is unavailable for the selected entity.",
+  FORECAST_DOCUMENT_NOT_OUTSTANDING: "This document is no longer outstanding. Refresh its details.",
+  FORECAST_SPLIT_SUM_MISMATCH: "Split amounts must add up to the outstanding balance.",
+  FORECAST_EXCLUSION_REASON_REQUIRED: "Enter an exclusion reason of 1–500 characters.",
+  FORECAST_TEMPLATE_INVALID: "Choose a standard v1 .xlsx workbook no larger than 5 MiB.",
+  FORECAST_TEMPLATE_CAPACITY: "The workbook supports at most 200 contributions on each Xero sheet.",
+  FORECAST_FORMULA_UNSUPPORTED:
+    "The workbook contains unsupported formulas. Check the listed cells.",
+  FORECAST_SYNC_IN_PROGRESS:
+    "A forecast sync is already running. Check History before requesting another.",
+  FORECAST_SYNC_TOO_MANY_CHANGES:
+    "More than 200 settlement checks are needed. Ask an administrator to review and rerun sync.",
+  FORECAST_SYNC_EXPIRED: "This sync expired. Check History and request a new run.",
+  FORECAST_SYNC_FAILED: "Sync did not complete. Check History before retrying.",
+  FORECAST_CURRENCY_UNSUPPORTED:
+    "Foreign-currency documents need an approved conversion rule before this forecast can be shown.",
+  FORECAST_TENANT_CHANGED:
+    "The Xero organisation changed. Ask an administrator to review the forecast mapping.",
+  FORECAST_CONFLICT_UNAVAILABLE: "This conflict was already resolved. Refresh the document.",
   SESSION_ENDED: "Your session has ended. Sign in again.",
   ACCESS_DENIED: "Your access has changed. Check your permissions or contact a Director.",
   INVALID_REQUEST: "Check the entered values and try again.",
@@ -47,11 +68,25 @@ export class ApiError extends Error {
     readonly code: Code,
     readonly upstreamStatus?: number,
     readonly retryAfterSeconds?: number,
+    readonly problems: TemplateProblem[] = [],
+    readonly fieldErrors: Record<string, string> = {},
   ) {
     super(messages[code]);
     this.retryAt =
       retryAfterSeconds === undefined ? undefined : Date.now() + retryAfterSeconds * 1000;
   }
+}
+export interface TemplateProblem {
+  sheet: string;
+  cell: string;
+  expected: string;
+}
+export interface ForecastFile {
+  blob: Blob;
+  filename: string;
+  reconciled: boolean;
+  warnings: string[];
+  generatedAt: string;
 }
 export function apiMessage(error: unknown): string {
   return error instanceof ApiError ? error.message : messages.REQUEST_FAILED;
@@ -63,7 +98,11 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-type JsonOptions = { method?: "GET" | "POST" | "PUT" | "PATCH"; body?: unknown };
+type JsonOptions = {
+  method?: "GET" | "POST" | "PUT" | "PATCH";
+  body?: unknown;
+  timeoutMs?: number;
+};
 const binaryTypes = new Set([
   "application/octet-stream",
   "application/pdf",
@@ -135,6 +174,55 @@ export class ApiClient {
     });
   }
 
+  forecastExport(path: string, file: File, signal?: AbortSignal): Promise<ForecastFile> {
+    const body = new FormData();
+    body.append("file", file);
+    return this.execute(
+      path,
+      signal,
+      { method: "POST", body },
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      async (response) => {
+        if (
+          response.headers.get("Content-Type")?.split(";")[0] !==
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+          throw new ApiError(502, "INVALID_RESPONSE");
+        const filename = /filename="([^"]+)"/.exec(
+          response.headers.get("Content-Disposition") ?? "",
+        )?.[1];
+        const reconciled = response.headers.get("X-Forecast-Reconciled");
+        const generatedAt = response.headers.get("X-Forecast-Generated-At");
+        if (
+          !filename ||
+          !/^forecast-[a-z0-9][a-z0-9_-]{0,79}-\d{4}-\d{2}-\d{8}-\d{4}\.xlsx$/.test(filename) ||
+          !["true", "false"].includes(reconciled ?? "") ||
+          !generatedAt ||
+          !Number.isFinite(Date.parse(generatedAt))
+        )
+          throw new ApiError(502, "INVALID_RESPONSE");
+        let warnings: unknown;
+        try {
+          warnings = JSON.parse(
+            decodeURIComponent(
+              (response.headers.get("X-Forecast-Warnings") ?? "%5B%5D").replace(/\+/g, "%20"),
+            ),
+          );
+        } catch {
+          throw new ApiError(502, "INVALID_RESPONSE");
+        }
+        if (
+          !Array.isArray(warnings) ||
+          !warnings.every((w: unknown) => typeof w === "string" && w.length < 2000)
+        )
+          throw new ApiError(502, "INVALID_RESPONSE");
+        const blob = await response.blob();
+        if (blob.size > 25 * 1024 * 1024) throw new ApiError(502, "INVALID_RESPONSE");
+        return { blob, filename, reconciled: reconciled === "true", warnings, generatedAt };
+      },
+    );
+  }
+
   /** For commands that succeed with 204 No Content; any other success response is rejected. */
   noContent(path: string, signal?: AbortSignal, options: JsonOptions = {}): Promise<void> {
     return this.execute(path, signal, options, "application/json", async (response) => {
@@ -160,14 +248,16 @@ export class ApiClient {
     const timer = setTimeout(() => {
       timedOut = true;
       controller.abort();
-    }, 90000);
+    }, options.timeoutMs ?? 90000);
     try {
       controller.signal.throwIfAborted();
       const token = await abortable(this.auth.getAccessToken(), controller.signal);
       controller.signal.throwIfAborted();
       if (!token) throw new ApiError(401, "SESSION_ENDED");
       const headers: Record<string, string> = { Authorization: `Bearer ${token}`, Accept: accept };
-      if (options.body !== undefined) headers["Content-Type"] = "application/json";
+      const body = options.body;
+      const multipart = body instanceof FormData;
+      if (body !== undefined && !multipart) headers["Content-Type"] = "application/json";
       // Native Window.fetch rejects an arbitrary object as its receiver.
       const fetcher = this.fetcher;
       const response = await fetcher(`${this.baseUrl}${path}`, {
@@ -176,7 +266,7 @@ export class ApiClient {
         credentials: "omit",
         cache: "no-store",
         signal: controller.signal,
-        ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
+        ...(body !== undefined ? { body: multipart ? body : JSON.stringify(body) } : {}),
       });
       controller.signal.throwIfAborted();
       if (!response.ok) throw await problem(response);
@@ -260,5 +350,23 @@ async function problem(response: Response): Promise<ApiError> {
     code,
     upstream,
     Number.isInteger(retry) && retry >= 0 && retry <= 2147483647 ? retry : undefined,
+    Array.isArray(values.problems)
+      ? values.problems
+          .filter(
+            (p: unknown): p is TemplateProblem =>
+              isRecord(p) &&
+              typeof p.sheet === "string" &&
+              typeof p.cell === "string" &&
+              typeof p.expected === "string",
+          )
+          .slice(0, 200)
+      : [],
+    isRecord(values.fieldErrors)
+      ? Object.fromEntries(
+          Object.entries(values.fieldErrors).filter(
+            (entry): entry is [string, string] => typeof entry[1] === "string",
+          ),
+        )
+      : {},
   );
 }

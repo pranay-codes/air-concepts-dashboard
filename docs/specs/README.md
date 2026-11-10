@@ -7,4 +7,5 @@
 - Staleness and refresh: [docs/requirements/README.md](../requirements/README.md).
 
 ## Current packs
-- None yet.
+- [UC4.md](UC4.md) — Financial forecast and business cash position (approved for this goal; delegated decisions recorded).
+- [UC4-template-map.md](UC4-template-map.md) — workbook cell map supporting UC4.

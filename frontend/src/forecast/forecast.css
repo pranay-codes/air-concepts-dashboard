@@ -1,0 +1,159 @@
+.forecast-header,
+.forecast-actions,
+.forecast-tabs,
+.forecast-row-actions {
+  display: flex;
+  gap: var(--space-3, 12px);
+  align-items: center;
+  flex-wrap: wrap;
+}
+.forecast-header {
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+.forecast-header h1 {
+  margin-bottom: 8px;
+}
+.forecast-tabs {
+  margin: 24px 0;
+}
+.forecast-tabs button[aria-pressed="true"] {
+  background: var(--selected-surface, #e7f2f5);
+  color: var(--primary-accent, #0f6b7f);
+  font-weight: 600;
+}
+.forecast-card,
+.forecast-panel {
+  padding: var(--card-padding, 24px);
+  border: 1px solid var(--divider, #e2e7ec);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  margin-bottom: 16px;
+}
+.forecast-card dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 8px 0;
+}
+.forecast-card dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.forecast-mobile {
+  display: none;
+}
+.forecast-desktop {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.forecast-desktop table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.forecast-desktop td,
+.forecast-desktop th {
+  padding: 12px 8px;
+  border-bottom: 1px solid var(--divider, #e2e7ec);
+  vertical-align: top;
+}
+.forecast-desktop th[scope="col"]:not(:first-child),
+.forecast-desktop .money {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.forecast-desktop td button {
+  display: block;
+  margin-left: auto;
+}
+.forecast-panel form,
+.forecast-form {
+  display: grid;
+  gap: 16px;
+}
+.forecast-form label {
+  display: grid;
+  gap: 4px;
+}
+.forecast-form input,
+.forecast-form select,
+.forecast-form textarea {
+  min-height: 44px;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+}
+.forecast-form input[type="checkbox"] {
+  width: auto;
+  min-height: 24px;
+}
+.forecast-form .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.forecast-detail {
+  border-left: 4px solid var(--primary-accent, #0f6b7f);
+}
+.forecast-overview {
+  min-width: 0;
+}
+.forecast-view.has-detail .forecast-overview {
+  display: none;
+}
+@media (min-width: 75rem) {
+  .forecast-view.has-detail {
+    display: grid;
+    grid-template-columns: minmax(0, 1.7fr) minmax(18rem, 1fr);
+    align-items: start;
+    gap: 24px;
+  }
+  .forecast-view.has-detail .forecast-overview {
+    display: block;
+  }
+}
+.forecast-split-line {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+  align-items: end;
+}
+.forecast-issues {
+  padding-left: 20px;
+}
+.forecast-issues li {
+  margin: 8px 0;
+}
+.forecast-export-notice {
+  overflow-wrap: anywhere;
+}
+.forecast-audit {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 48rem) {
+  .forecast-desktop {
+    display: none;
+  }
+  .forecast-mobile {
+    display: block;
+  }
+  .forecast-header {
+    display: block;
+  }
+  .forecast-header .forecast-actions {
+    margin-top: 16px;
+  }
+  .forecast-card,
+  .forecast-panel {
+    padding: 16px;
+  }
+  .forecast-split-line {
+    grid-template-columns: 1fr;
+  }
+  .forecast-tabs {
+    gap: 8px;
+  }
+}

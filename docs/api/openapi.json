@@ -108,6 +108,184 @@
         } ]
       }
     },
+    "/api/v1/entities/{entityId}/forecast/periods/{month}/opening-balance" : {
+      "get" : {
+        "tags" : [ "forecast-assumption-controller" ],
+        "operationId" : "getForecastOpeningBalance",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "month",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OpeningBalance"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      },
+      "put" : {
+        "tags" : [ "forecast-assumption-controller" ],
+        "operationId" : "saveForecastOpeningBalance",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "month",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/OpeningRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OpeningBalance"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/forecast/documents/{id}/splits" : {
+      "put" : {
+        "tags" : [ "forecast-adjustment-controller" ],
+        "operationId" : "splitForecastDocument",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SplitsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AdjustmentState"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/forecast/documents/{id}/adjustment" : {
+      "put" : {
+        "tags" : [ "forecast-adjustment-controller" ],
+        "operationId" : "adjustForecastDocument",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AdjustmentChange"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AdjustmentState"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
     "/api/v1/users" : {
       "get" : {
         "tags" : [ "staff-controller" ],
@@ -239,6 +417,405 @@
               "application/json" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/XeroAuthorizationStart"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/forecast/sync" : {
+      "get" : {
+        "tags" : [ "forecast-sync-controller" ],
+        "summary" : "Read the last ten forecast sync runs",
+        "operationId" : "getForecastSyncHistory",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/SyncRun"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "forecast-sync-controller" ],
+        "summary" : "Reconcile the entity forecast from its Xero organisation",
+        "operationId" : "syncForecast",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SyncRun"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/forecast/staffing" : {
+      "get" : {
+        "tags" : [ "forecast-assumption-controller" ],
+        "operationId" : "listForecastStaffing",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "includeInactive",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean",
+            "default" : false
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/StaffingLine"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "forecast-assumption-controller" ],
+        "operationId" : "createForecastStaffing",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/StaffingRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StaffingLine"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/forecast/staffing/{id}/deactivate" : {
+      "post" : {
+        "tags" : [ "forecast-assumption-controller" ],
+        "operationId" : "deactivateForecastStaffing",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StaffingLine"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/forecast/manual-items" : {
+      "get" : {
+        "tags" : [ "forecast-assumption-controller" ],
+        "operationId" : "listForecastManualItems",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "includeInactive",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean",
+            "default" : false
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/ManualItem"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "forecast-assumption-controller" ],
+        "operationId" : "createForecastManualItem",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ManualRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ManualItem"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/forecast/manual-items/{id}/deactivate" : {
+      "post" : {
+        "tags" : [ "forecast-assumption-controller" ],
+        "operationId" : "deactivateForecastManualItem",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ManualItem"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/forecast/export" : {
+      "post" : {
+        "tags" : [ "forecast-export-controller" ],
+        "operationId" : "exportForecast",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "startMonth",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "multipart/form-data" : {
+              "schema" : {
+                "type" : "object",
+                "properties" : {
+                  "file" : {
+                    "type" : "string",
+                    "format" : "binary"
+                  }
+                },
+                "required" : [ "file" ]
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" : {
+                "schema" : {
+                  "type" : "string",
+                  "format" : "byte"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/forecast/documents/{id}/conflict" : {
+      "post" : {
+        "tags" : [ "forecast-adjustment-controller" ],
+        "operationId" : "resolveForecastConflict",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ConflictRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AdjustmentState"
                 }
               }
             }
@@ -413,6 +990,102 @@
         } ]
       }
     },
+    "/api/v1/entities/{entityId}/forecast/staffing/{id}" : {
+      "patch" : {
+        "tags" : [ "forecast-assumption-controller" ],
+        "operationId" : "updateForecastStaffing",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/StaffingRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StaffingLine"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/forecast/manual-items/{id}" : {
+      "patch" : {
+        "tags" : [ "forecast-assumption-controller" ],
+        "operationId" : "updateForecastManualItem",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ManualRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ManualItem"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
     "/api/v1/xero/callback" : {
       "get" : {
         "tags" : [ "xero-connection-controller" ],
@@ -515,6 +1188,46 @@
               "*/*" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/MeResponse"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/forecast/combined" : {
+      "get" : {
+        "tags" : [ "forecast-controller" ],
+        "operationId" : "getCombinedForecast",
+        "parameters" : [ {
+          "name" : "entityIds",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "format" : "uuid"
+            }
+          }
+        }, {
+          "name" : "startMonth",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CombinedView"
                 }
               }
             }
@@ -845,6 +1558,243 @@
         } ]
       }
     },
+    "/api/v1/entities/{entityId}/forecast" : {
+      "get" : {
+        "tags" : [ "forecast-controller" ],
+        "operationId" : "getForecast",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "startMonth",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ForecastView"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/forecast/months/{month}/items" : {
+      "get" : {
+        "tags" : [ "forecast-controller" ],
+        "operationId" : "getForecastMonthItems",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "month",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "direction",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "startMonth",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MonthItems"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/forecast/documents" : {
+      "get" : {
+        "tags" : [ "forecast-controller" ],
+        "operationId" : "listForecastDocuments",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "type",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "includeSettled",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean",
+            "default" : false
+          }
+        }, {
+          "name" : "page",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 1
+          }
+        }, {
+          "name" : "pageSize",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 25
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DocumentPage"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/forecast/documents/{id}" : {
+      "get" : {
+        "tags" : [ "forecast-controller" ],
+        "operationId" : "getForecastDocument",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StoredDocument"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/forecast/audit" : {
+      "get" : {
+        "tags" : [ "forecast-assumption-controller" ],
+        "operationId" : "getForecastAudit",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "page",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 1
+          }
+        }, {
+          "name" : "pageSize",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 25
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AuditPage"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
     "/api/hello" : {
       "get" : {
         "tags" : [ "hello-controller" ],
@@ -949,6 +1899,110 @@
         },
         "required" : [ "invoiceId" ]
       },
+      "OpeningRequest" : {
+        "type" : "object",
+        "properties" : {
+          "openingBalance" : {
+            "type" : "string",
+            "format" : "decimal"
+          },
+          "source" : {
+            "type" : "string"
+          }
+        }
+      },
+      "OpeningBalance" : {
+        "type" : "object",
+        "properties" : {
+          "openingBalance" : {
+            "type" : "string",
+            "format" : "decimal"
+          },
+          "source" : {
+            "type" : "string"
+          }
+        }
+      },
+      "Split" : {
+        "type" : "object",
+        "properties" : {
+          "sequence" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "expectedDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "amount" : {
+            "type" : "string",
+            "format" : "decimal"
+          }
+        }
+      },
+      "SplitsRequest" : {
+        "type" : "object",
+        "properties" : {
+          "lines" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Split"
+            }
+          }
+        }
+      },
+      "AdjustmentState" : {
+        "type" : "object",
+        "properties" : {
+          "documentId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "expectedDateOverride" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "excluded" : {
+            "type" : "boolean"
+          },
+          "exclusionReason" : {
+            "type" : "string"
+          },
+          "dateConflictSince" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "previousXeroDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "newXeroDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "lines" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Split"
+            }
+          }
+        }
+      },
+      "AdjustmentChange" : {
+        "type" : "object",
+        "properties" : {
+          "expectedDateOverride" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "excluded" : {
+            "type" : "boolean"
+          },
+          "exclusionReason" : {
+            "type" : "string"
+          }
+        }
+      },
       "CreateStaff" : {
         "type" : "object",
         "properties" : {
@@ -1033,6 +2087,202 @@
           }
         },
         "required" : [ "attemptId", "authorizationUrl", "expiresAt" ]
+      },
+      "SyncRun" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "trigger" : {
+            "type" : "string"
+          },
+          "startedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "finishedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "documentsSeen" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "documentsInserted" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "documentsUpdated" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "documentsSettled" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "conflictsFlagged" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "errorCode" : {
+            "type" : "string"
+          },
+          "upstreamStatus" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "dayLimitRemaining" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "minuteLimitRemaining" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "appMinuteLimitRemaining" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "StaffingRequest" : {
+        "type" : "object",
+        "properties" : {
+          "label" : {
+            "type" : "string"
+          },
+          "monthlyCost" : {
+            "type" : "string",
+            "format" : "decimal"
+          },
+          "payDayOfMonth" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "startMonth" : {
+            "type" : "string"
+          },
+          "endMonth" : {
+            "type" : [ "string", "null" ]
+          },
+          "active" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "StaffingLine" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "monthlyCost" : {
+            "type" : "string",
+            "format" : "decimal"
+          },
+          "payDayOfMonth" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "startMonth" : {
+            "type" : "string"
+          },
+          "endMonth" : {
+            "type" : "string"
+          },
+          "active" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "ManualRequest" : {
+        "type" : "object",
+        "properties" : {
+          "direction" : {
+            "type" : "string"
+          },
+          "category" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "amount" : {
+            "type" : "string",
+            "format" : "decimal"
+          },
+          "recurrence" : {
+            "type" : "string"
+          },
+          "dayOfMonth" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "startMonth" : {
+            "type" : "string"
+          },
+          "endMonth" : {
+            "type" : [ "string", "null" ]
+          },
+          "active" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "ManualItem" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "direction" : {
+            "type" : "string"
+          },
+          "category" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "amount" : {
+            "type" : "string",
+            "format" : "decimal"
+          },
+          "recurrence" : {
+            "type" : "string"
+          },
+          "dayOfMonth" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "startMonth" : {
+            "type" : "string"
+          },
+          "endMonth" : {
+            "type" : "string"
+          },
+          "active" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "ConflictRequest" : {
+        "type" : "object",
+        "properties" : {
+          "resolution" : {
+            "type" : "string"
+          }
+        }
       },
       "UpdateStaff" : {
         "type" : "object",
@@ -1135,6 +2385,96 @@
           }
         },
         "required" : [ "displayName", "role", "subject" ]
+      },
+      "CombinedView" : {
+        "type" : "object",
+        "properties" : {
+          "startMonth" : {
+            "type" : "string"
+          },
+          "months" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/MonthRow"
+            }
+          },
+          "entities" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/EntitySummary"
+            }
+          },
+          "complete" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "EntitySummary" : {
+        "type" : "object",
+        "properties" : {
+          "entityId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "entityName" : {
+            "type" : "string"
+          },
+          "months" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/MonthRow"
+            }
+          },
+          "exceptions" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "complete" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "MonthRow" : {
+        "type" : "object",
+        "properties" : {
+          "month" : {
+            "type" : "string"
+          },
+          "opening" : {
+            "type" : [ "string", "null" ],
+            "format" : "decimal"
+          },
+          "receipts" : {
+            "type" : "string",
+            "format" : "decimal"
+          },
+          "payments" : {
+            "type" : "string",
+            "format" : "decimal"
+          },
+          "net" : {
+            "type" : "string",
+            "format" : "decimal"
+          },
+          "closing" : {
+            "type" : [ "string", "null" ],
+            "format" : "decimal"
+          },
+          "receiptCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "paymentCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "containsOverdue" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "closing", "containsOverdue", "month", "net", "opening", "paymentCount", "payments", "receiptCount", "receipts" ]
       },
       "InvoicePage" : {
         "type" : "object",
@@ -1323,6 +2663,317 @@
           }
         },
         "required" : [ "contentType", "fileName", "id", "previewable", "size" ]
+      },
+      "BeyondWindow" : {
+        "type" : "object",
+        "properties" : {
+          "receipts" : {
+            "type" : "string",
+            "format" : "decimal"
+          },
+          "payments" : {
+            "type" : "string",
+            "format" : "decimal"
+          }
+        }
+      },
+      "Exclusion" : {
+        "type" : "object",
+        "properties" : {
+          "documentId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "number" : {
+            "type" : "string"
+          },
+          "reason" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ForecastException" : {
+        "type" : "object",
+        "properties" : {
+          "kind" : {
+            "type" : "string"
+          },
+          "documentId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ForecastView" : {
+        "type" : "object",
+        "properties" : {
+          "entityId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "entityName" : {
+            "type" : "string"
+          },
+          "startMonth" : {
+            "type" : "string"
+          },
+          "months" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/MonthRow"
+            }
+          },
+          "totals" : {
+            "$ref" : "#/components/schemas/Totals"
+          },
+          "exceptions" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ForecastException"
+            }
+          },
+          "beyondWindow" : {
+            "$ref" : "#/components/schemas/BeyondWindow"
+          },
+          "exclusions" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Exclusion"
+            }
+          },
+          "lastSuccessfulSyncAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "lastRun" : {
+            "$ref" : "#/components/schemas/LastRun"
+          },
+          "syncStale" : {
+            "type" : "boolean"
+          },
+          "openingBalanceSource" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "beyondWindow", "entityId", "entityName", "exceptions", "exclusions", "months", "startMonth", "syncStale", "totals" ]
+      },
+      "LastRun" : {
+        "type" : "object",
+        "properties" : {
+          "status" : {
+            "type" : "string"
+          },
+          "finishedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "errorCode" : {
+            "type" : "string"
+          }
+        }
+      },
+      "Totals" : {
+        "type" : "object",
+        "properties" : {
+          "receipts" : {
+            "type" : "string",
+            "format" : "decimal"
+          },
+          "payments" : {
+            "type" : "string",
+            "format" : "decimal"
+          },
+          "closing" : {
+            "type" : [ "string", "null" ],
+            "format" : "decimal"
+          }
+        }
+      },
+      "Contribution" : {
+        "type" : "object",
+        "properties" : {
+          "sourceId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "source" : {
+            "type" : "string"
+          },
+          "direction" : {
+            "type" : "string"
+          },
+          "category" : {
+            "type" : "string"
+          },
+          "number" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "date" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "bucket" : {
+            "type" : "string"
+          },
+          "amount" : {
+            "type" : "string",
+            "format" : "decimal"
+          },
+          "rule" : {
+            "type" : "string",
+            "enum" : [ "SPLIT", "OVERRIDE", "XERO_EXPECTED_DATE", "DUE_DATE", "ISSUE_DATE", "MANUAL", "STAFFING" ]
+          },
+          "overdue" : {
+            "type" : "boolean"
+          },
+          "splitSequence" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "splitCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "MonthItems" : {
+        "type" : "object",
+        "properties" : {
+          "month" : {
+            "type" : "string"
+          },
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Contribution"
+            }
+          }
+        }
+      },
+      "DocumentPage" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/StoredDocument"
+            }
+          },
+          "page" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "pageSize" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "itemCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "StoredDocument" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "type" : {
+            "type" : "string"
+          },
+          "number" : {
+            "type" : "string"
+          },
+          "contact" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "outstanding" : {
+            "type" : "boolean"
+          },
+          "dueDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "xeroExpectedDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "amountDue" : {
+            "type" : "string",
+            "format" : "decimal"
+          },
+          "adjustment" : {
+            "$ref" : "#/components/schemas/AdjustmentState"
+          }
+        }
+      },
+      "AuditPage" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/AuditRow"
+            }
+          },
+          "page" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "pageSize" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "itemCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "AuditRow" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "actorId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "at" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "recordTable" : {
+            "type" : "string"
+          },
+          "recordKey" : {
+            "type" : "string"
+          },
+          "action" : {
+            "type" : "string"
+          },
+          "before" : {
+            "type" : "object",
+            "additionalProperties" : { }
+          },
+          "after" : {
+            "type" : "object",
+            "additionalProperties" : { }
+          }
+        }
       },
       "HelloResponse" : {
         "type" : "object",
