@@ -10,6 +10,7 @@ import java.util.*;
 import java.util.regex.Pattern;
 import org.springframework.http.*;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 
 /** Read-only forecast adapter. Caller checks connection health and persists safe operation state. */
 public class XeroForecastClient {
@@ -19,7 +20,13 @@ public class XeroForecastClient {
   private final RestClient api;
   private final Clock clock;
   private final Pacer pacer;
-  public XeroForecastClient(RestClient api, Clock clock, Pacer pacer) { this.api = api; this.clock = clock; this.pacer = pacer; }
+  // TEMPORARY DIAGNOSTICS (remove after the Test-tenant investigation): logs response shape only, never values.
+  private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(XeroForecastClient.class);
+  private final boolean diagnostics;
+  public XeroForecastClient(RestClient api, Clock clock, Pacer pacer) { this(api, clock, pacer, false); }
+  public XeroForecastClient(RestClient api, Clock clock, Pacer pacer, boolean diagnostics) {
+    this.api = api; this.clock = clock; this.pacer = pacer; this.diagnostics = diagnostics;
+  }
 
   @JsonIgnoreProperties(ignoreUnknown=true)
   private record Pagination(Integer page, Integer pageSize, Integer pageCount, Long itemCount) {}
@@ -41,14 +48,7 @@ public class XeroForecastClient {
 
   public ForecastSource.Page page(TenantAccess access, InvoiceType type, int page, Instant modifiedSince) {
     if (page < 1) throw new IllegalArgumentException("Page must be positive");
-    String where = "Type==\"" + type.name() + "\"" + (modifiedSince == null
-        ? " AND Status==\"" + ForecastSource.OUTSTANDING_STATUS + "\" AND AmountDue>0" : "");
-    var request = api.get().uri(b -> b.path("/api.xro/2.0/Invoices").queryParam("where", "{where}")
-        .queryParam("order", "{order}").queryParam("page", page).queryParam("pageSize", PAGE_SIZE)
-        .queryParam("summaryOnly", true).build(Map.of("where", where, "order", "UpdatedDateUTC ASC,InvoiceID ASC")));
-    if (modifiedSince != null) request.header("If-Modified-Since",
-        DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss").withZone(ZoneOffset.UTC).format(modifiedSince));
-    var response = call(request, access);
+    var response = call(request(type, page, modifiedSince, true, PAGE_SIZE), access);
     var body = response.getBody(); var p = body.pagination();
     // Xero may omit the pagination object when the first page matches nothing. An empty first page is zero rows;
     // a missing pagination object on a later page, or alongside any row, is still rejected below.
@@ -57,7 +57,10 @@ public class XeroForecastClient {
       return new ForecastSource.Page(List.of(), 1, 0, new ForecastSource.Limits(
           limit(h0, "X-DayLimit-Remaining"), limit(h0, "X-MinLimit-Remaining"), limit(h0, "X-AppMinLimit-Remaining")));
     }
-    if (p == null) throw XeroReadErrors.malformed("pagination missing");
+    if (p == null) {
+      if (diagnostics) diagnose(access, type, page, modifiedSince);
+      throw XeroReadErrors.malformed("pagination missing");
+    }
     if (p.page() == null || p.pageSize() == null || p.pageCount() == null || p.itemCount() == null)
       throw XeroReadErrors.malformed("pagination fields missing");
     if (p.page() != page || p.pageSize() != PAGE_SIZE) throw XeroReadErrors.malformed("pagination page or pageSize differs from request");
@@ -88,6 +91,66 @@ public class XeroForecastClient {
     if (!result.id().equals(id)) throw XeroReadErrors.malformed("detail returned a different InvoiceID");
     var headers=response.getHeaders();
     return new ForecastSource.Read(result,new ForecastSource.Limits(limit(headers,"X-DayLimit-Remaining"),limit(headers,"X-MinLimit-Remaining"),limit(headers,"X-AppMinLimit-Remaining")));
+  }
+
+  private RestClient.RequestHeadersSpec<?> request(InvoiceType type, int page, Instant modifiedSince, boolean summaryOnly, int pageSize) {
+    String where = "Type==\"" + type.name() + "\"" + (modifiedSince == null
+        ? " AND Status==\"" + ForecastSource.OUTSTANDING_STATUS + "\" AND AmountDue>0" : "");
+    var request = api.get().uri(b -> {
+      b.path("/api.xro/2.0/Invoices").queryParam("where", "{where}").queryParam("order", "{order}")
+          .queryParam("page", page).queryParam("pageSize", pageSize);
+      if (summaryOnly) b.queryParam("summaryOnly", true);
+      return b.build(Map.of("where", where, "order", "UpdatedDateUTC ASC,InvoiceID ASC"));
+    });
+    if (modifiedSince != null) request.header("If-Modified-Since",
+        DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss").withZone(ZoneOffset.UTC).format(modifiedSince));
+    return request;
+  }
+
+  // TEMPORARY DIAGNOSTICS (remove after the Test-tenant investigation).
+  private record Variant(String name, boolean summaryOnly, int pageSize) {}
+  /** Repeats the failing request with and without summaryOnly and at two page sizes. Read-only; never changes the outcome. */
+  private void diagnose(TenantAccess access, InvoiceType type, int page, Instant modifiedSince) {
+    try {
+      var variants = List.of(new Variant("production", true, PAGE_SIZE), new Variant("noSummaryOnly", false, PAGE_SIZE),
+          new Variant("summaryOnly_size25", true, 25), new Variant("noSummaryOnly_size25", false, 25));
+      for (var v : variants) {
+        pacer.await(access.tenantId());
+        String query = "type=" + type.name() + " page=" + page + " pageSize=" + v.pageSize() + " summaryOnly=" + v.summaryOnly()
+            + " modifiedSince=" + (modifiedSince != null);
+        try {
+          var entity = request(type, page, modifiedSince, v.summaryOnly(), v.pageSize())
+              .header(HttpHeaders.AUTHORIZATION, "Bearer " + access.accessToken())
+              .header("xero-tenant-id", access.tenantId().toString()).accept(MediaType.APPLICATION_JSON)
+              .retrieve().toEntity(String.class);
+          LOG.warn("XERO_FORECAST_DIAGNOSTIC variant={} request[{}] status={} response[{}]",
+              v.name(), query, entity.getStatusCode().value(), shape(entity.getBody()));
+        } catch (RestClientResponseException e) {
+          LOG.warn("XERO_FORECAST_DIAGNOSTIC variant={} request[{}] status={} response[no body read]",
+              v.name(), query, e.getStatusCode().value());
+        } catch (RuntimeException e) {
+          LOG.warn("XERO_FORECAST_DIAGNOSTIC variant={} request[{}] failure={}", v.name(), query, e.getClass().getSimpleName());
+        }
+      }
+    } catch (RuntimeException ignored) {
+      // Diagnostics must never change the sync outcome.
+    }
+  }
+  /** Structure only: sizes, key presence and the pagination numbers. Customer names and amounts are never logged. */
+  private static String shape(String body) {
+    if (body == null) return "bytes=0";
+    int at = body.indexOf("\"pagination\"");
+    String pagination = "absent";
+    if (at >= 0) {
+      int end = body.indexOf('}', at);
+      pagination = end > at ? body.substring(at, end + 1) : "unclosed";
+    }
+    return "bytes=" + body.length()
+        + " pagination=" + pagination
+        + " PaginationCapital=" + body.contains("\"Pagination\"")
+        + " Invoices=" + body.contains("\"Invoices\"")
+        + " ErrorNumber=" + body.contains("\"ErrorNumber\"")
+        + " invoiceIdCount=" + (body.split("\"InvoiceID\"", -1).length - 1);
   }
 
   private ResponseEntity<Envelope> call(RestClient.RequestHeadersSpec<?> request, TenantAccess access) {

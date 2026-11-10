@@ -116,6 +116,19 @@ class XeroForecastClientTest {
     }
   }
 
+  @Test void frUc04_01_diagnosticsRepeatReadsAndKeepTheSameFailure() {
+    // TEMPORARY diagnostics: the failing request plus four read-only variants; the outcome must not change.
+    var diagnosed = new XeroForecastClient(builder.build(), clock, tenant -> {}, true);
+    server.expect(org.springframework.test.web.client.ExpectedCount.times(5), anything())
+        .andRespond(withSuccess("{\"Invoices\":[" + invoice("ACCREC") + "]}", MediaType.APPLICATION_JSON));
+    assertThatThrownBy(() -> diagnosed.page(access, InvoiceType.ACCREC, 1, null))
+        .isInstanceOfSatisfying(ProviderFailure.class, f -> {
+          assertThat(f.code()).isEqualTo("XERO_INVALID_RESPONSE");
+          assertThat(f.getMessage()).contains("pagination missing");
+        });
+    server.verify();
+  }
+
   private String page(String rows, int count) {
     return "{\"pagination\":{\"page\":1,\"pageSize\":100,\"pageCount\":1,\"itemCount\":" + count + "},\"Invoices\":[" + rows + "]}";
   }
