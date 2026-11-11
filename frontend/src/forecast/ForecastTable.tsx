@@ -34,11 +34,13 @@ export function ForecastTable({
           <caption>12-month cash forecast · NZD, GST-inclusive</caption>
           <thead>
             <tr>
-              {["Month", "Opening", "Receipts", "Payments", "Net", "Closing"].map((h) => (
-                <th key={h} scope="col">
-                  {h}
-                </th>
-              ))}
+              {["Month", "Opening balance", "Money In", "Money Out", "Net", "Closing balance"].map(
+                (h) => (
+                  <th key={h} scope="col">
+                    {h}
+                  </th>
+                ),
+              )}
             </tr>
           </thead>
           <tbody>
@@ -78,11 +80,11 @@ export function ForecastTable({
             <h3>{monthName(month.month)}</h3>
             <dl>
               {[
-                ["Opening", month.opening],
-                ["Receipts", month.receipts],
-                ["Payments", month.payments],
+                ["Opening balance", month.opening],
+                ["Money In", month.receipts],
+                ["Money Out", month.payments],
                 ["Net", month.net],
-                ["Closing", month.closing],
+                ["Closing balance", month.closing],
               ].map(([label, value]) => (
                 <div key={label}>
                   <dt>{label}</dt>
