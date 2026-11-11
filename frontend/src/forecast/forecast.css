@@ -165,6 +165,13 @@
 .forecast-desktop tr[data-state="PREVIEW"] .money {
   color: var(--information, #245e9b);
 }
+/* Applied to the amount only, never the cell: the preview tint above does not override these. */
+.forecast-desktop .amount-positive {
+  color: var(--success, #18794e);
+}
+.forecast-desktop .amount-negative {
+  color: var(--error, #b42318);
+}
 .forecast-table .link-button,
 .link-button {
   background: none;

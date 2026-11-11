@@ -107,25 +107,112 @@ it("keeps every row's opening and Edit control within its own row", () => {
   expect(within(rows[1]!).getByText("Not set")).toBeInTheDocument();
 });
 
-it("labels a carried opening that follows a preview month as Provisional", () => {
+it("shows a provisional carried opening without a Provisional or Carried forward label", () => {
   render(
     <ForecastTable
       months={[
         base({
           month: "2026-11",
-          opening: "1000.00",
+          opening: "12000.00",
           openingSource: "MANUAL",
           state: "PREVIEW",
           generatable: true,
-          closing: "1999.00",
+          closing: "21705.32",
         }),
-        base({ month: "2026-12", opening: "1999.00", openingSource: "CARRIED_FORWARD" }),
+        base({ month: "2026-12", opening: "21705.32", openingSource: "CARRIED_FORWARD" }),
       ]}
       onOpening={vi.fn()}
     />,
   );
-  expect(screen.getAllByText("Provisional").length).toBeGreaterThan(0);
+  expect(screen.queryByText("Provisional")).toBeNull();
   expect(screen.queryByText("Carried forward")).toBeNull();
+  const decemberRow = screen.getAllByRole("row")[2]!;
+  expect(within(decemberRow).getByText("NZD 21,705.32")).toHaveClass("amount-positive");
+  expect(
+    within(decemberRow).getByRole("button", { name: "Edit opening balance for December 2026" }),
+  ).toBeInTheDocument();
+});
+
+it("does not label a manually entered opening as Entered", () => {
+  render(
+    <ForecastTable
+      months={[base({ month: "2026-11", opening: "12000.00", openingSource: "MANUAL" })]}
+      onOpening={vi.fn()}
+    />,
+  );
+  expect(screen.getByText("NZD 12,000.00")).toBeInTheDocument();
+  expect(screen.queryByText("Entered")).toBeNull();
+});
+
+describe("forecast financial colour coding", () => {
+  it("colours opening, net and closing amounts by sign and leaves Money In and Money Out neutral", () => {
+    render(
+      <ForecastTable
+        months={[
+          base({
+            month: "2026-11",
+            opening: "12000.00",
+            receipts: "13966.75",
+            payments: "4261.43",
+            net: "9705.32",
+            closing: "21705.32",
+            receiptCount: 1,
+            paymentCount: 1,
+            openingSource: "MANUAL",
+            state: "GENERATED",
+          }),
+          base({
+            month: "2026-12",
+            opening: "-250.00",
+            receipts: "100.00",
+            payments: "-75.00",
+            net: "-175.00",
+            closing: "-425.00",
+            receiptCount: 1,
+            paymentCount: 1,
+            openingSource: "CARRIED_FORWARD",
+            state: "GENERATED",
+          }),
+        ]}
+      />,
+    );
+    expect(screen.getByText("NZD 12,000.00")).toHaveClass("amount-positive");
+    expect(screen.getByText("NZD 9,705.32")).toHaveClass("amount-positive");
+    expect(screen.getByText("NZD 21,705.32")).toHaveClass("amount-positive");
+    expect(screen.getByText("-NZD 250.00")).toHaveClass("amount-negative");
+    expect(screen.getByText("-NZD 175.00")).toHaveClass("amount-negative");
+    expect(screen.getByText("-NZD 425.00")).toHaveClass("amount-negative");
+    expect(screen.getByText("NZD 13,966.75")).not.toHaveClass("amount-positive");
+    expect(screen.getByText("NZD 4,261.43")).not.toHaveClass("amount-positive");
+    expect(screen.getByText("NZD 100.00")).not.toHaveClass("amount-positive");
+    expect(screen.getByText("-NZD 75.00")).not.toHaveClass("amount-negative");
+  });
+
+  it("leaves zero, missing and not-generated amounts in the default text colour", () => {
+    render(
+      <ForecastTable
+        months={[
+          base({
+            month: "2026-11",
+            opening: "0.00",
+            net: "0.00",
+            closing: "-0.00",
+            openingSource: "MANUAL",
+            state: "GENERATED",
+          }),
+          base({ month: "2026-12", opening: null, openingSource: null }),
+        ]}
+      />,
+    );
+    const zeros = screen.getAllByText("NZD 0.00");
+    expect(zeros).toHaveLength(3);
+    for (const zero of zeros) {
+      expect(zero).not.toHaveClass("amount-positive");
+      expect(zero).not.toHaveClass("amount-negative");
+    }
+    expect(screen.getByText("Not set")).not.toHaveClass("amount-negative");
+    expect(screen.getByText("Not set")).not.toHaveClass("amount-positive");
+  });
 });
 
 describe("FR-UC04-23 compact forecast table", () => {

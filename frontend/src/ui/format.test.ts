@@ -1,7 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { formatMoney, formatDate, dateRange, formatDecimal } from "./format";
+import { amountSign, formatMoney, formatDate, dateRange, formatDecimal } from "./format";
 
 describe("UC5 shared financial and calendar formatting", () => {
+  it("reads the sign of an amount from its digits, treating zero and missing values as neutral", () => {
+    expect(amountSign("12000.00")).toBe(1);
+    expect(amountSign("0.01")).toBe(1);
+    expect(amountSign("-9705.32")).toBe(-1);
+    expect(amountSign("-0.05")).toBe(-1);
+    expect(amountSign("0")).toBe(0);
+    expect(amountSign("0.00")).toBe(0);
+    expect(amountSign("-0.00")).toBe(0);
+    expect(amountSign("1.2E+3")).toBe(1);
+    expect(amountSign("-9007199254740993.01")).toBe(-1);
+    expect(amountSign(null)).toBe(0);
+    expect(amountSign(undefined)).toBe(0);
+    expect(amountSign("invalid")).toBe(0);
+  });
+
   it("FR-UC15-06 preserves large monetary strings, cents, currencies and negative fractions", () => {
     expect(formatMoney("9007199254740993.01", "NZD")).toContain("9,007,199,254,740,993.01");
     expect(formatMoney("1.20", "AUD")).toContain("AUD");
