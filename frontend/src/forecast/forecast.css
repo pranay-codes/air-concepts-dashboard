@@ -263,6 +263,7 @@
 }
 .forecast-month-page {
   min-width: 0;
+  max-width: 70rem;
 }
 .forecast-summary-strip {
   display: grid;
@@ -291,8 +292,7 @@
 }
 /* Transaction notes: one line of preview by default, so rows keep their height. */
 .note-column {
-  min-width: 13rem;
-  max-width: 24rem;
+  min-width: 0;
   padding-top: 6px;
   padding-bottom: 6px;
 }
@@ -361,16 +361,7 @@
   font-size: 13px;
   white-space: nowrap;
 }
-.forecast-ledger {
-  width: 100%;
-  min-width: 24rem;
-  border-collapse: collapse;
-}
-.forecast-ledger .money {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
+/* Money In / Money Out ledgers: fixed column widths so the amount sits beside the notes, not at the far edge. */
 .forecast-ledger-region {
   max-width: 100%;
   overflow-x: auto;
@@ -379,42 +370,149 @@
   border: 1px solid var(--divider, #e2e7ec);
   border-radius: 8px;
 }
-.forecast-ledger-cards {
-  min-width: 100%;
+.forecast-ledger {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
 }
-.forecast-ledger-cards caption {
+.forecast-ledger caption {
   text-align: left;
   font-size: 18px;
   font-weight: 600;
-  padding: 16px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--divider, #e2e7ec);
 }
-.forecast-ledger-cards td,
-.forecast-ledger-cards th {
-  padding: 12px 16px;
+.forecast-ledger thead th {
+  padding: 8px 16px;
+  font-size: var(--font-small, 14px);
+  font-weight: 600;
+  color: var(--secondary, #52616b);
+  text-align: left;
+  background: var(--workspace, #f5f6f8);
+  border-bottom: 1px solid var(--divider, #e2e7ec);
+}
+.forecast-ledger thead th:nth-child(1) {
+  width: 40%;
+}
+.forecast-ledger thead th:nth-child(3) {
+  width: 9rem;
+}
+.forecast-ledger tbody th,
+.forecast-ledger tbody td {
+  padding: 10px 16px;
   border-bottom: 1px solid var(--divider, #e2e7ec);
   vertical-align: middle;
   text-align: left;
 }
-.forecast-ledger-cards tbody tr:last-child td,
-.forecast-ledger-cards tbody tr:last-child th {
+.forecast-ledger tbody tr:last-child > * {
   border-bottom: none;
 }
-.forecast-ledger-cards th[scope="row"] {
+.forecast-ledger tbody tr:hover > * {
+  background: var(--workspace, #f5f6f8);
+}
+.forecast-ledger tbody th[scope="row"] {
   font-weight: 400;
 }
-.forecast-ledger-cards tfoot th,
-.forecast-ledger-cards tfoot td {
+.forecast-ledger .money {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.forecast-ledger tbody td.money {
   font-weight: 600;
+}
+.forecast-ledger tfoot th,
+.forecast-ledger tfoot td {
+  padding: 12px 16px;
+  font-weight: 600;
+  text-align: left;
   border-top: 2px solid var(--divider, #e2e7ec);
-  border-bottom: none;
 }
 .forecast-ledger-label {
   display: block;
   font-weight: 600;
+  overflow-wrap: anywhere;
 }
-.forecast-ledger-cards td.money {
-  font-weight: 600;
+.forecast-ledger-meta {
+  display: block;
+  font-size: var(--font-small, 14px);
+  color: var(--secondary, #52616b);
+}
+/* Overdue is shown by text and colour together, on the due-date line only. */
+.forecast-overdue {
+  color: var(--error, #b42318);
+}
+/* Narrow screens: each transaction becomes a block with its amount beside the title and notes below.
+   The header row stays in the accessibility tree, visually hidden. */
+@media (max-width: 48rem) {
+  .forecast-ledger,
+  .forecast-ledger thead,
+  .forecast-ledger tbody,
+  .forecast-ledger tfoot,
+  .forecast-ledger tr,
+  .forecast-ledger th,
+  .forecast-ledger td {
+    display: block;
+  }
+  .forecast-ledger caption {
+    display: block;
+    width: 100%;
+  }
+  .forecast-ledger thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .forecast-ledger tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--divider, #e2e7ec);
+  }
+  .forecast-ledger tbody tr:last-child {
+    border-bottom: none;
+  }
+  .forecast-ledger tbody th[scope="row"] {
+    grid-column: 1;
+    grid-row: 1;
+    padding: 0;
+    border: 0;
+  }
+  .forecast-ledger tbody td.money {
+    grid-column: 2;
+    grid-row: 1;
+    padding: 0;
+    border: 0;
+    align-self: start;
+  }
+  .forecast-ledger tbody td.note-column {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    padding: 8px 0 0;
+    border: 0;
+  }
+  .forecast-ledger tbody td[colspan] {
+    padding: 12px 16px;
+    border: 0;
+  }
+  .forecast-ledger tfoot tr {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-top: 2px solid var(--divider, #e2e7ec);
+  }
+  .forecast-ledger tfoot th,
+  .forecast-ledger tfoot td {
+    padding: 0;
+    border: 0;
+  }
+  .forecast-ledger tfoot td:empty {
+    display: none;
+  }
 }
 .forecast-split-line {
   display: grid;

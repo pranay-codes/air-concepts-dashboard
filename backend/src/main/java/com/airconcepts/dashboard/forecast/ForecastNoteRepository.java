@@ -43,7 +43,10 @@ public class ForecastNoteRepository {
             + "returning source,source_id,note,updated_at",
         (r, n) -> new TransactionNote(r.getString("source"), r.getObject("source_id", UUID.class),
             r.getString("note"), r.getTimestamp("updated_at").toInstant()),
-        entity, source, sourceId, note, actor).stream().findFirst().orElseThrow();
+        // The statement has six placeholders: created_by and updated_by both take the acting user on insert.
+        // Binding one value short makes Postgres reject the statement (SQLState 22023), which Spring reports
+        // as a data integrity violation and the API returns as RECORD_CONFLICT.
+        entity, source, sourceId, note, actor, actor).stream().findFirst().orElseThrow();
   }
 
   public void delete(UUID entity, String source, UUID sourceId) {
