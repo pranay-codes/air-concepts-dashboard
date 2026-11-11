@@ -30,10 +30,17 @@ public class ForecastResolver {
     var end=start.plusMonths(11);var current=calendar.currentMonth();
     var generated=months.generated(entity.id());var generatedSet=generated.keySet();
     var anchors=assumptions.openingAnchors(entity.id());
-    var openings=ForecastChain.openings(start,end,generatedSet,months.netByMonth(entity.id()),anchorValues(anchors));
     var base=loader.load(entity,start);
-    var calculated=calculator.calculate(withOpening(base,openings.get(start),null));
     var stored=months.lines(entity.id(),start,end);var placed=months.placement(entity.id());
+    // The preview month's closing is provisional, but the next month's opening must follow it (D13).
+    var closing=new HashSet<>(generatedSet);var netByMonth=new HashMap<>(months.netByMonth(entity.id()));
+    var preview=previewMonth(start,generatedSet,current);
+    if(preview!=null) {
+      closing.add(preview);
+      netByMonth.put(preview,net(ForecastPlacement.unplaced(calculator.calculate(withOpening(base,null,null)).contributions(),preview,placed)));
+    }
+    var openings=ForecastChain.openings(start,end,closing,netByMonth,anchorValues(anchors));
+    var calculated=calculator.calculate(withOpening(base,openings.get(start),null));
 
     List<MonthRow> rows=new ArrayList<>();List<Contribution> contributions=new ArrayList<>();
     List<ForecastException> exceptions=new ArrayList<>();
@@ -51,7 +58,7 @@ public class ForecastResolver {
       else if(generatable){state=STATE_PREVIEW;lines=pending;}
       else {state=STATE_NOT_GENERATED;lines=null;notGenerated.add(month);}
       if(lines==null) {
-        rows.add(new MonthRow(month,opening,null,null,null,null,0,0,false,state,generatable,null,pendingCount,openingSource(month,generatedSet,anchors)));
+        rows.add(new MonthRow(month,opening,null,null,null,null,0,0,false,state,generatable,null,pendingCount,openingSource(month,closing,anchors)));
         continue;
       }
       contributions.addAll(lines);
@@ -59,7 +66,7 @@ public class ForecastResolver {
       rows.add(new MonthRow(month,opening,receipts,payments,net,opening==null?null:opening.add(net),
           (int)lines.stream().filter(c->c.direction().equals("IN")).count(),(int)lines.stream().filter(c->c.direction().equals("OUT")).count(),
           lines.stream().anyMatch(Contribution::overdue),state,generatable,generatedMonth==null?null:generatedMonth.generatedAt(),pendingCount,
-          openingSource(month,generatedSet,anchors)));
+          openingSource(month,closing,anchors)));
     }
     if(!notGenerated.isEmpty()) exceptions.add(new ForecastException("NOT_GENERATED",null,"Not generated: "+notGenerated.stream()
         .map(m->m.getMonth().getDisplayName(java.time.format.TextStyle.SHORT,Locale.ENGLISH)+" "+m.getYear()).reduce((a,b)->a+", "+b).orElse("")+
@@ -67,16 +74,27 @@ public class ForecastResolver {
     for(var note:pendingNotes) exceptions.add(new ForecastException("PENDING_ITEMS",null,note));
 
     var beyond=beyondAfter(calculated.contributions(),end,placed);
-    String source=generated.containsKey(start.minusMonths(1))?"Previous month forecast":(anchors.get(start)==null?null:anchors.get(start).source());
+    String source=closing.contains(start.minusMonths(1))?"Previous month forecast":(anchors.get(start)==null?null:anchors.get(start).source());
     var totals=new Totals(sumNullable(rows,MonthRow::receipts),sumNullable(rows,MonthRow::payments),rows.getLast().closing());
     return new Resolved(withOpening(base,openings.get(start),source),new ForecastResult(List.copyOf(rows),totals,List.copyOf(exceptions),beyond,
         List.copyOf(contributions),calculated.exclusions()),source);
   }
 
+  /** The one month that can be generated now, or null. Its figures are provisional until it is generated. */
+  private YearMonth previewMonth(YearMonth start,Set<YearMonth> generated,YearMonth current) {
+    for(int i=0;i<12;i++) {
+      var month=start.plusMonths(i);
+      if(!generated.contains(month)&&calendar.canGenerate(month,generated,current)) return month;
+    }
+    return null;
+  }
+
+  private static BigDecimal net(List<Contribution> lines) {return sum(lines,"IN").subtract(sum(lines,"OUT"));}
+
   /** How a month's opening was set: an explicit entry (MANUAL), an override of the carried value (OVERRIDE), or the carried closing (CARRIED_FORWARD). */
-  static String openingSource(YearMonth month,Set<YearMonth> generated,Map<YearMonth,OpeningBalance> anchors) {
+  static String openingSource(YearMonth month,Set<YearMonth> closing,Map<YearMonth,OpeningBalance> anchors) {
     boolean anchored=anchors.containsKey(month)&&anchors.get(month).openingBalance()!=null;
-    boolean carried=generated.contains(month.minusMonths(1));
+    boolean carried=closing.contains(month.minusMonths(1));
     if(anchored) return carried?"OVERRIDE":"MANUAL";
     return carried?"CARRIED_FORWARD":null;
   }

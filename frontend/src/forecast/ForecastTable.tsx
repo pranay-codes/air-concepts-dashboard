@@ -33,15 +33,28 @@ function StateBadge({ month }: { month: ForecastMonth }) {
   return <span className={`badge ${tone}`.trim()}>{stateLabel[month.state]}</span>;
 }
 
+/** A carried opening that follows a preview month rests on figures that can still change until that month is generated (D13). */
+function isProvisional(months: ForecastMonth[], index: number) {
+  return (
+    months[index]?.openingSource === "CARRIED_FORWARD" && months[index - 1]?.state === "PREVIEW"
+  );
+}
+
 /** Opening amount, its source, and an Edit control that is always present when editing is allowed. */
 function OpeningCell({
   month,
   onOpening,
+  provisional,
 }: {
   month: ForecastMonth;
   onOpening?: (month: ForecastMonth) => void;
+  provisional: boolean;
 }) {
-  const source = month.openingSource ? openingSourceLabel[month.openingSource] : null;
+  const source = provisional
+    ? "Provisional"
+    : month.openingSource
+      ? openingSourceLabel[month.openingSource]
+      : null;
   return (
     <div className="opening-cell">
       <span className="opening-amount">
@@ -138,7 +151,7 @@ export function ForecastTable({
             </tr>
           </thead>
           <tbody>
-            {months.map((month) => (
+            {months.map((month, index) => (
               <tr key={month.month}>
                 <th scope="row">
                   {onOpen ? (
@@ -157,7 +170,11 @@ export function ForecastTable({
                   <StateBadge month={month} />
                 </td>
                 <td className="money">
-                  <OpeningCell month={month} onOpening={onOpening} />
+                  <OpeningCell
+                    month={month}
+                    onOpening={onOpening}
+                    provisional={isProvisional(months, index)}
+                  />
                 </td>
                 <td className="money">{figure(month, month.receipts)}</td>
                 <td className="money">{figure(month, month.payments)}</td>
@@ -174,7 +191,7 @@ export function ForecastTable({
         </table>
       </div>
       <div className="forecast-mobile">
-        {months.map((month) => (
+        {months.map((month, index) => (
           <article className="forecast-card" key={month.month}>
             <h3>{monthName(month.month)}</h3>
             <p>
@@ -197,7 +214,11 @@ export function ForecastTable({
             </dl>
             <div className="forecast-card-opening">
               <span>Opening balance</span>
-              <OpeningCell month={month} onOpening={onOpening} />
+              <OpeningCell
+                month={month}
+                onOpening={onOpening}
+                provisional={isProvisional(months, index)}
+              />
             </div>
             {warning(month)}
             {month.containsOverdue ? (
