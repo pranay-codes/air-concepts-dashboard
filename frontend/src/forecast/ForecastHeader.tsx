@@ -1,4 +1,6 @@
 import { formatFetchTime } from "../ui/format";
+
+/** Calendar month of the current time in New Zealand, as YYYY-MM. */
 export function currentMonth() {
   const parts = new Intl.DateTimeFormat("en-NZ", {
     timeZone: "Pacific/Auckland",
@@ -7,14 +9,15 @@ export function currentMonth() {
   }).formatToParts(new Date());
   return `${parts.find((p) => p.type === "year")?.value}-${parts.find((p) => p.type === "month")?.value}`;
 }
-export function earliestMonth() {
-  const [year = "2026", month = "1"] = currentMonth().split("-");
-  return new Date(Date.UTC(Number(year) - 1, Number(month) - 1, 1)).toISOString().slice(0, 7);
-}
+
+/**
+ * Page header. The financial year is chosen with previous and next controls; the label comes from the
+ * server, so the screen never guesses the year boundary (FR-UC04-22).
+ */
 export function ForecastHeader(props: {
   entityName: string;
-  month: string;
-  onMonth(month: string): void;
+  financialYearLabel?: string | null;
+  onStep?(delta: number): void;
   lastSync?: string | null;
   loadedAt?: Date | null;
   stale?: boolean;
@@ -29,19 +32,21 @@ export function ForecastHeader(props: {
         <p>
           <strong>{props.entityName}</strong> · 12 months · NZD
         </p>
-        <label>
-          Forecast start month
-          <input
-            type="month"
-            min={earliestMonth()}
-            max={currentMonth()}
-            value={props.month}
-            required
-            onChange={(e) => {
-              if (e.target.value) props.onMonth(e.target.value);
-            }}
-          />
-        </label>
+        <div className="forecast-year" role="group" aria-label="Financial year">
+          {props.onStep ? (
+            <button type="button" onClick={() => props.onStep?.(-1)}>
+              Previous year
+            </button>
+          ) : null}
+          <p aria-live="polite">
+            Financial year <strong>{props.financialYearLabel ?? "Loading…"}</strong>
+          </p>
+          {props.onStep ? (
+            <button type="button" onClick={() => props.onStep?.(1)}>
+              Next year
+            </button>
+          ) : null}
+        </div>
         {props.onSync ? (
           <p>
             Xero data as at {formatFetchTime(props.lastSync)}{" "}

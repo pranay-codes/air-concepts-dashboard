@@ -22,10 +22,10 @@ public class ForecastExportController {
   private final ForecastExportService service;private final CurrentUserResolver users;private final ForecastAccess access;private final ObjectMapper mapper;
   public ForecastExportController(ForecastExportService service,CurrentUserResolver users,ForecastAccess access,ObjectMapper mapper){this.service=service;this.users=users;this.access=access;this.mapper=mapper;}
   @PostMapping(consumes=MediaType.MULTIPART_FORM_DATA_VALUE,produces=XLSX) @Operation(operationId="exportForecast")
-  public ResponseEntity<byte[]> export(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID entityId,@RequestParam(required=false) String startMonth,@RequestPart("file") MultipartFile file)throws IOException{
+  public ResponseEntity<byte[]> export(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID entityId,@RequestParam(required=false) String financialYearStart,@RequestPart("file") MultipartFile file)throws IOException{
     var user=users.from(jwt);access.requireRead(user,entityId);
     if(file.getSize()>WorkbookValidator.MAX_UPLOAD_BYTES)throw tooLarge();
-    var result=service.export(user,entityId,startMonth,file.getOriginalFilename(),file.getBytes());
+    var result=service.export(user,entityId,financialYearStart,file.getOriginalFilename(),file.getBytes());
     return ResponseEntity.ok().contentType(MediaType.parseMediaType(XLSX)).cacheControl(CacheControl.noStore())
         .header("X-Content-Type-Options","nosniff").header(HttpHeaders.CONTENT_DISPOSITION,ContentDisposition.attachment().filename(result.filename()).build().toString())
         .header("X-Forecast-Reconciled",Boolean.toString(result.reconciled())).header("X-Forecast-Generated-At",result.generatedAt().toString())

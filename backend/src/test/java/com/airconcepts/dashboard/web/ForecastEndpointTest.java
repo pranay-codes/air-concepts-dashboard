@@ -57,7 +57,7 @@ class ForecastEndpointTest {
   @Test void frUc04_07_roleMatrixOnEveryRoute() throws Exception {
     var id=UUID.randomUUID();
     var routes=List.of(
-        get(base()),get(base()+"/months/2026-11/items"),get(base()+"/documents"),get(base()+"/documents/"+id),
+        get(base()),get(base()+"/months/2026-11/items"),post(base()+"/months/2026-11/generate"),get(base()+"/documents"),get(base()+"/documents/"+id),
         get("/api/v1/forecast/combined"),get(base()+"/sync"),post(base()+"/sync"),
         get(base()+"/periods/2026-11/opening-balance"),put(base()+"/periods/2026-11/opening-balance"),
         get(base()+"/manual-items"),post(base()+"/manual-items"),patch(base()+"/manual-items/"+id),post(base()+"/manual-items/"+id+"/deactivate"),
@@ -120,10 +120,10 @@ class ForecastEndpointTest {
     when(datasets.load(eq(authorised),any())).thenReturn(dataset());
     for(var role:List.of(Role.DIRECTOR,Role.FINANCIAL_ADMIN)){
       as(role);
-      mvc.perform(get(base()).param("startMonth","2026-11").header("Authorization","Bearer "+TestJwts.TOKEN))
+      mvc.perform(get(base()).param("financialYearStart","2026").header("Authorization","Bearer "+TestJwts.TOKEN))
           .andExpect(status().isOk()).andExpect(jsonPath("$.syncStale").value(true)).andExpect(jsonPath("$.lastRun.status").value("FAILED"))
           .andExpect(jsonPath("$.lastSuccessfulSyncAt").value("2026-11-01T00:00:00Z"));
-      mvc.perform(get("/api/v1/forecast/combined").param("entityIds",entity.toString()).param("startMonth","2026-11").header("Authorization","Bearer "+TestJwts.TOKEN))
+      mvc.perform(get("/api/v1/forecast/combined").param("entityIds",entity.toString()).param("financialYearStart","2026").header("Authorization","Bearer "+TestJwts.TOKEN))
           .andExpect(status().isOk()).andExpect(jsonPath("$.complete").value(false)).andExpect(jsonPath("$..staffing").doesNotExist())
           .andExpect(jsonPath("$..documents").doesNotExist()).andExpect(jsonPath("$..items").doesNotExist())
           .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("PRIVATE_STAFF"))));
@@ -135,18 +135,19 @@ class ForecastEndpointTest {
   @Test void frUc04_20_monthItemsGroupByForecastDateNotIssueMonth()throws Exception {
     as(Role.FINANCIAL_ADMIN);var authorised=new Entity(entity,"Synthetic");when(entities.get(any(),eq(entity))).thenReturn(authorised);
     when(datasets.load(eq(authorised),any())).thenReturn(dataset());
-    mvc.perform(get(base()+"/months/2026-11/items").param("startMonth","2026-11").param("direction","IN").header("Authorization","Bearer "+TestJwts.TOKEN))
-        .andExpect(status().isOk()).andExpect(jsonPath("$.items").isEmpty());
-    mvc.perform(get(base()+"/months/2026-12/items").param("startMonth","2026-11").param("direction","IN").header("Authorization","Bearer "+TestJwts.TOKEN))
-        .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].number").value("INV-PRIVATE"))
-        .andExpect(jsonPath("$.items[0].rule").value("DUE_DATE")).andExpect(jsonPath("$.items[0].overdue").value(false))
-        .andExpect(jsonPath("$.items[0].amount").value("115.00"));
+    // Issued in November but due in December: the November preview does not carry it, so it is grouped by forecast date.
+    mvc.perform(get(base()+"/months/2026-11/items").param("direction","IN").header("Authorization","Bearer "+TestJwts.TOKEN))
+        .andExpect(status().isOk()).andExpect(jsonPath("$.state").value("PREVIEW")).andExpect(jsonPath("$.generatable").value(true))
+        .andExpect(jsonPath("$.items").isEmpty());
+    // December cannot be previewed until November is generated, so its items are not shown.
+    mvc.perform(get(base()+"/months/2026-12/items").param("direction","IN").header("Authorization","Bearer "+TestJwts.TOKEN))
+        .andExpect(status().isOk()).andExpect(jsonPath("$.state").value("NOT_GENERATED")).andExpect(jsonPath("$.items").isEmpty());
   }
   @Test void frUc04_13_archivedEntityFailsWholeRequest()throws Exception {
     as(Role.DIRECTOR);var unknown=UUID.randomUUID();var authorised=new Entity(entity,"Synthetic");
     when(entities.get(any(),eq(entity))).thenReturn(authorised);when(datasets.load(eq(authorised),any())).thenReturn(dataset());
     when(entities.get(any(),eq(unknown))).thenThrow(new ApiFailure(org.springframework.http.HttpStatus.NOT_FOUND,"ENTITY_UNAVAILABLE","Entity unavailable."));
-    mvc.perform(get("/api/v1/forecast/combined").param("entityIds",entity+","+unknown).param("startMonth","2026-11").header("Authorization","Bearer "+TestJwts.TOKEN))
+    mvc.perform(get("/api/v1/forecast/combined").param("entityIds",entity+","+unknown).param("financialYearStart","2026").header("Authorization","Bearer "+TestJwts.TOKEN))
         .andExpect(status().isNotFound()).andExpect(jsonPath("$.entities").doesNotExist());
   }
   @Test void frUc04_16_conflictResolution()throws Exception {

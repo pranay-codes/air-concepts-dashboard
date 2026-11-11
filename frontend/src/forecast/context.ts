@@ -5,7 +5,9 @@ import { isAccessFailure } from "../api/client";
 export interface ForecastContext {
   api: DashboardApi;
   entity: Entity;
-  month: string;
+  /** Calendar year the selected financial year starts in (2026 is 2026-2027); null until the server has answered. */
+  financialYear: number | null;
+  financialYearLabel: string;
   subject: string;
   onChanged(): void;
   onAccessDenied(): void;

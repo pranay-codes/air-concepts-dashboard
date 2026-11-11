@@ -36,7 +36,7 @@ public class ForecastDatasetLoader {
         new SyncInfo(last,r.getString(1),last==null||last.isBefore(clock.instant().minus(STALE_AFTER)),r.getTimestamp(2)==null?null:r.getTimestamp(2).toInstant(),r.getString(3)),entity.id());
     var sync=runs.isEmpty()?new SyncInfo(null,null,true):runs.getFirst();var opening=assumptions.opening(entity.id(),start.atDay(1));
     return new ForecastDataset(entity.id(),entity.displayName(),start,LocalDate.now(clock.withZone(ForecastMonths.ZONE)),opening.openingBalance(),opening.source(),documents,
-        assumptions.manualItems(entity.id(),false),assumptions.staffing(entity.id(),false),sync);
+        assumptions.manualItems(entity.id(),true),assumptions.staffing(entity.id(),true),sync);
   }
   private static LocalDate date(ResultSet r,String key)throws SQLException{var d=r.getDate(key);return d==null?null:d.toLocalDate();}
 }

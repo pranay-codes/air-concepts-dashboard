@@ -68,7 +68,7 @@ public final class ForecastCalculator {
       List<Contribution> rows) {
     boolean overdue=date.isBefore(data.today());
     YearMonth bucket=overdue&&overduePolicy==OverduePolicy.CURRENT_MONTH?YearMonth.from(data.today()):YearMonth.from(date);
-    rows.add(new Contribution(d.id(),"DOCUMENT",d.type().equals("ACCREC")?"IN":"OUT",d.type(),d.number(),d.contact(),date,bucket,money(amount),rule,overdue,sequence,count));
+    rows.add(new Contribution(d.id(),"DOCUMENT",d.type().equals("ACCREC")?"IN":"OUT",d.type(),d.number(),d.contact(),date,bucket,money(amount),rule,overdue,sequence,count,d.issueDate(),d.dueDate()));
   }
   /** One planning summary per direction: how much overdue cash is in the forecast, and where it sits. */
   private void addOverdueSummaries(ForecastDataset data,List<Contribution> rows,List<ForecastException> exceptions) {

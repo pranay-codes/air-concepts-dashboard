@@ -5,7 +5,11 @@ const a = "10000000-0000-4000-8000-000000000001",
   b = "10000000-0000-4000-8000-000000000002";
 const months = () =>
   Array.from({ length: 12 }, (_, i) => ({
-    month: new Date(Date.UTC(2026, 10 + i, 1)).toISOString().slice(0, 7),
+    month: new Date(Date.UTC(2026, 3 + i, 1)).toISOString().slice(0, 7),
+    state: "GENERATED" as const,
+    generatable: false,
+    generatedAt: null,
+    pendingNewItems: 0,
     opening: "100.00",
     closing: "100.00",
     receipts: "0.00",
@@ -41,11 +45,12 @@ it("FR-UC04-13 rejects a duplicate entity summary instead of silently omitting a
   };
   await expect(
     api({
-      startMonth: "2026-11",
+      financialYearStart: "2026-04",
+      financialYearLabel: "2026-2027",
       months: months(),
       entities: [summary, summary],
       complete: true,
-    }).combinedForecast([a, b], "2026-11"),
+    }).combinedForecast([a, b], 2026),
   ).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
 });
 it("FR-UC04-05 rejects month rows that do not match the selected 12-month period", async () => {
@@ -54,7 +59,8 @@ it("FR-UC04-05 rejects month rows that do not match the selected 12-month period
   const body = {
     entityId: a,
     entityName: "Synthetic",
-    startMonth: "2026-11",
+    financialYearStart: "2026-04",
+    financialYearLabel: "2026-2027",
     months: rows,
     totals: { receipts: "0.00", payments: "0.00", closing: "100.00" },
     beyondWindow: { receipts: "0.00", payments: "0.00" },
@@ -65,7 +71,7 @@ it("FR-UC04-05 rejects month rows that do not match the selected 12-month period
     syncStale: true,
     openingBalanceSource: null,
   };
-  await expect(api(body).forecast(a, "2026-11")).rejects.toMatchObject({
+  await expect(api(body).forecast(a, 2026)).rejects.toMatchObject({
     code: "INVALID_RESPONSE",
   });
 });

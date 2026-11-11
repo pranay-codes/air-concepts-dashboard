@@ -17,6 +17,10 @@ it("FR-UC04-05 shows missing opening as Not recorded, flags negative cash and op
           receiptCount: 1,
           paymentCount: 1,
           containsOverdue: true,
+          state: "GENERATED",
+          generatable: false,
+          generatedAt: null,
+          pendingNewItems: 0,
         },
       ]}
       onOpen={onOpen}

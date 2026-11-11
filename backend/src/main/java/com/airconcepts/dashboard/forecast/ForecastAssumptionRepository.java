@@ -26,6 +26,13 @@ public class ForecastAssumptionRepository {
     return jdbc.query("select opening_balance,opening_balance_source from public.forecast_periods where entity_id=? and start_month=?",
         (r,n)->new OpeningBalance(r.getBigDecimal(1),r.getString(2)),entity,start).stream().findFirst().orElse(new OpeningBalance(null,null));
   }
+  /** Manually entered opening balances by month. Used only where the previous month has no frozen forecast. */
+  public Map<YearMonth,OpeningBalance> openingAnchors(UUID entity) {
+    Map<YearMonth,OpeningBalance> anchors=new LinkedHashMap<>();
+    jdbc.query("select start_month,opening_balance,opening_balance_source from public.forecast_periods where entity_id=? and opening_balance is not null order by start_month",
+        r->{anchors.put(YearMonth.from(r.getDate(1).toLocalDate()),new OpeningBalance(r.getBigDecimal(2),r.getString(3)));},entity);
+    return anchors;
+  }
   public List<ManualItem> manualItems(UUID entity,boolean inactive) {return jdbc.query("select * from public.forecast_manual_items where entity_id=? and (? or active) order by description,id",MANUAL,entity,inactive);}
   public Optional<ManualItem> manual(UUID entity,UUID id) {return jdbc.query("select * from public.forecast_manual_items where entity_id=? and id=?",MANUAL,entity,id).stream().findFirst();}
   @Transactional(propagation=org.springframework.transaction.annotation.Propagation.MANDATORY)

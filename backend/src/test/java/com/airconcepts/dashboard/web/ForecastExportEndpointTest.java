@@ -22,10 +22,19 @@ class ForecastExportEndpointTest {
   @Autowired MockMvc mvc;
   @MockitoBean JwtDecoder decoder;@MockitoBean RoleLookup roles;
   @MockitoBean EntityService entities;@MockitoBean ForecastDatasetLoader loader;@MockitoBean ForecastExportRepository exports;
+  @MockitoBean ForecastMonthRepository months;@MockitoBean ForecastAssumptionRepository assumptions;
+  @org.springframework.beans.factory.annotation.Autowired ForecastCalendar calendar;
   @org.springframework.test.context.bean.override.mockito.MockitoSpyBean com.airconcepts.dashboard.forecast.excel.WorkbookPopulator populator;
   private final UUID entity=UUID.randomUUID();private final String subject=UUID.randomUUID().toString();
   private void as(Role role){when(decoder.decode(TestJwts.TOKEN)).thenReturn(TestJwts.forSubject(subject));when(roles.findRole(subject)).thenReturn(Optional.ofNullable(role));}
   private String path(){return "/api/v1/entities/"+entity+"/forecast/export";}
+  /** A financial year in which every month is generated and carries an opening balance, so the export has no coverage warnings. */
+  private void generatedFinancialYear(){
+    var start=calendar.currentFinancialYearStart();Map<java.time.YearMonth,ForecastMonthRepository.GeneratedMonth> generated=new LinkedHashMap<>();
+    for(int i=0;i<12;i++) generated.put(start.plusMonths(i),new ForecastMonthRepository.GeneratedMonth(start.plusMonths(i),java.time.Instant.now(),1));
+    when(months.generated(entity)).thenReturn(generated);when(months.placement(entity)).thenReturn(com.airconcepts.dashboard.forecast.calc.ForecastPlacement.Placed.none());
+    when(assumptions.openingAnchors(entity)).thenReturn(Map.of(start,new ForecastAssumptionRepository.OpeningBalance(new java.math.BigDecimal("1000.00"),"Statement")));
+  }
   @Test void frUc04_12_invalidUploadLeavesTablesUnchanged()throws Exception{
     as(Role.FINANCIAL_ADMIN);when(entities.get(any(),eq(entity))).thenReturn(new Entity(entity,"Synthetic"));
     mvc.perform(multipart(path()).file(new MockMultipartFile("file","invalid.xlsx","application/octet-stream",new byte[]{1,2,3}))
@@ -39,7 +48,7 @@ class ForecastExportEndpointTest {
     verifyNoInteractions(exports,loader,entities);
   }
   @Test void frUc04_19_headersFilenameAndSingleAuditWrite()throws Exception{
-    as(Role.FINANCIAL_ADMIN);var authorised=new Entity(entity,"Synthetic");when(entities.get(any(),eq(entity))).thenReturn(authorised);when(exports.entityCode(entity)).thenReturn("synthetic");
+    as(Role.FINANCIAL_ADMIN);var authorised=new Entity(entity,"Synthetic");when(entities.get(any(),eq(entity))).thenReturn(authorised);when(exports.entityCode(entity)).thenReturn("synthetic"); generatedFinancialYear();
     when(loader.load(eq(authorised),any())).thenAnswer(invocation->{var month=invocation.getArgument(1,java.time.YearMonth.class);return new com.airconcepts.dashboard.forecast.calc.ForecastDataset(entity,"Synthetic",month,java.time.LocalDate.now(),new java.math.BigDecimal("1000.00"),"Statement",List.of(),List.of(),List.of(),null);});
     mvc.perform(multipart(path()).file(new MockMultipartFile("file","template.xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",Files.readAllBytes(Path.of("src/test/resources/forecast/template-v1.xlsx"))))
         .header("Authorization","Bearer "+TestJwts.TOKEN).header("Origin","http://localhost:5173"))
@@ -51,7 +60,7 @@ class ForecastExportEndpointTest {
     verify(exports,times(1)).record(eq(entity),eq(UUID.fromString(subject)),any(),any(),eq(true),eq(List.of()),any());
   }
   @Test void frUc04_21_injectedMismatchSetsHeaderAndFlagButStillReturnsWorkbook()throws Exception{
-    as(Role.FINANCIAL_ADMIN);var authorised=new Entity(entity,"Synthetic");when(entities.get(any(),eq(entity))).thenReturn(authorised);when(exports.entityCode(entity)).thenReturn("synthetic");
+    as(Role.FINANCIAL_ADMIN);var authorised=new Entity(entity,"Synthetic");when(entities.get(any(),eq(entity))).thenReturn(authorised);when(exports.entityCode(entity)).thenReturn("synthetic"); generatedFinancialYear();
     when(loader.load(eq(authorised),any())).thenAnswer(invocation->new com.airconcepts.dashboard.forecast.calc.ForecastDataset(entity,"Synthetic",invocation.getArgument(1),java.time.LocalDate.now(),new java.math.BigDecimal("1000.00"),"Statement",List.of(),List.of(),List.of(),null));
     doAnswer(invocation->{
       var warnings=invocation.callRealMethod();
