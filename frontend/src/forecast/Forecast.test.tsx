@@ -119,9 +119,9 @@ for (const switchContext of ["entity", "period"] as const) {
       view.rerender(<Forecast {...common} entity={b} />);
     } else {
       await screen.findAllByText(/111\.00/);
-      fireEvent.click(screen.getByRole("button", { name: "Previous year" }));
+      fireEvent.click(screen.getByRole("button", { name: "Previous financial year" }));
       await waitFor(() => expect(finishOld).toBeDefined());
-      fireEvent.click(screen.getByRole("button", { name: "Next year" }));
+      fireEvent.click(screen.getByRole("button", { name: "Next financial year" }));
     }
     await screen.findAllByText(/222\.00/);
     expect(oldSignal?.aborted).toBe(true);

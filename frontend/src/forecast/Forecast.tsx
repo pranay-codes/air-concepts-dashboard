@@ -135,6 +135,7 @@ function EntityForecast(props: Props & { entity: Entity }) {
       <ForecastHeader
         entityName={props.entity.displayName}
         financialYearLabel={resource.data?.financialYearLabel ?? null}
+        canStep={loadedYear !== null}
         onStep={(delta) => {
           if (loadedYear === null || !canLeave()) return;
           leaveCurrentView();
@@ -142,7 +143,6 @@ function EntityForecast(props: Props & { entity: Entity }) {
         }}
         lastSync={resource.data?.lastSuccessfulSyncAt}
         stale={resource.data?.syncStale}
-        loadedAt={resource.loadedAt}
         busy={action.busy}
         onSync={() => {
           void action
