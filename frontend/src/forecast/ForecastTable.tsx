@@ -1,5 +1,5 @@
 import type { ForecastMonth, ForecastMonthState, OpeningSource } from "./contracts";
-import { formatMoney } from "../ui/format";
+import { amountSign, formatMoney } from "../ui/format";
 import "./forecast.css";
 
 export function monthName(value: string) {
@@ -16,17 +16,31 @@ const stateLabel: Record<ForecastMonthState, string> = {
   NOT_GENERATED: "Not generated",
 };
 
-const openingSourceLabel: Record<OpeningSource, string> = {
-  MANUAL: "Entered",
+/** Entered openings are unlabelled; only overrides and carried-forward openings name their source. */
+const openingSourceLabel: Record<Exclude<OpeningSource, "MANUAL">, string> = {
   OVERRIDE: "Override",
   CARRIED_FORWARD: "Carried forward",
 };
+
+/** Colour class for a financial amount, decided from its digits: positive green, negative red, zero or missing neutral. */
+function signClass(value: string | null | undefined) {
+  const sign = amountSign(value);
+  return sign > 0 ? "amount-positive" : sign < 0 ? "amount-negative" : undefined;
+}
 
 /**
  * Figures for a month that has no forecast are described, never shown as zero (AC-9, FR-UC04-23).
  * The visible dash is hidden from assistive technology; the visually hidden text carries the meaning.
  */
-function FigureCell({ month, value }: { month: ForecastMonth; value: string | null }) {
+function FigureCell({
+  month,
+  value,
+  signed = false,
+}: {
+  month: ForecastMonth;
+  value: string | null;
+  signed?: boolean;
+}) {
   if (month.state === "NOT_GENERATED")
     return (
       <>
@@ -34,7 +48,9 @@ function FigureCell({ month, value }: { month: ForecastMonth; value: string | nu
         <span className="visually-hidden">Not generated</span>
       </>
     );
-  return <>{formatMoney(value, "NZD")}</>;
+  const text = formatMoney(value, "NZD");
+  const tone = signed ? signClass(value) : undefined;
+  return tone ? <span className={tone}>{text}</span> : <>{text}</>;
 }
 
 const columns = [
@@ -70,14 +86,13 @@ function OpeningCell({
   onOpening?: (month: ForecastMonth) => void;
   provisional: boolean;
 }) {
-  const source = provisional
-    ? "Provisional"
-    : month.openingSource
-      ? openingSourceLabel[month.openingSource]
-      : null;
+  const source =
+    provisional || !month.openingSource || month.openingSource === "MANUAL"
+      ? null
+      : openingSourceLabel[month.openingSource];
   return (
     <div className="opening-cell">
-      <span className="opening-amount">
+      <span className={`opening-amount ${signClass(month.opening) ?? ""}`.trim()}>
         {month.opening === null ? "Not set" : formatMoney(month.opening, "NZD")}
       </span>
       {source ? <span className="supporting opening-source">{source}</span> : null}
@@ -205,10 +220,10 @@ export function ForecastTable({
                   <FigureCell month={month} value={month.payments} />
                 </td>
                 <td className="money total">
-                  <FigureCell month={month} value={month.net} />
+                  <FigureCell month={month} value={month.net} signed />
                 </td>
                 <td className="money total">
-                  <FigureCell month={month} value={month.closing} /> {warning(month)}
+                  <FigureCell month={month} value={month.closing} signed /> {warning(month)}
                 </td>
                 <td>
                   <MonthAction month={month} onGenerate={onGenerate} />

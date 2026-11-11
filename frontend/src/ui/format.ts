@@ -25,6 +25,17 @@ function sign(value: Decimal) {
   return value.negative && /[1-9]/.test(value.whole + value.fraction) ? "-" : "";
 }
 
+/**
+ * Sign of an amount, read from its digits rather than its formatted text.
+ * 1 = positive, -1 = negative, 0 = confirmed zero, missing or unreadable.
+ */
+export function amountSign(value: string | null | undefined): 1 | -1 | 0 {
+  if (value === null || value === undefined) return 0;
+  const parsed = decimal(value);
+  if (!parsed || !/[1-9]/.test(parsed.whole + parsed.fraction)) return 0;
+  return parsed.negative ? -1 : 1;
+}
+
 const integerFormat = new Intl.NumberFormat("en-NZ", { maximumFractionDigits: 0 });
 const currencyFormats = new Map<string, Intl.NumberFormat>();
 
