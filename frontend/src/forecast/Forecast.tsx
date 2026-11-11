@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, type KeyboardEvent } from "react";
 import type { Entity, Profile } from "../api/contracts";
 import type { DashboardApi } from "../api/dashboard";
 import { yearOf } from "../api/dashboard";
@@ -56,6 +56,8 @@ export default function Forecast(props: Props) {
   );
 }
 const tabs = ["Forecast", "Xero items", "Manual items", "Staffing", "History"] as const;
+type ForecastTab = (typeof tabs)[number];
+const tabId = (name: ForecastTab) => `forecast-tab-${name.toLowerCase().replace(/\s+/g, "-")}`;
 function EntityForecast(props: Props & { entity: Entity }) {
   const { api, entity, onDirty: notifyDirty, onAccessDenied } = props;
   // null asks the server for the financial year that contains today; navigation then uses the year it reports.
@@ -114,6 +116,32 @@ function EntityForecast(props: Props & { entity: Entity }) {
     setDialog(null);
     setDocument(null);
     setReview(null);
+  }
+  /** Switches section only after the unsaved-changes check passes; returns whether the section changed. */
+  function selectTab(name: ForecastTab): boolean {
+    if (!canLeave()) return false;
+    setTab(name);
+    leaveCurrentView();
+    return true;
+  }
+  /** WAI tabs keyboard model: arrows wrap, Home and End jump to the ends, and focus follows the selection. */
+  function tabKey(event: KeyboardEvent<HTMLButtonElement>) {
+    const index = tabs.indexOf(tab);
+    const next =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? tabs.length - 1
+          : event.key === "ArrowRight"
+            ? (index + 1) % tabs.length
+            : event.key === "ArrowLeft"
+              ? (index + tabs.length - 1) % tabs.length
+              : -1;
+    const name = tabs[next];
+    if (!name) return;
+    event.preventDefault();
+    // `document` is shadowed by the dirty-document state above, so the DOM lookup uses window.document.
+    if (selectTab(name)) window.document.getElementById(tabId(name))?.focus();
   }
   function confirmGeneration(month: ForecastMonth) {
     void generation
@@ -175,106 +203,109 @@ function EntityForecast(props: Props & { entity: Entity }) {
           label="Check sync history"
         />
       ) : null}
-      <nav className="forecast-tabs" aria-label="Forecast sections">
+      <div className="forecast-tabs" role="tablist" aria-label="Forecast sections">
         {tabs.map((name) => (
           <button
             key={name}
             type="button"
-            aria-pressed={tab === name}
-            onClick={() => {
-              if (!canLeave()) return;
-              setTab(name);
-              leaveCurrentView();
-            }}
+            role="tab"
+            id={tabId(name)}
+            aria-controls="forecast-section-panel"
+            aria-selected={tab === name}
+            tabIndex={tab === name ? 0 : -1}
+            onClick={() => selectTab(name)}
+            onKeyDown={tabKey}
           >
             {name}
           </button>
         ))}
-      </nav>
-      {tab === "Forecast" ? (
-        <div className="forecast-view">
-          {resource.status === "loading" ? <Loading label="Loading forecast…" /> : null}
-          {selectedMonth ? (
-            <MonthDetail
-              key={`${loadedYear}:${selectedMonth}:${revision}`}
-              {...context}
-              selectedMonth={selectedMonth}
-              summary={resource.data?.months.find((row) => row.month === selectedMonth) ?? null}
-              onBack={() => {
-                setSelectedMonth(null);
-                requestAnimationFrame(() => monthOpener.current?.focus());
-              }}
-            />
-          ) : resource.data ? (
-            <div className="forecast-overview">
-              {review ? (
-                <GenerationReview
-                  month={review}
-                  busy={generation.busy}
-                  error={generation.error}
-                  onConfirm={() => confirmGeneration(review)}
-                  onCancel={() => setReview(null)}
-                />
-              ) : null}
-              <ForecastTable
-                months={resource.data.months}
-                onOpen={(value) => {
-                  monthOpener.current = window.document.activeElement as HTMLElement | null;
-                  setSelectedMonth(value);
+      </div>
+      <div id="forecast-section-panel" role="tabpanel" aria-labelledby={tabId(tab)}>
+        {tab === "Forecast" ? (
+          <div className="forecast-view">
+            {resource.status === "loading" ? <Loading label="Loading forecast…" /> : null}
+            {selectedMonth ? (
+              <MonthDetail
+                key={`${loadedYear}:${selectedMonth}:${revision}`}
+                {...context}
+                selectedMonth={selectedMonth}
+                summary={resource.data?.months.find((row) => row.month === selectedMonth) ?? null}
+                onBack={() => {
+                  setSelectedMonth(null);
+                  requestAnimationFrame(() => monthOpener.current?.focus());
                 }}
-                onOpening={(month) => {
-                  setOpeningMonth(month);
-                  setDialog("opening");
-                }}
-                onGenerate={(month) => setReview(month)}
               />
-              <p>
-                Beyond this financial year: money in{" "}
-                {formatMoney(resource.data.beyondWindow.receipts, "NZD")}, money out{" "}
-                {formatMoney(resource.data.beyondWindow.payments, "NZD")}.
-              </p>
-              {resource.data.exclusions.length ? (
-                <details className="forecast-panel">
-                  <summary>Excluded documents ({resource.data.exclusions.length})</summary>
-                  {resource.data.exclusions.map((row) => (
-                    <p key={row.documentId}>
-                      {row.number ?? row.documentId}: {row.reason}{" "}
-                      {row.documentId ? (
-                        <button
-                          type="button"
-                          onClick={() => setDocument({ id: row.documentId!, mode: "exclude" })}
-                        >
-                          Include again
-                        </button>
-                      ) : null}
-                    </p>
-                  ))}
-                </details>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-      {tab === "Xero items" ? (
-        <XeroItems key={loadedYear} {...context} revision={revision} />
-      ) : null}
-      {tab === "Manual items" ? (
-        <AssumptionLines
-          key={`${loadedYear}:manual`}
-          {...context}
-          kind="manual"
-          revision={revision}
-        />
-      ) : null}
-      {tab === "Staffing" ? (
-        <AssumptionLines
-          key={`${loadedYear}:staffing`}
-          {...context}
-          kind="staffing"
-          revision={revision}
-        />
-      ) : null}
-      {tab === "History" ? <History {...context} revision={revision} /> : null}
+            ) : resource.data ? (
+              <div className="forecast-overview">
+                {review ? (
+                  <GenerationReview
+                    month={review}
+                    busy={generation.busy}
+                    error={generation.error}
+                    onConfirm={() => confirmGeneration(review)}
+                    onCancel={() => setReview(null)}
+                  />
+                ) : null}
+                <ForecastTable
+                  months={resource.data.months}
+                  onOpen={(value) => {
+                    monthOpener.current = window.document.activeElement as HTMLElement | null;
+                    setSelectedMonth(value);
+                  }}
+                  onOpening={(month) => {
+                    setOpeningMonth(month);
+                    setDialog("opening");
+                  }}
+                  onGenerate={(month) => setReview(month)}
+                />
+                <p>
+                  Beyond this financial year: money in{" "}
+                  {formatMoney(resource.data.beyondWindow.receipts, "NZD")}, money out{" "}
+                  {formatMoney(resource.data.beyondWindow.payments, "NZD")}.
+                </p>
+                {resource.data.exclusions.length ? (
+                  <details className="forecast-panel">
+                    <summary>Excluded documents ({resource.data.exclusions.length})</summary>
+                    {resource.data.exclusions.map((row) => (
+                      <p key={row.documentId}>
+                        {row.number ?? row.documentId}: {row.reason}{" "}
+                        {row.documentId ? (
+                          <button
+                            type="button"
+                            onClick={() => setDocument({ id: row.documentId!, mode: "exclude" })}
+                          >
+                            Include again
+                          </button>
+                        ) : null}
+                      </p>
+                    ))}
+                  </details>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+        {tab === "Xero items" ? (
+          <XeroItems key={loadedYear} {...context} revision={revision} />
+        ) : null}
+        {tab === "Manual items" ? (
+          <AssumptionLines
+            key={`${loadedYear}:manual`}
+            {...context}
+            kind="manual"
+            revision={revision}
+          />
+        ) : null}
+        {tab === "Staffing" ? (
+          <AssumptionLines
+            key={`${loadedYear}:staffing`}
+            {...context}
+            kind="staffing"
+            revision={revision}
+          />
+        ) : null}
+        {tab === "History" ? <History {...context} revision={revision} /> : null}
+      </div>
       <details className="forecast-panel">
         <summary>How this is calculated</summary>
         <p>

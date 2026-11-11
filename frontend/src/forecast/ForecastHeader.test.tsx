@@ -32,6 +32,13 @@ describe("financial-year navigation", () => {
   });
 });
 
+describe("forecast header subtitle", () => {
+  it("shows the entity and forecast period without the currency", () => {
+    const { container } = render(<ForecastHeader entityName="HotAs" />);
+    expect(container.querySelector(".forecast-heading > p")?.textContent).toBe("HotAs · 12 months");
+  });
+});
+
 describe("Xero sync time", () => {
   it("shows the sync time in Pacific/Auckland without a zone name or a page-load time", () => {
     const { container } = render(
