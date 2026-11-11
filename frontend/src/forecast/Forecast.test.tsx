@@ -225,6 +225,7 @@ it("FR-UC04-20 opens a month as a full page listing Xero invoices with due dates
             splitCount: null,
           },
         ],
+        notes: [],
       }) as unknown as Awaited<ReturnType<DashboardApi["forecastItems"]>>,
   );
   render(
@@ -313,6 +314,7 @@ it("FR-UC04-20 keeps two invoices for the same debtor as separate rows, and excl
             splitCount: null,
           },
         ],
+        notes: [],
       }) as unknown as Awaited<ReturnType<DashboardApi["forecastItems"]>>,
   );
   render(
@@ -336,4 +338,82 @@ it("FR-UC04-20 keeps two invoices for the same debtor as separate rows, and excl
   const moneyOut = screen.getByRole("table", { name: /^Money Out/ });
   expect(moneyOut.textContent).not.toContain("Wages");
   expect(screen.getByText("No expected money out for this month.")).toBeTruthy();
+});
+it("adds a transaction note from the Money In table and shows the saved preview", async () => {
+  const api = new DashboardApi(
+    new ApiClient("", {
+      getAccessToken: async () => null,
+      requestCode: vi.fn(),
+      verifyCode: vi.fn(),
+      signOut: vi.fn(),
+      onSessionChange: () => () => {},
+    }),
+  );
+  const invoiceId = "20000000-0000-4000-8000-000000000001";
+  vi.spyOn(api, "forecast").mockImplementation(async (entity, year) => data(entity, year, "0.00"));
+  vi.spyOn(api, "forecastItems").mockImplementation(
+    async (_entity, month) =>
+      ({
+        month,
+        state: "PREVIEW" as const,
+        generatable: true,
+        items: [
+          {
+            sourceId: invoiceId,
+            source: "DOCUMENT",
+            direction: "IN",
+            category: "ACCREC",
+            number: "INV-0017",
+            label: "City Limousines",
+            date: `${month}-19`,
+            bucket: month,
+            amount: "250.00",
+            rule: "DUE_DATE",
+            overdue: true,
+            splitSequence: null,
+            splitCount: null,
+          },
+        ],
+        notes: [],
+      }) as unknown as Awaited<ReturnType<DashboardApi["forecastItems"]>>,
+  );
+  const save = vi.spyOn(api, "saveForecastTransactionNote").mockImplementation(
+    async (_entity, source, sourceId, note) =>
+      ({
+        source,
+        sourceId,
+        note: note || null,
+        updatedAt: "2026-11-11T00:00:00Z",
+      }) as unknown as Awaited<ReturnType<DashboardApi["saveForecastTransactionNote"]>>,
+  );
+  render(
+    <Forecast
+      api={api}
+      profile={{ subject: a.id, displayName: "Admin", role: "FINANCIAL_ADMIN" as const }}
+      entities={[a, b]}
+      combined={false}
+      entity={a}
+      onDirty={vi.fn()}
+      onAccessDenied={vi.fn()}
+    />,
+  );
+  fireEvent.click((await screen.findAllByRole("button", { name: "View November 2026" }))[0]!);
+  const moneyIn = await screen.findByRole("table", { name: /^Money In/ });
+  expect(
+    within(moneyIn)
+      .getAllByRole("columnheader")
+      .map((h) => h.textContent),
+  ).toEqual(["Transaction", "Notes", "Amount"]);
+  const label = "INV-0017 · City Limousines";
+  fireEvent.click(within(moneyIn).getByRole("button", { name: `Add note for ${label}` }));
+  fireEvent.change(within(moneyIn).getByRole("textbox", { name: `Note for ${label}` }), {
+    target: { value: "  Chase by phone  " },
+  });
+  fireEvent.click(within(moneyIn).getByRole("button", { name: "Save" }));
+  await waitFor(() =>
+    expect(save).toHaveBeenCalledWith(a.id, "DOCUMENT", invoiceId, "Chase by phone"),
+  );
+  expect(
+    await within(moneyIn).findByRole("button", { name: `Edit note for ${label}: Chase by phone` }),
+  ).toBeTruthy();
 });

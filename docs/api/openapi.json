@@ -108,6 +108,61 @@
         } ]
       }
     },
+    "/api/v1/entities/{entityId}/forecast/transactions/{source}/{sourceId}/note" : {
+      "put" : {
+        "tags" : [ "forecast-controller" ],
+        "operationId" : "saveForecastTransactionNote",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "source",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "sourceId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/NoteRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TransactionNote"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
     "/api/v1/entities/{entityId}/forecast/periods/{month}/opening-balance" : {
       "get" : {
         "tags" : [ "forecast-assumption-controller" ],
@@ -1929,6 +1984,33 @@
         },
         "required" : [ "invoiceId" ]
       },
+      "NoteRequest" : {
+        "type" : "object",
+        "properties" : {
+          "note" : {
+            "type" : "string"
+          }
+        }
+      },
+      "TransactionNote" : {
+        "type" : "object",
+        "properties" : {
+          "source" : {
+            "type" : "string"
+          },
+          "sourceId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
       "OpeningRequest" : {
         "type" : "object",
         "properties" : {
@@ -2950,9 +3032,15 @@
             "items" : {
               "$ref" : "#/components/schemas/Contribution"
             }
+          },
+          "notes" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/TransactionNote"
+            }
           }
         },
-        "required" : [ "generatable", "items", "month", "state" ]
+        "required" : [ "generatable", "items", "month", "notes", "state" ]
       },
       "DocumentPage" : {
         "type" : "object",

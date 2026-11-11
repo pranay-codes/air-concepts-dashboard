@@ -33,6 +33,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/entities/{entityId}/forecast/transactions/{source}/{sourceId}/note": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["saveForecastTransactionNote"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/entities/{entityId}/forecast/periods/{month}/opening-balance": {
         parameters: {
             query?: never;
@@ -654,6 +670,17 @@ export interface components {
             invoiceId: string;
             owner?: components["schemas"]["InvoiceOwner"];
         };
+        NoteRequest: {
+            note?: string;
+        };
+        TransactionNote: {
+            source?: string;
+            /** Format: uuid */
+            sourceId?: string;
+            note?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
         OpeningRequest: {
             /** Format: decimal */
             openingBalance?: string;
@@ -1055,6 +1082,7 @@ export interface components {
             state: string;
             generatable: boolean;
             items: components["schemas"]["Contribution"][];
+            notes: components["schemas"]["TransactionNote"][];
         };
         DocumentPage: {
             items?: components["schemas"]["StoredDocument"][];
@@ -1170,6 +1198,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SalesAssignment"];
+                };
+            };
+        };
+    };
+    saveForecastTransactionNote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entityId: string;
+                source: string;
+                sourceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["TransactionNote"];
                 };
             };
         };

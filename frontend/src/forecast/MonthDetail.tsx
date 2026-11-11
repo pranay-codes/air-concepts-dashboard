@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useResource } from "../api/useResource";
 import { Failure, Loading, Notice } from "../ui/Feedback";
 import { formatDate, formatFetchTime, formatMoney } from "../ui/format";
-import { monthName } from "./ForecastTable";
+import { monthName, signClass } from "./ForecastTable";
+import { TransactionNoteEditor } from "./TransactionNoteEditor";
 import type { Contribution, ForecastMonth } from "./contracts";
 import { type ForecastContext, handleAccess } from "./context";
 function rowLabel(item: Contribution): string {
@@ -28,6 +29,8 @@ function sumMoney(values: string[]): string {
   const abs = Math.abs(cents);
   return `${sign}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, "0")}`;
 }
+/** A note belongs to the transaction, so every split row of one invoice shares it. */
+const transactionKey = (item: Contribution) => `${item.source}:${item.sourceId}`;
 /**
  * Full-page planning view for one forecast month: the month's totals, then expected money in and
  * money out, one row per Xero invoice or bill. Manual items and staffing are shown on their own
@@ -57,6 +60,41 @@ export function MonthDetail(
     `${props.subject}:${props.entity.id}:${props.financialYear}:${props.selectedMonth}:items`,
     load,
   );
+  // Notes saved in this view override the loaded notes. They are tied to the loaded data they were
+  // saved against, so a reload of the month (a new data object) drops them in favour of the server.
+  const [saves, setSaves] = useState<{
+    base: unknown;
+    notes: Record<string, string | null>;
+  }>({ base: null, notes: {} });
+  const savedNotes = saves.base === resource.data ? saves.notes : {};
+  const loadedNotes = new Map(
+    (resource.data?.notes ?? []).map((note) => [`${note.source}:${note.sourceId}`, note.note]),
+  );
+  function noteFor(item: Contribution): string | null {
+    const key = transactionKey(item);
+    return key in savedNotes ? (savedNotes[key] ?? null) : (loadedNotes.get(key) ?? null);
+  }
+  async function saveNote(item: Contribution, text: string) {
+    try {
+      const saved = await props.api.saveForecastTransactionNote(
+        props.entity.id,
+        item.source,
+        item.sourceId,
+        text,
+      );
+      const base = resource.data;
+      setSaves((current) => ({
+        base,
+        notes: {
+          ...(current.base === base ? current.notes : {}),
+          [transactionKey(item)]: saved.note ?? null,
+        },
+      }));
+    } catch (error) {
+      handleAccess(props.onAccessDenied, error);
+      throw error;
+    }
+  }
   // Scoped to Xero invoices and bills for now; manual items, staffing and other fixed costs will
   // be added to this ledger in a later slice. The totals above remain the full forecast totals.
   const items = [...(resource.data?.items ?? [])]
@@ -64,12 +102,13 @@ export function MonthDetail(
     .sort((a, b) => a.date.localeCompare(b.date));
   const name = monthName(props.selectedMonth);
   const summary = props.summary;
-  const figures = summary
+  // Opening and closing balances take the sign colour; money in and money out stay in the text colour.
+  const figures: [string, string | null, boolean][] = summary
     ? [
-        ["Opening balance", summary.opening],
-        ["Money In", summary.receipts],
-        ["Money Out", summary.payments],
-        ["Closing balance", summary.closing],
+        ["Opening balance", summary.opening, true],
+        ["Money In", summary.receipts, false],
+        ["Money Out", summary.payments, false],
+        ["Closing balance", summary.closing, true],
       ]
     : [];
   return (
@@ -96,10 +135,12 @@ export function MonthDetail(
       ) : null}
       {summary ? (
         <dl className="forecast-summary-strip" aria-label={`${name} totals`}>
-          {figures.map(([label, value]) => (
+          {figures.map(([label, value, signed]) => (
             <div key={label}>
               <dt>{label}</dt>
-              <dd className="money">{formatMoney(value ?? null, "NZD")}</dd>
+              <dd className={`money ${signed ? (signClass(value) ?? "") : ""}`.trim()}>
+                {formatMoney(value ?? null, "NZD")}
+              </dd>
             </div>
           ))}
         </dl>
@@ -123,18 +164,17 @@ export function MonthDetail(
                     <caption id={`forecast-${direction}-heading`}>{title}</caption>
                     <thead>
                       <tr>
-                        <th scope="col" className="visually-hidden">
-                          Description
-                        </th>
-                        <th scope="col" className="visually-hidden money">
-                          Amount (NZD)
+                        <th scope="col">Transaction</th>
+                        <th scope="col">Notes</th>
+                        <th scope="col" className="money">
+                          Amount
                         </th>
                       </tr>
                     </thead>
                     <tbody>
                       {rows.length === 0 ? (
                         <tr>
-                          <td colSpan={2}>
+                          <td colSpan={3}>
                             <Notice>
                               No expected {direction === "IN" ? "money in" : "money out"} for this
                               month.
@@ -148,6 +188,13 @@ export function MonthDetail(
                               <span className="forecast-ledger-label">{rowLabel(item)}</span>
                               <span className="forecast-muted">{rowSubtitle(item)}</span>
                             </th>
+                            <td className="note-column">
+                              <TransactionNoteEditor
+                                label={rowLabel(item)}
+                                note={noteFor(item)}
+                                onSave={(text) => saveNote(item, text)}
+                              />
+                            </td>
                             <td className="money">{formatMoney(item.amount, "NZD")}</td>
                           </tr>
                         ))
@@ -157,6 +204,7 @@ export function MonthDetail(
                       <tfoot>
                         <tr>
                           <th scope="row">Total {title}</th>
+                          <td />
                           <td className="money">{formatMoney(total, "NZD")}</td>
                         </tr>
                       </tfoot>
@@ -172,7 +220,7 @@ export function MonthDetail(
         current month; drafts are excluded. These tables list Xero invoices and bills; manual items
         and staffing are on the Manual items and Staffing tabs, and will be added here in a later
         update. To change an invoice's expected date, split it or exclude it, use the Xero items
-        tab.
+        tab. Notes are kept in this application and are never sent to Xero.
       </p>
     </section>
   );

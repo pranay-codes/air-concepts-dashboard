@@ -53,6 +53,24 @@ export class DashboardApi {
       throw new ApiError(502, "INVALID_RESPONSE");
     return result;
   }
+  /** Saves the internal note for one forecast transaction; a blank note removes it. Notes stay in this application. */
+  async saveForecastTransactionNote(
+    entity: string,
+    source: string,
+    sourceId: string,
+    note: string,
+    signal?: AbortSignal,
+  ) {
+    const result = await this.client.json(
+      `${root(entity)}/forecast/transactions/${encodeURIComponent(source)}/${id(sourceId)}/note`,
+      f.isTransactionNote,
+      signal,
+      { method: "PUT", body: { note } },
+    );
+    if (result.sourceId !== sourceId || result.source !== source)
+      throw new ApiError(502, "INVALID_RESPONSE");
+    return result;
+  }
   /** Freezes a month's planned lines. The server appends only lines not already in a forecast. */
   async generateForecastMonth(entity: string, month: string, signal?: AbortSignal) {
     const result = await this.client.json(

@@ -21,7 +21,12 @@ export type Contribution = Nullable<
   Present<S["Contribution"]>,
   "number" | "splitSequence" | "splitCount"
 >;
-export type MonthItems = { month: string; items: Contribution[] } & S["MonthItems"];
+/** Internal note for one forecast transaction. A null note means none is saved. Never sent to Xero. */
+export type TransactionNote = Nullable<Present<S["TransactionNote"]>, "note" | "updatedAt">;
+export type MonthItems = Omit<S["MonthItems"], "items" | "notes"> & {
+  items: Contribution[];
+  notes: TransactionNote[];
+};
 export type Generation = S["GenerationResult"];
 export type Adjustment = Nullable<
   Present<S["AdjustmentState"]>,
@@ -148,13 +153,24 @@ export function isContribution(v: unknown): v is Contribution {
     nullable(v.splitCount, count)
   );
 }
+/** Notes may run to 2000 code points, which can be up to 4000 UTF-16 units. */
+export function isTransactionNote(v: unknown): v is TransactionNote {
+  return (
+    isRecord(v) &&
+    ["DOCUMENT", "MANUAL", "STAFFING"].includes(String(v.source)) &&
+    isUuid(v.sourceId) &&
+    nullable(v.note, (n) => typeof n === "string" && n.length >= 1 && n.length <= 4000) &&
+    nullable(v.updatedAt, (d) => typeof d === "string" && !Number.isNaN(Date.parse(d)))
+  );
+}
 export function isMonthItems(v: unknown): v is MonthItems {
   return (
     isRecord(v) &&
     month(v.month) &&
     monthState(v.state) &&
     typeof v.generatable === "boolean" &&
-    array(v.items, isContribution)
+    array(v.items, isContribution) &&
+    array(v.notes, isTransactionNote)
   );
 }
 export function isGeneration(v: unknown): v is Generation {
