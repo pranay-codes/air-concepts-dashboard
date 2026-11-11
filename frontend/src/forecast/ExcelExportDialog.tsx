@@ -5,11 +5,13 @@ import { Modal } from "../ui/Modal";
 import { Failure, Notice } from "../ui/Feedback";
 import { formatFetchTime } from "../ui/format";
 import { type ForecastContext, handleAccess, useDirty } from "./context";
-export function ExcelExportDialog(props: ForecastContext & { onClose(): void }) {
+export function ExcelExportDialog(
+  props: ForecastContext & { financialYear: number; onClose(): void },
+) {
   const [file, setFile] = useState<File | null>(null);
   const [validation, setValidation] = useState("");
   const [ready, setReady] = useState<ForecastFile | null>(null);
-  const action = useAction(`${props.subject}:${props.entity.id}:${props.month}:export`);
+  const action = useAction(`${props.subject}:${props.entity.id}:${props.financialYear}:export`);
   useDirty(file !== null || ready !== null, props.onDirty);
   const close = () => {
     if ((!file && !ready) || window.confirm("Discard this workbook generation?")) props.onClose();
@@ -28,12 +30,12 @@ export function ExcelExportDialog(props: ForecastContext & { onClose(): void }) 
   return (
     <Modal title="Export forecast to Excel" onClose={close}>
       <p>
-        {props.entity.displayName} · {props.month}
+        {props.entity.displayName} · {props.financialYearLabel}
       </p>
       {ready ? (
         <div className="forecast-export-notice">
           <Notice tone={ready.reconciled ? "success" : "warning"}>
-            Forecast ready for {props.entity.displayName}, {props.month}, generated{" "}
+            Forecast ready for {props.entity.displayName}, {props.financialYearLabel}, generated{" "}
             {formatFetchTime(ready.generatedAt)}. Download completed workbook?
           </Notice>
           {!ready.reconciled ? <p role="alert">Workbook totals need review before use.</p> : null}
@@ -60,7 +62,8 @@ export function ExcelExportDialog(props: ForecastContext & { onClose(): void }) 
             event.preventDefault();
             if (!file) return;
             const result = await action.run(
-              (signal) => props.api.exportForecast(props.entity.id, props.month, file, signal),
+              (signal) =>
+                props.api.exportForecast(props.entity.id, props.financialYear, file, signal),
               (error) => handleAccess(props.onAccessDenied, error),
             );
             if (result) setReady(result);

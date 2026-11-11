@@ -33,6 +33,9 @@ Constraints: no Docker commands or container-backed execution locally, no hosted
 | FR-UC04-19 | Export HTTP headers/audit-call test, Download/Discard component and browser flow | Insert-only database proof not run |
 | FR-UC04-20 | Canonical date bucketing and month-items UI/API; HTTP verifies issued-month omission and due-month inclusion | Human acceptance |
 | FR-UC04-21 | Complex fixed-data POI reconciliation and injected mismatch tests | Human workbook acceptance |
+| FR-UC04-22 | Financial-year view with previous and next navigation; year boundary from the server | Unit: `ForecastCalendarTest`, `ForecastServiceTest`; HTTP: `ForecastEndpointTest`; Vitest: `Forecast.test.tsx` | Playwright journey and Test acceptance not run |
+| FR-UC04-23 | Explicit monthly generation freezes planned lines; generated lines never change | Unit: `ForecastGenerationServiceTest`, `ForecastChainTest`, `ForecastServiceTest.frUc04_23_*`; schema: `Uc4SchemaTest` (not run locally) | Disposable-PostgreSQL placement test not written; Test acceptance pending |
+| FR-UC04-24 | Regeneration appends only unplaced lines; overdue items placed in the current month; month locked once the next is generated | Unit: `ForecastGenerationServiceTest`, `ForecastCalendarTest` | Human acceptance on Test pending; cross-review pending |
 
 ## Acceptance criteria evidence
 

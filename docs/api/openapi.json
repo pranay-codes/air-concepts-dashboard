@@ -607,6 +607,43 @@
         } ]
       }
     },
+    "/api/v1/entities/{entityId}/forecast/months/{month}/generate" : {
+      "post" : {
+        "tags" : [ "forecast-controller" ],
+        "operationId" : "generateForecastMonth",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "month",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/GenerationResult"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
     "/api/v1/entities/{entityId}/forecast/manual-items" : {
       "get" : {
         "tags" : [ "forecast-assumption-controller" ],
@@ -737,7 +774,7 @@
             "format" : "uuid"
           }
         }, {
-          "name" : "startMonth",
+          "name" : "financialYearStart",
           "in" : "query",
           "required" : false,
           "schema" : {
@@ -1214,7 +1251,7 @@
             }
           }
         }, {
-          "name" : "startMonth",
+          "name" : "financialYearStart",
           "in" : "query",
           "required" : false,
           "schema" : {
@@ -1571,7 +1608,7 @@
             "format" : "uuid"
           }
         }, {
-          "name" : "startMonth",
+          "name" : "financialYearStart",
           "in" : "query",
           "required" : false,
           "schema" : {
@@ -1616,13 +1653,6 @@
           }
         }, {
           "name" : "direction",
-          "in" : "query",
-          "required" : false,
-          "schema" : {
-            "type" : "string"
-          }
-        }, {
-          "name" : "startMonth",
           "in" : "query",
           "required" : false,
           "schema" : {
@@ -2204,6 +2234,34 @@
           }
         }
       },
+      "GenerationResult" : {
+        "type" : "object",
+        "properties" : {
+          "month" : {
+            "type" : "string"
+          },
+          "state" : {
+            "type" : "string"
+          },
+          "generatable" : {
+            "type" : "boolean"
+          },
+          "generationCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "addedLines" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "addedReceipts" : {
+            "type" : "number"
+          },
+          "addedPayments" : {
+            "type" : "number"
+          }
+        }
+      },
       "ManualRequest" : {
         "type" : "object",
         "properties" : {
@@ -2389,7 +2447,10 @@
       "CombinedView" : {
         "type" : "object",
         "properties" : {
-          "startMonth" : {
+          "financialYearStart" : {
+            "type" : "string"
+          },
+          "financialYearLabel" : {
             "type" : "string"
           },
           "months" : {
@@ -2447,15 +2508,15 @@
             "format" : "decimal"
           },
           "receipts" : {
-            "type" : "string",
+            "type" : [ "string", "null" ],
             "format" : "decimal"
           },
           "payments" : {
-            "type" : "string",
+            "type" : [ "string", "null" ],
             "format" : "decimal"
           },
           "net" : {
-            "type" : "string",
+            "type" : [ "string", "null" ],
             "format" : "decimal"
           },
           "closing" : {
@@ -2472,9 +2533,24 @@
           },
           "containsOverdue" : {
             "type" : "boolean"
+          },
+          "state" : {
+            "type" : "string",
+            "enum" : [ "GENERATED", "PREVIEW", "NOT_GENERATED" ]
+          },
+          "generatable" : {
+            "type" : "boolean"
+          },
+          "generatedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "pendingNewItems" : {
+            "type" : "integer",
+            "format" : "int32"
           }
         },
-        "required" : [ "closing", "containsOverdue", "month", "net", "opening", "paymentCount", "payments", "receiptCount", "receipts" ]
+        "required" : [ "containsOverdue", "generatable", "month", "paymentCount", "pendingNewItems", "receiptCount", "state" ]
       },
       "InvoicePage" : {
         "type" : "object",
@@ -2717,7 +2793,10 @@
           "entityName" : {
             "type" : "string"
           },
-          "startMonth" : {
+          "financialYearStart" : {
+            "type" : "string"
+          },
+          "financialYearLabel" : {
             "type" : "string"
           },
           "months" : {
@@ -2758,7 +2837,7 @@
             "type" : "string"
           }
         },
-        "required" : [ "beyondWindow", "entityId", "entityName", "exceptions", "exclusions", "months", "startMonth", "syncStale", "totals" ]
+        "required" : [ "beyondWindow", "entityId", "entityName", "exceptions", "exclusions", "financialYearLabel", "financialYearStart", "months", "syncStale", "totals" ]
       },
       "LastRun" : {
         "type" : "object",
@@ -2779,11 +2858,11 @@
         "type" : "object",
         "properties" : {
           "receipts" : {
-            "type" : "string",
+            "type" : [ "string", "null" ],
             "format" : "decimal"
           },
           "payments" : {
-            "type" : "string",
+            "type" : [ "string", "null" ],
             "format" : "decimal"
           },
           "closing" : {
@@ -2839,6 +2918,14 @@
           "splitCount" : {
             "type" : "integer",
             "format" : "int32"
+          },
+          "issueDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "dueDate" : {
+            "type" : "string",
+            "format" : "date"
           }
         }
       },
@@ -2848,13 +2935,20 @@
           "month" : {
             "type" : "string"
           },
+          "state" : {
+            "type" : "string"
+          },
+          "generatable" : {
+            "type" : "boolean"
+          },
           "items" : {
             "type" : "array",
             "items" : {
               "$ref" : "#/components/schemas/Contribution"
             }
           }
-        }
+        },
+        "required" : [ "generatable", "items", "month", "state" ]
       },
       "DocumentPage" : {
         "type" : "object",

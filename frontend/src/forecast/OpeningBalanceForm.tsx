@@ -5,7 +5,13 @@ import { Modal } from "../ui/Modal";
 import { decimal } from "./contracts";
 import { type ForecastContext, handleAccess, useDirty } from "./context";
 export function OpeningBalanceForm(
-  props: ForecastContext & { initial?: string | null; source?: string | null; onClose(): void },
+  props: ForecastContext & {
+    /** First month of the financial year; the opening balance is used only when the month before has no generated forecast. */
+    month: string;
+    initial?: string | null;
+    source?: string | null;
+    onClose(): void;
+  },
 ) {
   const [amount, setAmount] = useState(props.initial ?? "");
   const [source, setSource] = useState(props.source ?? "");

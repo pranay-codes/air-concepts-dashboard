@@ -1,13 +1,15 @@
 import { useCallback, useRef, useState } from "react";
 import type { Entity, Profile } from "../api/contracts";
 import type { DashboardApi } from "../api/dashboard";
+import { yearOf } from "../api/dashboard";
 import { isAccessFailure } from "../api/client";
 import { useResource } from "../api/useResource";
 import { useAction } from "../api/useAction";
 import { Loading, Failure, Notice } from "../ui/Feedback";
 import { formatMoney } from "../ui/format";
 import { ForecastTable } from "./ForecastTable";
-import { ForecastHeader, currentMonth } from "./ForecastHeader";
+import { ForecastHeader } from "./ForecastHeader";
+import { GenerationReview } from "./GenerationReview";
 import { OpeningBalanceForm } from "./OpeningBalanceForm";
 import { ExcelExportDialog } from "./ExcelExportDialog";
 import { MonthDetail } from "./MonthDetail";
@@ -16,6 +18,8 @@ import { XeroItems } from "./XeroItems";
 import { History } from "./History";
 import { CombinedForecast } from "./CombinedForecast";
 import { DocumentEditor, type AdjustmentMode } from "./AdjustmentDialog";
+import type { ForecastMonth } from "./contracts";
+import type { ForecastContext } from "./context";
 interface Props {
   api: DashboardApi;
   profile: Profile;
@@ -30,12 +34,15 @@ export default function Forecast(props: Props) {
     return <Notice>Forecast access is restricted to Director and Financial Admin.</Notice>;
   if (props.combined)
     return (
-      <Aggregate
+      <CombinedForecast
         key={`${props.profile.subject}:${props.entities
           .map((e) => e.id)
           .sort()
           .join(",")}`}
-        {...props}
+        api={props.api}
+        entities={props.entities}
+        subject={props.profile.subject}
+        onAccessDenied={props.onAccessDenied}
       />
     );
   if (!props.entity)
@@ -48,30 +55,17 @@ export default function Forecast(props: Props) {
     />
   );
 }
-function Aggregate(props: Props) {
-  const [month, setMonth] = useState(currentMonth);
-  return (
-    <>
-      <ForecastHeader entityName="All entities" month={month} onMonth={setMonth} />
-      <CombinedForecast
-        api={props.api}
-        entities={props.entities}
-        month={month}
-        subject={props.profile.subject}
-        onAccessDenied={props.onAccessDenied}
-      />
-    </>
-  );
-}
 const tabs = ["Forecast", "Xero items", "Manual items", "Staffing", "History"] as const;
 function EntityForecast(props: Props & { entity: Entity }) {
   const { api, entity, onDirty: notifyDirty, onAccessDenied } = props;
-  const [month, setMonth] = useState(currentMonth);
+  // null asks the server for the financial year that contains today; navigation then uses the year it reports.
+  const [requestedYear, setRequestedYear] = useState<number | null>(null);
   const [tab, setTab] = useState<(typeof tabs)[number]>("Forecast");
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const monthOpener = useRef<HTMLElement | null>(null);
   const [dialog, setDialog] = useState<"opening" | "export" | null>(null);
   const [document, setDocument] = useState<{ id: string; mode: AdjustmentMode } | null>(null);
+  const [review, setReview] = useState<ForecastMonth | null>(null);
   const [revision, setRevision] = useState(0);
   const [dirty, setDirty] = useState(false);
   const onDirty = useCallback(
@@ -84,43 +78,66 @@ function EntityForecast(props: Props & { entity: Entity }) {
   const load = useCallback(
     async (signal: AbortSignal) => {
       try {
-        return await api.forecast(entity.id, month, signal);
+        return await api.forecast(entity.id, requestedYear, signal);
       } catch (error) {
         if (!signal.aborted && isAccessFailure(error)) onAccessDenied();
         throw error;
       }
     },
-    [api, entity.id, month, onAccessDenied],
+    [api, entity.id, requestedYear, onAccessDenied],
   );
-  const resource = useResource(`${props.profile.subject}:${props.entity.id}:${month}:${tab}`, load);
-  const action = useAction(`${props.profile.subject}:${props.entity.id}:${month}:sync`);
+  const scope = requestedYear ?? "current";
+  const resource = useResource(`${props.profile.subject}:${props.entity.id}:${scope}:${tab}`, load);
+  const action = useAction(`${props.profile.subject}:${props.entity.id}:${scope}:sync`);
+  const generation = useAction(`${props.profile.subject}:${props.entity.id}:${scope}:generate`);
+  const loadedYear = resource.data ? yearOf(resource.data.financialYearStart) : requestedYear;
   function changed() {
     resource.refresh();
     setRevision((value) => value + 1);
   }
-  const context = {
+  const context: ForecastContext = {
     api: props.api,
     entity: props.entity,
-    month,
+    financialYear: loadedYear,
+    financialYearLabel: resource.data?.financialYearLabel ?? "",
     subject: props.profile.subject,
     onDirty,
     onChanged: changed,
     onAccessDenied: props.onAccessDenied,
   };
   const canLeave = () => !dirty || window.confirm("Discard unsaved forecast changes?");
+  function leaveCurrentView() {
+    setDirty(false);
+    props.onDirty(false);
+    setSelectedMonth(null);
+    setDialog(null);
+    setDocument(null);
+    setReview(null);
+  }
+  function confirmGeneration(month: ForecastMonth) {
+    void generation
+      .run(
+        (signal) => props.api.generateForecastMonth(props.entity.id, month.month, signal),
+        (error) => {
+          if (isAccessFailure(error)) props.onAccessDenied();
+        },
+      )
+      .then((result) => {
+        if (result) {
+          setReview(null);
+          changed();
+        }
+      });
+  }
   return (
     <div aria-busy={resource.status === "loading" || resource.status === "refreshing"}>
       <ForecastHeader
         entityName={props.entity.displayName}
-        month={month}
-        onMonth={(next) => {
-          if (!canLeave()) return;
-          setDirty(false);
-          props.onDirty(false);
-          setMonth(next);
-          setSelectedMonth(null);
-          setDialog(null);
-          setDocument(null);
+        financialYearLabel={resource.data?.financialYearLabel ?? null}
+        onStep={(delta) => {
+          if (loadedYear === null || !canLeave()) return;
+          leaveCurrentView();
+          setRequestedYear(loadedYear + delta);
         }}
         lastSync={resource.data?.lastSuccessfulSyncAt}
         stale={resource.data?.syncStale}
@@ -138,7 +155,7 @@ function EntityForecast(props: Props & { entity: Entity }) {
               if (result) changed();
             });
         }}
-        onExport={() => setDialog("export")}
+        onExport={resource.data ? () => setDialog("export") : undefined}
       />
       {resource.status === "refreshing" ? <p role="status">Refreshing forecast…</p> : null}
       {resource.error ? <Failure error={resource.error} onRetry={resource.refresh} /> : null}
@@ -166,9 +183,7 @@ function EntityForecast(props: Props & { entity: Entity }) {
             onClick={() => {
               if (!canLeave()) return;
               setTab(name);
-              setSelectedMonth(null);
-              setDialog(null);
-              setDocument(null);
+              leaveCurrentView();
             }}
           >
             {name}
@@ -180,7 +195,7 @@ function EntityForecast(props: Props & { entity: Entity }) {
           {resource.status === "loading" ? <Loading label="Loading forecast…" /> : null}
           {selectedMonth ? (
             <MonthDetail
-              key={`${month}:${selectedMonth}:${revision}`}
+              key={`${loadedYear}:${selectedMonth}:${revision}`}
               {...context}
               selectedMonth={selectedMonth}
               summary={resource.data?.months.find((row) => row.month === selectedMonth) ?? null}
@@ -191,6 +206,15 @@ function EntityForecast(props: Props & { entity: Entity }) {
             />
           ) : resource.data ? (
             <div className="forecast-overview">
+              {review ? (
+                <GenerationReview
+                  month={review}
+                  busy={generation.busy}
+                  error={generation.error}
+                  onConfirm={() => confirmGeneration(review)}
+                  onCancel={() => setReview(null)}
+                />
+              ) : null}
               <ForecastTable
                 months={resource.data.months}
                 onOpen={(value) => {
@@ -198,9 +222,10 @@ function EntityForecast(props: Props & { entity: Entity }) {
                   setSelectedMonth(value);
                 }}
                 onOpening={() => setDialog("opening")}
+                onGenerate={(month) => setReview(month)}
               />
               <p>
-                Beyond this 12-month window: money in{" "}
+                Beyond this financial year: money in{" "}
                 {formatMoney(resource.data.beyondWindow.receipts, "NZD")}, money out{" "}
                 {formatMoney(resource.data.beyondWindow.payments, "NZD")}.
               </p>
@@ -226,13 +251,20 @@ function EntityForecast(props: Props & { entity: Entity }) {
           ) : null}
         </div>
       ) : null}
-      {tab === "Xero items" ? <XeroItems key={month} {...context} revision={revision} /> : null}
+      {tab === "Xero items" ? (
+        <XeroItems key={loadedYear} {...context} revision={revision} />
+      ) : null}
       {tab === "Manual items" ? (
-        <AssumptionLines key={`${month}:manual`} {...context} kind="manual" revision={revision} />
+        <AssumptionLines
+          key={`${loadedYear}:manual`}
+          {...context}
+          kind="manual"
+          revision={revision}
+        />
       ) : null}
       {tab === "Staffing" ? (
         <AssumptionLines
-          key={`${month}:staffing`}
+          key={`${loadedYear}:staffing`}
           {...context}
           kind="staffing"
           revision={revision}
@@ -244,24 +276,34 @@ function EntityForecast(props: Props & { entity: Entity }) {
         <p>
           Money in and money out use outstanding Xero balances and the forecast dates shown in each
           month. Split schedules replace the single document amount. Excluded items contribute
-          nothing. Overdue cash is placed in the current month.
+          nothing. Overdue cash is placed in the month that is current when that month is generated.
+        </p>
+        <p>
+          A month is generated once it is the current month or the next month after the last
+          generated month. Generating adds lines that are not yet in a forecast; it never changes
+          lines already there. Once the following month is generated, a month is locked.
         </p>
         <p>
           Manual cash amounts and gross staffing costs are GST-inclusive where GST applies; tax is
           never added again. Each closing balance becomes the next opening balance. Missing balances
-          are shown as Not recorded.
+          are shown as Not recorded, and months not yet generated show Not generated.
         </p>
       </details>
-      {dialog === "opening" ? (
+      {dialog === "opening" && resource.data ? (
         <OpeningBalanceForm
           {...context}
-          initial={resource.data?.months[0]?.opening}
-          source={resource.data?.openingBalanceSource}
+          month={resource.data.financialYearStart}
+          initial={resource.data.months[0]?.opening}
+          source={resource.data.openingBalanceSource}
           onClose={() => setDialog(null)}
         />
       ) : null}
-      {dialog === "export" ? (
-        <ExcelExportDialog {...context} onClose={() => setDialog(null)} />
+      {dialog === "export" && loadedYear !== null ? (
+        <ExcelExportDialog
+          {...context}
+          financialYear={loadedYear}
+          onClose={() => setDialog(null)}
+        />
       ) : null}
       {document ? (
         <DocumentEditor

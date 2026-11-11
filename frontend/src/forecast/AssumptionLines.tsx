@@ -7,6 +7,7 @@ import { Modal } from "../ui/Modal";
 import { formatMoney } from "../ui/format";
 import { type ManualItem, type StaffingLine, decimal, cents } from "./contracts";
 import { type ForecastContext, handleAccess, useDirty } from "./context";
+import { currentMonth } from "./ForecastHeader";
 type Line = ManualItem | StaffingLine;
 const label = (line: Line) => ("description" in line ? line.description : line.label);
 const cost = (line: Line) => ("amount" in line ? line.amount : line.monthlyCost);
@@ -30,7 +31,7 @@ export function AssumptionLines(
     [props.api, props.entity.id, props.kind, inactive, props.onAccessDenied],
   );
   const resource = useResource(
-    `${props.subject}:${props.entity.id}:${props.month}:${props.kind}:${inactive}:${props.revision}`,
+    `${props.subject}:${props.entity.id}:${props.financialYear}:${props.kind}:${inactive}:${props.revision}`,
     load,
   );
   async function deactivate(line: Line) {
@@ -120,7 +121,7 @@ function LineForm(
   const [form, setForm] = useState({
     label: line ? label(line) : "",
     amount: line ? cost(line) : "",
-    start: line?.startMonth ?? props.month,
+    start: line?.startMonth ?? currentMonth(),
     end: line?.endMonth ?? "",
     day: String(line ? (("dayOfMonth" in line ? line.dayOfMonth : line.payDayOfMonth) ?? 1) : 1),
     direction: manual?.direction ?? "OUT",

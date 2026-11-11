@@ -25,7 +25,8 @@ it("FR-UC04-19 prompts only after success and never automatically downloads", as
     <ExcelExportDialog
       api={api}
       entity={{ id: "10000000-0000-4000-8000-000000000001", displayName: "Synthetic" }}
-      month="2026-11"
+      financialYear={2026}
+      financialYearLabel="2026-2027"
       subject="synthetic"
       onChanged={vi.fn()}
       onDirty={vi.fn()}

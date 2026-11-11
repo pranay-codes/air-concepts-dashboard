@@ -4,7 +4,12 @@ import { isUuid } from "../api/contracts";
 type S = components["schemas"];
 type Present<T> = { [K in keyof T]-?: Exclude<T[K], undefined> };
 type Nullable<T, K extends keyof T> = Omit<T, K> & { [P in K]: T[P] | null };
-export type ForecastMonth = Nullable<Present<S["MonthRow"]>, "opening" | "closing">;
+export type ForecastMonth = Nullable<
+  Present<S["MonthRow"]>,
+  "opening" | "closing" | "receipts" | "payments" | "net" | "generatedAt"
+>;
+/** GENERATED = frozen lines; PREVIEW = the one month that can be generated now; NOT_GENERATED = no figures. */
+export type ForecastMonthState = "GENERATED" | "PREVIEW" | "NOT_GENERATED";
 export type ForecastView = Omit<
   Nullable<Present<S["ForecastView"]>, "lastSuccessfulSyncAt" | "lastRun" | "openingBalanceSource">,
   "months"
@@ -14,6 +19,7 @@ export type Contribution = Nullable<
   "number" | "splitSequence" | "splitCount"
 >;
 export type MonthItems = { month: string; items: Contribution[] } & S["MonthItems"];
+export type Generation = S["GenerationResult"];
 export type Adjustment = Nullable<
   Present<S["AdjustmentState"]>,
   | "expectedDateOverride"
@@ -60,6 +66,8 @@ const date = (v: unknown) =>
   Number.isFinite(Date.parse(`${v}T00:00:00Z`)) &&
   new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) === v;
 const count = (v: unknown) => typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
+const monthState = (v: unknown): v is ForecastMonthState =>
+  v === "GENERATED" || v === "PREVIEW" || v === "NOT_GENERATED";
 const array = <T>(v: unknown, check: (v: unknown) => v is T): v is T[] =>
   Array.isArray(v) && v.every(check);
 export function isMonth(v: unknown): v is ForecastMonth {
@@ -68,12 +76,16 @@ export function isMonth(v: unknown): v is ForecastMonth {
     month(v.month) &&
     nullable(v.opening, money) &&
     nullable(v.closing, money) &&
-    money(v.receipts) &&
-    money(v.payments) &&
-    money(v.net) &&
+    nullable(v.receipts, money) &&
+    nullable(v.payments, money) &&
+    nullable(v.net, money) &&
     count(v.receiptCount) &&
     count(v.paymentCount) &&
-    typeof v.containsOverdue === "boolean"
+    typeof v.containsOverdue === "boolean" &&
+    monthState(v.state) &&
+    typeof v.generatable === "boolean" &&
+    nullable(v.generatedAt, text) &&
+    count(v.pendingNewItems)
   );
 }
 export function isForecast(v: unknown): v is ForecastView {
@@ -81,12 +93,13 @@ export function isForecast(v: unknown): v is ForecastView {
     isRecord(v) &&
     isUuid(v.entityId) &&
     text(v.entityName) &&
-    month(v.startMonth) &&
+    month(v.financialYearStart) &&
+    text(v.financialYearLabel) &&
     array(v.months, isMonth) &&
     v.months.length === 12 &&
     isRecord(v.totals) &&
-    money(v.totals.receipts) &&
-    money(v.totals.payments) &&
+    nullable(v.totals.receipts, money) &&
+    nullable(v.totals.payments, money) &&
     nullable(v.totals.closing, money) &&
     isRecord(v.beyondWindow) &&
     money(v.beyondWindow.receipts) &&
@@ -130,7 +143,25 @@ export function isContribution(v: unknown): v is Contribution {
   );
 }
 export function isMonthItems(v: unknown): v is MonthItems {
-  return isRecord(v) && month(v.month) && array(v.items, isContribution);
+  return (
+    isRecord(v) &&
+    month(v.month) &&
+    monthState(v.state) &&
+    typeof v.generatable === "boolean" &&
+    array(v.items, isContribution)
+  );
+}
+export function isGeneration(v: unknown): v is Generation {
+  return (
+    isRecord(v) &&
+    month(v.month) &&
+    monthState(v.state) &&
+    typeof v.generatable === "boolean" &&
+    count(v.generationCount) &&
+    count(v.addedLines) &&
+    money(v.addedReceipts) &&
+    money(v.addedPayments)
+  );
 }
 export function isAdjustment(v: unknown): v is Adjustment {
   return (
@@ -203,7 +234,8 @@ export function isStaff(v: unknown): v is StaffingLine {
 export function isCombined(v: unknown): v is Combined {
   return (
     isRecord(v) &&
-    month(v.startMonth) &&
+    month(v.financialYearStart) &&
+    text(v.financialYearLabel) &&
     array(v.months, isMonth) &&
     v.months.length === 12 &&
     typeof v.complete === "boolean" &&

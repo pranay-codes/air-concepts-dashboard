@@ -11,6 +11,11 @@ const document = (entity: string, invoice: string) => `${root(entity)}/invoices/
 function isOpening(value: unknown): value is { openingBalance: string; source?: string } {
   return isRecord(value) && f.money(value.openingBalance);
 }
+/** The calendar year of a YYYY-MM month string. */
+export function yearOf(month: string): number {
+  return Number(month.slice(0, 4));
+}
+
 function matchesPeriod(rows: f.ForecastMonth[], start: string): boolean {
   const [year = "0", month = "1"] = start.split("-");
   return (
@@ -26,28 +31,37 @@ function matchesPeriod(rows: f.ForecastMonth[], start: string): boolean {
 /** Typed feature interface. All tenant selection and financial calculations remain on the backend. */
 export class DashboardApi {
   constructor(private readonly client: ApiClient) {}
-  async forecast(entity: string, month: string, signal?: AbortSignal) {
-    const result = await this.client.json(
-      `${root(entity)}/forecast?startMonth=${encodeURIComponent(month)}`,
-      f.isForecast,
-      signal,
-    );
+  /** `financialYear` is the calendar year the financial year starts in; null asks for the server's current year. */
+  async forecast(entity: string, financialYear: number | null, signal?: AbortSignal) {
+    const query = financialYear === null ? "" : `?financialYearStart=${financialYear}`;
+    const result = await this.client.json(`${root(entity)}/forecast${query}`, f.isForecast, signal);
     if (
       result.entityId !== entity ||
-      result.startMonth !== month ||
-      !matchesPeriod(result.months, month)
+      (financialYear !== null && yearOf(result.financialYearStart) !== financialYear) ||
+      !matchesPeriod(result.months, result.financialYearStart)
     )
       throw new ApiError(502, "INVALID_RESPONSE");
     return result;
   }
-  async forecastItems(entity: string, month: string, startMonth: string, signal?: AbortSignal) {
+  async forecastItems(entity: string, month: string, signal?: AbortSignal) {
     const result = await this.client.json(
-      `${root(entity)}/forecast/months/${encodeURIComponent(month)}/items?startMonth=${encodeURIComponent(startMonth)}`,
+      `${root(entity)}/forecast/months/${encodeURIComponent(month)}/items`,
       f.isMonthItems,
       signal,
     );
     if (result.month !== month || result.items.some((item) => item.bucket !== month))
       throw new ApiError(502, "INVALID_RESPONSE");
+    return result;
+  }
+  /** Freezes a month's planned lines. The server appends only lines not already in a forecast. */
+  async generateForecastMonth(entity: string, month: string, signal?: AbortSignal) {
+    const result = await this.client.json(
+      `${root(entity)}/forecast/months/${encodeURIComponent(month)}/generate`,
+      f.isGeneration,
+      signal,
+      { method: "POST" },
+    );
+    if (result.month !== month) throw new ApiError(502, "INVALID_RESPONSE");
     return result;
   }
   async forecastDocument(entity: string, documentId: string, signal?: AbortSignal) {
@@ -192,26 +206,30 @@ export class DashboardApi {
       signal,
     );
   }
-  exportForecast(entity: string, month: string, file: File, signal?: AbortSignal) {
+  exportForecast(entity: string, financialYear: number, file: File, signal?: AbortSignal) {
     return this.client.forecastExport(
-      `${root(entity)}/forecast/export?startMonth=${encodeURIComponent(month)}`,
+      `${root(entity)}/forecast/export?financialYearStart=${financialYear}`,
       file,
       signal,
     );
   }
-  async combinedForecast(entities: string[], month: string, signal?: AbortSignal) {
+  async combinedForecast(entities: string[], financialYear: number | null, signal?: AbortSignal) {
+    const year = financialYear === null ? "" : `&financialYearStart=${financialYear}`;
     const result = await this.client.json(
-      `/api/v1/forecast/combined?entityIds=${entities.map(id).join(",")}&startMonth=${encodeURIComponent(month)}`,
+      `/api/v1/forecast/combined?entityIds=${entities.map(id).join(",")}${year}`,
       f.isCombined,
       signal,
     );
     if (
-      result.startMonth !== month ||
+      (financialYear !== null && yearOf(result.financialYearStart) !== financialYear) ||
+      !matchesPeriod(result.months, result.financialYearStart) ||
       result.entities.length !== entities.length ||
       new Set(result.entities.map((e) => e.entityId)).size !== entities.length ||
-      !matchesPeriod(result.months, month) ||
       result.entities.some(
-        (e) => !e.entityId || !entities.includes(e.entityId) || !matchesPeriod(e.months, month),
+        (e) =>
+          !e.entityId ||
+          !entities.includes(e.entityId) ||
+          !matchesPeriod(e.months, result.financialYearStart),
       )
     )
       throw new ApiError(502, "INVALID_RESPONSE");

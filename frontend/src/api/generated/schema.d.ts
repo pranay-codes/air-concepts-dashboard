@@ -184,6 +184,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/entities/{entityId}/forecast/months/{month}/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["generateForecastMonth"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/entities/{entityId}/forecast/manual-items": {
         parameters: {
             query?: never;
@@ -762,6 +778,17 @@ export interface components {
             endMonth?: string;
             active?: boolean;
         };
+        GenerationResult: {
+            month?: string;
+            state?: string;
+            generatable?: boolean;
+            /** Format: int32 */
+            generationCount?: number;
+            /** Format: int32 */
+            addedLines?: number;
+            addedReceipts?: number;
+            addedPayments?: number;
+        };
         ManualRequest: {
             direction?: string;
             category?: string;
@@ -831,7 +858,8 @@ export interface components {
             displayName: string;
         };
         CombinedView: {
-            startMonth?: string;
+            financialYearStart?: string;
+            financialYearLabel?: string;
             months?: components["schemas"]["MonthRow"][];
             entities?: components["schemas"]["EntitySummary"][];
             complete?: boolean;
@@ -847,20 +875,27 @@ export interface components {
         MonthRow: {
             month: string;
             /** Format: decimal */
-            opening: string | null;
+            opening?: string | null;
             /** Format: decimal */
-            receipts: string;
+            receipts?: string | null;
             /** Format: decimal */
-            payments: string;
+            payments?: string | null;
             /** Format: decimal */
-            net: string;
+            net?: string | null;
             /** Format: decimal */
-            closing: string | null;
+            closing?: string | null;
             /** Format: int32 */
             receiptCount: number;
             /** Format: int32 */
             paymentCount: number;
             containsOverdue: boolean;
+            /** @enum {string} */
+            state: "GENERATED" | "PREVIEW" | "NOT_GENERATED";
+            generatable: boolean;
+            /** Format: date-time */
+            generatedAt?: string;
+            /** Format: int32 */
+            pendingNewItems: number;
         };
         InvoicePage: {
             items: components["schemas"]["InvoiceSummary"][];
@@ -961,7 +996,8 @@ export interface components {
             /** Format: uuid */
             entityId: string;
             entityName: string;
-            startMonth: string;
+            financialYearStart: string;
+            financialYearLabel: string;
             months: components["schemas"]["MonthRow"][];
             totals: components["schemas"]["Totals"];
             exceptions: components["schemas"]["ForecastException"][];
@@ -981,9 +1017,9 @@ export interface components {
         };
         Totals: {
             /** Format: decimal */
-            receipts?: string;
+            receipts?: string | null;
             /** Format: decimal */
-            payments?: string;
+            payments?: string | null;
             /** Format: decimal */
             closing?: string | null;
         };
@@ -1007,10 +1043,16 @@ export interface components {
             splitSequence?: number;
             /** Format: int32 */
             splitCount?: number;
+            /** Format: date */
+            issueDate?: string;
+            /** Format: date */
+            dueDate?: string;
         };
         MonthItems: {
-            month?: string;
-            items?: components["schemas"]["Contribution"][];
+            month: string;
+            state: string;
+            generatable: boolean;
+            items: components["schemas"]["Contribution"][];
         };
         DocumentPage: {
             items?: components["schemas"]["StoredDocument"][];
@@ -1461,6 +1503,29 @@ export interface operations {
             };
         };
     };
+    generateForecastMonth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entityId: string;
+                month: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["GenerationResult"];
+                };
+            };
+        };
+    };
     listForecastManualItems: {
         parameters: {
             query?: {
@@ -1537,7 +1602,7 @@ export interface operations {
     exportForecast: {
         parameters: {
             query?: {
-                startMonth?: string;
+                financialYearStart?: string;
             };
             header?: never;
             path: {
@@ -1850,7 +1915,7 @@ export interface operations {
         parameters: {
             query: {
                 entityIds: string[];
-                startMonth?: string;
+                financialYearStart?: string;
             };
             header?: never;
             path?: never;
@@ -2005,7 +2070,7 @@ export interface operations {
     getForecast: {
         parameters: {
             query?: {
-                startMonth?: string;
+                financialYearStart?: string;
             };
             header?: never;
             path: {
@@ -2030,7 +2095,6 @@ export interface operations {
         parameters: {
             query?: {
                 direction?: string;
-                startMonth?: string;
             };
             header?: never;
             path: {

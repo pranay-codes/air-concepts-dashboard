@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useResource } from "../api/useResource";
 import { Failure, Loading, Notice } from "../ui/Feedback";
-import { formatDate, formatMoney } from "../ui/format";
+import { formatDate, formatFetchTime, formatMoney } from "../ui/format";
 import { monthName } from "./ForecastTable";
 import type { Contribution, ForecastMonth } from "./contracts";
 import { type ForecastContext, handleAccess } from "./context";
@@ -45,21 +45,16 @@ export function MonthDetail(
   const load = useCallback(
     async (signal: AbortSignal) => {
       try {
-        return await props.api.forecastItems(
-          props.entity.id,
-          props.selectedMonth,
-          props.month,
-          signal,
-        );
+        return await props.api.forecastItems(props.entity.id, props.selectedMonth, signal);
       } catch (error) {
         if (!signal.aborted) handleAccess(props.onAccessDenied, error);
         throw error;
       }
     },
-    [props.api, props.entity.id, props.month, props.selectedMonth, props.onAccessDenied],
+    [props.api, props.entity.id, props.selectedMonth, props.onAccessDenied],
   );
   const resource = useResource(
-    `${props.subject}:${props.entity.id}:${props.month}:${props.selectedMonth}:items`,
+    `${props.subject}:${props.entity.id}:${props.financialYear}:${props.selectedMonth}:items`,
     load,
   );
   // Scoped to Xero invoices and bills for now; manual items, staffing and other fixed costs will
@@ -85,6 +80,20 @@ export function MonthDetail(
       <h2 id="forecast-month-heading" ref={heading} tabIndex={-1}>
         {name} cash forecast
       </h2>
+      {props.summary?.state === "GENERATED" ? (
+        <p className="supporting">
+          Generated {formatFetchTime(props.summary.generatedAt)}. Lines are frozen; later Xero
+          changes do not alter them.
+        </p>
+      ) : null}
+      {props.summary?.state === "PREVIEW" ? (
+        <p className="supporting">
+          Preview. This month is not generated yet, so these figures can still change.
+        </p>
+      ) : null}
+      {props.summary?.state === "NOT_GENERATED" ? (
+        <p className="supporting">Not generated. No figures are shown for this month.</p>
+      ) : null}
       {summary ? (
         <dl className="forecast-summary-strip" aria-label={`${name} totals`}>
           {figures.map(([label, value]) => (

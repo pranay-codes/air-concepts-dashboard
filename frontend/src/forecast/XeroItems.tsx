@@ -21,7 +21,7 @@ export function XeroItems(props: ForecastContext & { revision: number }) {
     [props.api, props.entity.id, page, type, settled, props.onAccessDenied],
   );
   const resource = useResource(
-    `${props.subject}:${props.entity.id}:${props.month}:${page}:${type}:${settled}:${props.revision}`,
+    `${props.subject}:${props.entity.id}:${props.financialYear}:${page}:${type}:${settled}:${props.revision}`,
     load,
   );
   return (
