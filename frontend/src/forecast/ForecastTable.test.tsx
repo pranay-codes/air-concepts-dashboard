@@ -127,3 +127,48 @@ it("labels a carried opening that follows a preview month as Provisional", () =>
   expect(screen.getAllByText("Provisional").length).toBeGreaterThan(0);
   expect(screen.queryByText("Carried forward")).toBeNull();
 });
+
+describe("FR-UC04-23 compact forecast table", () => {
+  it("shows a dash for each figure of an ungenerated month, read as Not generated", () => {
+    render(<ForecastTable months={[base({ month: "2026-04" })]} />);
+    const row = screen.getAllByRole("row")[1]!;
+    expect(within(row).getAllByText("—")).toHaveLength(4);
+    // Status badge plus one visually hidden description per financial cell.
+    expect(within(row).getAllByText("Not generated")).toHaveLength(5);
+  });
+
+  it("explains the dash in a note beneath the table", () => {
+    render(<ForecastTable months={[base({})]} />);
+    expect(
+      screen.getByText("— Not generated: figures appear once the month is generated."),
+    ).toBeInTheDocument();
+  });
+
+  it("offers a compact Generate action that keeps its full name for assistive technology", () => {
+    const onGenerate = vi.fn();
+    render(
+      <ForecastTable
+        months={[
+          base({
+            month: "2026-11",
+            opening: "1.00",
+            openingSource: "MANUAL",
+            state: "PREVIEW",
+            generatable: true,
+            closing: "2.00",
+          }),
+        ]}
+        onGenerate={onGenerate}
+      />,
+    );
+    const button = screen.getByRole("button", { name: "Generate forecast for November 2026" });
+    expect(button).toHaveTextContent(/^Generate$/);
+    fireEvent.click(button);
+    expect(onGenerate).toHaveBeenCalledWith(expect.objectContaining({ month: "2026-11" }));
+  });
+
+  it("keeps the overdue flag visible in the table", () => {
+    render(<ForecastTable months={[base({ month: "2026-11", containsOverdue: true })]} />);
+    expect(screen.getByText("Includes overdue cash")).toBeInTheDocument();
+  });
+});
