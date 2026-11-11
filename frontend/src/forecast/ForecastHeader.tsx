@@ -116,7 +116,7 @@ export function ForecastHeader(props: {
       <div className="forecast-heading">
         <h1>Financial forecast</h1>
         <p>
-          <strong>{props.entityName}</strong> · 12 months · NZD
+          <strong>{props.entityName}</strong> · 12 months
         </p>
         {props.onSync ? (
           <p className="supporting forecast-sync">

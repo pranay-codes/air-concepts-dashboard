@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { ApiClient } from "../api/client";
 import { DashboardApi } from "../api/dashboard";
@@ -77,6 +77,56 @@ it("FR-UC04-13 clears the previous entity synchronously while the next entity is
   });
   expect(await screen.findAllByText(/222\.00/)).not.toHaveLength(0);
 });
+it("FR-UC04-22 exposes section navigation as tabs with a labelled panel and arrow-key switching", async () => {
+  const api = new DashboardApi(
+    new ApiClient("", {
+      getAccessToken: async () => null,
+      requestCode: vi.fn(),
+      verifyCode: vi.fn(),
+      signOut: vi.fn(),
+      onSessionChange: () => () => {},
+    }),
+  );
+  vi.spyOn(api, "forecast").mockImplementation(async (entity, year) =>
+    data(entity, year, "111.00"),
+  );
+  render(
+    <Forecast
+      api={api}
+      profile={{ subject: a.id, displayName: "Admin", role: "FINANCIAL_ADMIN" as const }}
+      entities={[a, b]}
+      combined={false}
+      entity={a}
+      onDirty={vi.fn()}
+      onAccessDenied={vi.fn()}
+    />,
+  );
+  await screen.findAllByText(/111\.00/);
+  const tablist = screen.getByRole("tablist", { name: "Forecast sections" });
+  const forecastTab = within(tablist).getByRole("tab", { name: "Forecast" });
+  const xeroTab = within(tablist).getByRole("tab", { name: "Xero items" });
+  const historyTab = within(tablist).getByRole("tab", { name: "History" });
+  expect(forecastTab.getAttribute("aria-selected")).toBe("true");
+  expect(forecastTab.getAttribute("tabindex")).toBe("0");
+  expect(xeroTab.getAttribute("aria-selected")).toBe("false");
+  expect(xeroTab.getAttribute("tabindex")).toBe("-1");
+  expect(screen.getByRole("tabpanel", { name: "Forecast" })).toBeTruthy();
+
+  fireEvent.keyDown(forecastTab, { key: "ArrowRight" });
+  expect(xeroTab.getAttribute("aria-selected")).toBe("true");
+  expect(xeroTab).toBe(window.document.activeElement);
+  expect(screen.getByRole("tabpanel", { name: "Xero items" })).toBeTruthy();
+
+  fireEvent.keyDown(xeroTab, { key: "End" });
+  expect(historyTab.getAttribute("aria-selected")).toBe("true");
+  fireEvent.keyDown(historyTab, { key: "ArrowRight" });
+  expect(forecastTab.getAttribute("aria-selected")).toBe("true");
+  fireEvent.keyDown(forecastTab, { key: "ArrowLeft" });
+  expect(historyTab.getAttribute("aria-selected")).toBe("true");
+  fireEvent.keyDown(historyTab, { key: "Home" });
+  expect(forecastTab.getAttribute("aria-selected")).toBe("true");
+});
+
 for (const switchContext of ["entity", "period"] as const) {
   it(`FR-UC04-13_05 aborts ${switchContext} requests and discards their late responses`, async () => {
     const api = new DashboardApi(
