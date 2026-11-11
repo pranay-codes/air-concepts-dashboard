@@ -896,6 +896,8 @@ export interface components {
             generatedAt?: string;
             /** Format: int32 */
             pendingNewItems: number;
+            /** @enum {string|null} */
+            openingSource?: "MANUAL" | "OVERRIDE" | "CARRIED_FORWARD" | null;
         };
         InvoicePage: {
             items: components["schemas"]["InvoiceSummary"][];

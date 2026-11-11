@@ -64,6 +64,7 @@ function EntityForecast(props: Props & { entity: Entity }) {
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const monthOpener = useRef<HTMLElement | null>(null);
   const [dialog, setDialog] = useState<"opening" | "export" | null>(null);
+  const [openingMonth, setOpeningMonth] = useState<ForecastMonth | null>(null);
   const [document, setDocument] = useState<{ id: string; mode: AdjustmentMode } | null>(null);
   const [review, setReview] = useState<ForecastMonth | null>(null);
   const [revision, setRevision] = useState(0);
@@ -221,7 +222,10 @@ function EntityForecast(props: Props & { entity: Entity }) {
                   monthOpener.current = window.document.activeElement as HTMLElement | null;
                   setSelectedMonth(value);
                 }}
-                onOpening={() => setDialog("opening")}
+                onOpening={(month) => {
+                  setOpeningMonth(month);
+                  setDialog("opening");
+                }}
                 onGenerate={(month) => setReview(month)}
               />
               <p>
@@ -289,13 +293,20 @@ function EntityForecast(props: Props & { entity: Entity }) {
           are shown as Not recorded, and months not yet generated show Not generated.
         </p>
       </details>
-      {dialog === "opening" && resource.data ? (
+      {dialog === "opening" && openingMonth && resource.data ? (
         <OpeningBalanceForm
           {...context}
-          month={resource.data.financialYearStart}
-          initial={resource.data.months[0]?.opening}
-          source={resource.data.openingBalanceSource}
-          onClose={() => setDialog(null)}
+          month={openingMonth.month}
+          initial={openingMonth.opening}
+          source={
+            openingMonth.month === resource.data.financialYearStart
+              ? resource.data.openingBalanceSource
+              : null
+          }
+          onClose={() => {
+            setDialog(null);
+            setOpeningMonth(null);
+          }}
         />
       ) : null}
       {dialog === "export" && loadedYear !== null ? (

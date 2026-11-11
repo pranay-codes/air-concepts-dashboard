@@ -36,6 +36,7 @@ FR-UC04-22 to 24 are new IDs allocated under the forecast use case, after FR-UC0
 | D9 | **beyondWindow is kept.** It sums unplaced lines dated after the displayed financial year, so AC-12 still holds. | Keeps the existing response shape. Unplaced means not yet in any generated month. |
 | D10 | **Excel export** uses the same resolved financial-year view as the dashboard (frozen lines for generated months, preview lines for the generatable month). Export adds a warning naming each month that is not generated, and the export history records totals over the months that have figures (`forecast_exports.receipts_total` is NOT NULL). | FR-UC04-21 parity. The export is still read-only apart from the existing `forecast_exports` insert. |
 | D11 | **Audit:** each generation that adds lines, or creates the month, writes one `forecast_audit` row with `record_table = forecast_generated_months`. Action is `INSERT` for the first generation and `UPDATE` for later additions; the row carries the generation count, lines added, and receipt and payment totals added. | Keeps FR-UC04-08 audit coverage without a row per line. |
+| D12 | **Opening balance override (requested 11 November 2026, chat):** an opening balance entered for a month always applies to that month and overrides the carried closing of the month before it (`ForecastChain`: explicit entry first, then carried closing, else none). Each month row carries `openingSource`: `MANUAL` (entered, previous month not generated), `OVERRIDE` (entered over a generated previous month), `CARRIED_FORWARD` (previous month's closing), or null. The table shows an Edit control on every row, shows "Not set" when no amount exists, and the dialog edits the row's own month (it previously always edited the financial year's first month). | Without this, an Edit on a month after a generated month was saved and then ignored. Overrides are stored in the existing `forecast_periods` table, so no migration is needed. |
 
 ## Data model (migration `20261111010000_uc4_generated_forecast_months.sql`)
 
@@ -104,6 +105,9 @@ Migration is forward-only and additive. Rolling back the application leaves the 
 - **Q-C (D3):** should a locked month allow a manual correction line instead of silently excluding late items?
 - **Q-D:** FR-UC04-22 to 24 IDs are allocated by this addendum. Confirm numbering.
 - **Q-E:** the client's Xero financial year-end, to confirm D1 against the organisation settings (not read here: no live Xero access by the agent).
+- **Q-F (requested 11 November 2026):** the request asks that an April closing becomes May's opening. Under D2 only the current month or the next month after the last generated month can be generated, so past months such as April never have a closing and cannot carry one. The delivered behaviour carries closings only between generated months and uses an entered opening (D12) elsewhere. Confirm whether past months may be generated, which would change D2 and the lock rule D3.
+- **Q-G (requested 11 November 2026):** the empty-amount label is "Not set" as requested. AC-9 and the `formatMoney` helper still say "Not recorded" for the other figures. Confirm the label for the opening column.
+- **Q-H (D12):** an override entered on a month can stop the carried chain from following a later generated closing. The row shows "Override" so it is visible; there is no reset action yet.
 
 ## Verification (this delivery)
 

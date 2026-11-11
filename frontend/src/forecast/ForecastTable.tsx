@@ -1,4 +1,4 @@
-import type { ForecastMonth, ForecastMonthState } from "./contracts";
+import type { ForecastMonth, ForecastMonthState, OpeningSource } from "./contracts";
 import { formatMoney } from "../ui/format";
 import "./forecast.css";
 
@@ -16,6 +16,12 @@ const stateLabel: Record<ForecastMonthState, string> = {
   NOT_GENERATED: "Not generated",
 };
 
+const openingSourceLabel: Record<OpeningSource, string> = {
+  MANUAL: "Entered",
+  OVERRIDE: "Override",
+  CARRIED_FORWARD: "Carried forward",
+};
+
 /** Figures for a month that has no forecast are described, never shown as zero (AC-9, FR-UC04-23). */
 export function figure(month: ForecastMonth, value: string | null) {
   if (month.state === "NOT_GENERATED") return "Not generated";
@@ -25,6 +31,35 @@ export function figure(month: ForecastMonth, value: string | null) {
 function StateBadge({ month }: { month: ForecastMonth }) {
   const tone = month.state === "GENERATED" ? "success" : month.state === "PREVIEW" ? "info" : "";
   return <span className={`badge ${tone}`.trim()}>{stateLabel[month.state]}</span>;
+}
+
+/** Opening amount, its source, and an Edit control that is always present when editing is allowed. */
+function OpeningCell({
+  month,
+  onOpening,
+}: {
+  month: ForecastMonth;
+  onOpening?: (month: ForecastMonth) => void;
+}) {
+  const source = month.openingSource ? openingSourceLabel[month.openingSource] : null;
+  return (
+    <div className="opening-cell">
+      <span className="opening-amount">
+        {month.opening === null ? "Not set" : formatMoney(month.opening, "NZD")}
+      </span>
+      {source ? <span className="supporting opening-source">{source}</span> : null}
+      {onOpening ? (
+        <button
+          type="button"
+          className="compact-button"
+          aria-label={`Edit opening balance for ${monthName(month.month)}`}
+          onClick={() => onOpening(month)}
+        >
+          Edit
+        </button>
+      ) : null}
+    </div>
+  );
 }
 
 /** Generate or add-items action for a month, or a plain note when no action is possible. */
@@ -67,7 +102,7 @@ export function ForecastTable({
 }: {
   months: ForecastMonth[];
   onOpen?: (month: string) => void;
-  onOpening?: () => void;
+  onOpening?: (month: ForecastMonth) => void;
   onGenerate?: (month: ForecastMonth) => void;
 }) {
   const warning = (month: ForecastMonth) =>
@@ -82,7 +117,7 @@ export function ForecastTable({
         aria-label="12-month forecast"
         tabIndex={0}
       >
-        <table>
+        <table className="forecast-table">
           <caption>12-month cash forecast · NZD, GST-inclusive</caption>
           <thead>
             <tr>
@@ -107,7 +142,11 @@ export function ForecastTable({
               <tr key={month.month}>
                 <th scope="row">
                   {onOpen ? (
-                    <button type="button" onClick={() => onOpen(month.month)}>
+                    <button
+                      type="button"
+                      className="link-button"
+                      onClick={() => onOpen(month.month)}
+                    >
                       View {monthName(month.month)}
                     </button>
                   ) : (
@@ -118,12 +157,7 @@ export function ForecastTable({
                   <StateBadge month={month} />
                 </td>
                 <td className="money">
-                  {formatMoney(month.opening, "NZD")}
-                  {month.opening === null && onOpening ? (
-                    <button type="button" onClick={onOpening}>
-                      Enter opening balance
-                    </button>
-                  ) : null}
+                  <OpeningCell month={month} onOpening={onOpening} />
                 </td>
                 <td className="money">{figure(month, month.receipts)}</td>
                 <td className="money">{figure(month, month.payments)}</td>
@@ -149,7 +183,6 @@ export function ForecastTable({
             <dl>
               {(
                 [
-                  ["Opening balance", month.opening, false],
                   ["Money In", month.receipts, true],
                   ["Money Out", month.payments, true],
                   ["Net", month.net, true],
@@ -162,18 +195,17 @@ export function ForecastTable({
                 </div>
               ))}
             </dl>
+            <div className="forecast-card-opening">
+              <span>Opening balance</span>
+              <OpeningCell month={month} onOpening={onOpening} />
+            </div>
             {warning(month)}
             {month.containsOverdue ? (
               <span className="badge warning">Includes overdue cash</span>
             ) : null}
-            {month.opening === null && onOpening ? (
-              <button type="button" onClick={onOpening}>
-                Enter opening balance
-              </button>
-            ) : null}
             <MonthAction month={month} onGenerate={onGenerate} />
             {onOpen ? (
-              <button type="button" onClick={() => onOpen(month.month)}>
+              <button type="button" className="link-button" onClick={() => onOpen(month.month)}>
                 View {monthName(month.month)}
               </button>
             ) : null}

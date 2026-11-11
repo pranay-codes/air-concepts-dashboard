@@ -49,7 +49,7 @@ public class ForecastService {
       months.add(new MonthRow(rows.getFirst().month(),sum(rows,MonthRow::opening),sum(rows,MonthRow::receipts),sum(rows,MonthRow::payments),sum(rows,MonthRow::net),sum(rows,MonthRow::closing),
           rows.stream().mapToInt(MonthRow::receiptCount).sum(),rows.stream().mapToInt(MonthRow::paymentCount).sum(),rows.stream().anyMatch(MonthRow::containsOverdue),
           combinedState(rows),
-          false,null,rows.stream().mapToInt(MonthRow::pendingNewItems).sum()));
+          false,null,rows.stream().mapToInt(MonthRow::pendingNewItems).sum(),null));
     }
     var summaries=views.stream().map(v->new EntitySummary(v.entityId(),v.entityName(),v.months(),v.exceptions().stream().map(ForecastException::kind).distinct().toList(),
         v.lastSuccessfulSyncAt()!=null&&!v.syncStale()&&v.lastRun()!=null&&!"FAILED".equals(v.lastRun().status())&&v.months().getFirst().opening()!=null)).toList();

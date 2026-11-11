@@ -21,4 +21,17 @@ class ForecastChainTest {
     var openings=ForecastChain.openings(JUN,JUN,Set.of(APR,MAY),Map.of(APR,new BigDecimal("10.00"),MAY,new BigDecimal("-5.00")),Map.of(APR,new BigDecimal("100.00")));
     assertThat(openings.get(JUN)).isEqualByComparingTo("105.00");
   }
+  @Test void frUc04_23_anOverrideReplacesTheCarriedClosingForItsMonth(){
+    // May is generated, so June would carry May's closing; the explicit June override wins for June only.
+    var openings=ForecastChain.openings(APR,JUN.plusMonths(1),Set.of(APR,MAY),Map.of(APR,new BigDecimal("50.00"),MAY,new BigDecimal("10.00")),
+        Map.of(APR,new BigDecimal("100.00"),JUN,new BigDecimal("999.00")));
+    assertThat(openings.get(MAY)).isEqualByComparingTo("150.00");
+    assertThat(openings.get(JUN)).isEqualByComparingTo("999");
+    assertThat(openings.get(JUN.plusMonths(1))).isNull();
+  }
+  @Test void frUc04_23_anOverrideAfterAnUngeneratedMonthIsStillUsed(){
+    var openings=ForecastChain.openings(APR,JUN,Set.of(),Map.of(),Map.of(JUN,new BigDecimal("0.00")));
+    assertThat(openings.get(APR)).isNull();
+    assertThat(openings.get(JUN)).isEqualByComparingTo("0.00");
+  }
 }

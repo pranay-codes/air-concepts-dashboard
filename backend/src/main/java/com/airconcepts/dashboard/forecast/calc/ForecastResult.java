@@ -16,11 +16,12 @@ public record ForecastResult(List<MonthRow> months,Totals totals,List<ForecastEx
       @JsonFormat(shape=JsonFormat.Shape.STRING) @io.swagger.v3.oas.annotations.media.Schema(types={"string","null"},format="decimal") BigDecimal closing,
       int receiptCount,int paymentCount,boolean containsOverdue,
       @io.swagger.v3.oas.annotations.media.Schema(allowableValues={"GENERATED","PREVIEW","NOT_GENERATED"}) String state,
-      boolean generatable,@JsonFormat(shape=JsonFormat.Shape.STRING) Instant generatedAt,int pendingNewItems) {
+      boolean generatable,@JsonFormat(shape=JsonFormat.Shape.STRING) Instant generatedAt,int pendingNewItems,
+      @io.swagger.v3.oas.annotations.media.Schema(types={"string","null"},allowableValues={"MANUAL","OVERRIDE","CARRIED_FORWARD"}) String openingSource) {
     /** Calculator rows have no generation state; the service assigns it when it resolves a financial year. */
     public MonthRow(YearMonth month,BigDecimal opening,BigDecimal receipts,BigDecimal payments,BigDecimal net,BigDecimal closing,
         int receiptCount,int paymentCount,boolean containsOverdue) {
-      this(month,opening,receipts,payments,net,closing,receiptCount,paymentCount,containsOverdue,"PREVIEW",false,null,0);
+      this(month,opening,receipts,payments,net,closing,receiptCount,paymentCount,containsOverdue,"PREVIEW",false,null,0,null);
     }
   }
   public record Totals(@JsonFormat(shape=JsonFormat.Shape.STRING) @io.swagger.v3.oas.annotations.media.Schema(types={"string","null"},format="decimal") BigDecimal receipts,
