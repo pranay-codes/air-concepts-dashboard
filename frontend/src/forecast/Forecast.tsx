@@ -177,9 +177,20 @@ function EntityForecast(props: Props & { entity: Entity }) {
         ))}
       </nav>
       {tab === "Forecast" ? (
-        <div className={`forecast-view${selectedMonth ? " has-detail" : ""}`}>
+        <div className="forecast-view">
           {resource.status === "loading" ? <Loading label="Loading forecast…" /> : null}
-          {resource.data ? (
+          {selectedMonth ? (
+            <MonthDetail
+              key={`${month}:${selectedMonth}:${revision}`}
+              {...context}
+              selectedMonth={selectedMonth}
+              summary={resource.data?.months.find((row) => row.month === selectedMonth) ?? null}
+              onBack={() => {
+                setSelectedMonth(null);
+                requestAnimationFrame(() => monthOpener.current?.focus());
+              }}
+            />
+          ) : resource.data ? (
             <div className="forecast-overview">
               <ExceptionsPanel
                 exceptions={resource.data.exceptions}
@@ -218,17 +229,6 @@ function EntityForecast(props: Props & { entity: Entity }) {
                 </details>
               ) : null}
             </div>
-          ) : null}
-          {selectedMonth ? (
-            <MonthDetail
-              key={`${month}:${selectedMonth}:${revision}`}
-              {...context}
-              selectedMonth={selectedMonth}
-              onBack={() => {
-                setSelectedMonth(null);
-                requestAnimationFrame(() => monthOpener.current?.focus());
-              }}
-            />
           ) : null}
         </div>
       ) : null}

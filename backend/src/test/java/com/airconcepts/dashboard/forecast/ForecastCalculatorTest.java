@@ -61,6 +61,34 @@ class ForecastCalculatorTest {
     var result=calc.calculate(data(BigDecimal.ZERO,List.of(doc("ACCREC","2026-10-15",null,null,false,List.of())),List.of(),List.of()));
     assertThat(result.months().getFirst().containsOverdue()).isTrue();assertThat(result.months().getFirst().receipts()).isEqualByComparingTo("115");
   }
+  @Test void frUc04_15_overdueCashIsSummarisedOncePerDirection() {
+    var result=calc.calculate(data(BigDecimal.ZERO,List.of(
+        doc("ACCREC","2026-10-15",null,null,false,List.of()),
+        doc("ACCREC","2026-10-20",null,null,false,List.of()),
+        doc("ACCPAY","2026-10-01",null,null,false,List.of())),List.of(),List.of()));
+    var overdue=result.exceptions().stream().filter(e->e.kind().equals("OVERDUE")).toList();
+    assertThat(overdue).extracting(ForecastResult.ForecastException::documentId).containsOnlyNulls();
+    assertThat(overdue).extracting(ForecastResult.ForecastException::message).containsExactly(
+        "2 overdue receipts (NZD 230.00) are included in November 2026.",
+        "1 overdue payment (NZD 115.00) is included in November 2026.");
+    assertThat(result.contributions()).filteredOn(ForecastResult.Contribution::overdue).hasSize(3);
+  }
+  @Test void frUc04_15_overdueSplitLinesCountAsOneInvoice() {
+    var result=calc.calculate(data(BigDecimal.ZERO,List.of(doc("ACCREC","2026-10-15",null,null,false,
+        List.of(new Split(1,LocalDate.of(2026,10,5),new BigDecimal("15")),new Split(2,LocalDate.of(2026,10,25),new BigDecimal("100"))))),List.of(),List.of()));
+    assertThat(result.exceptions()).extracting(ForecastResult.ForecastException::message).containsExactly(
+        "1 overdue receipt (NZD 115.00) is included in November 2026.");
+  }
+  @Test void frUc04_15_keepOriginalMonthPolicyDescribesOriginalDates() {
+    var result=new ForecastCalculator(OverduePolicy.KEEP_ORIGINAL_MONTH).calculate(data(BigDecimal.ZERO,
+        List.of(doc("ACCREC","2026-10-15",null,null,false,List.of())),List.of(),List.of()));
+    assertThat(result.exceptions()).extracting(ForecastResult.ForecastException::message).containsExactly(
+        "1 overdue receipt (NZD 115.00) is shown at its original forecast date.");
+  }
+  @Test void frUc04_15_noOverdueCashMeansNoOverdueSummary() {
+    var result=calc.calculate(data(BigDecimal.ZERO,List.of(doc("ACCREC","2026-12-15",null,null,false,List.of())),List.of(),List.of()));
+    assertThat(result.exceptions()).extracting(ForecastResult.ForecastException::kind).doesNotContain("OVERDUE");
+  }
   @Test void frUc04_05_twelveRowsAndBeyondWindow() {
     var result=calc.calculate(data(BigDecimal.ZERO,List.of(doc("ACCREC","2027-12-15",null,null,false,List.of())),List.of(),List.of()));
     assertThat(result.months()).hasSize(12);assertThat(result.beyondWindow().receipts()).isEqualByComparingTo("115");
