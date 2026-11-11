@@ -22,11 +22,31 @@ const openingSourceLabel: Record<OpeningSource, string> = {
   CARRIED_FORWARD: "Carried forward",
 };
 
-/** Figures for a month that has no forecast are described, never shown as zero (AC-9, FR-UC04-23). */
-export function figure(month: ForecastMonth, value: string | null) {
-  if (month.state === "NOT_GENERATED") return "Not generated";
-  return formatMoney(value, "NZD");
+/**
+ * Figures for a month that has no forecast are described, never shown as zero (AC-9, FR-UC04-23).
+ * The visible dash is hidden from assistive technology; the visually hidden text carries the meaning.
+ */
+function FigureCell({ month, value }: { month: ForecastMonth; value: string | null }) {
+  if (month.state === "NOT_GENERATED")
+    return (
+      <>
+        <span aria-hidden="true">—</span>
+        <span className="visually-hidden">Not generated</span>
+      </>
+    );
+  return <>{formatMoney(value, "NZD")}</>;
 }
+
+const columns = [
+  { label: "Month", numeric: false },
+  { label: "Status", numeric: false },
+  { label: "Opening balance", numeric: true },
+  { label: "Money In", numeric: true },
+  { label: "Money Out", numeric: true },
+  { label: "Net", numeric: true },
+  { label: "Closing balance", numeric: true },
+  { label: "Action", numeric: false },
+] as const;
 
 function StateBadge({ month }: { month: ForecastMonth }) {
   const tone = month.state === "GENERATED" ? "success" : month.state === "PREVIEW" ? "info" : "";
@@ -87,13 +107,18 @@ function MonthAction({
   const noun = items === 1 ? "item" : "items";
   if (month.state === "PREVIEW" && month.generatable && onGenerate)
     return (
-      <button type="button" onClick={() => onGenerate(month)}>
-        Generate forecast for {monthName(month.month)}
+      <button
+        type="button"
+        className="compact-button primary"
+        aria-label={`Generate forecast for ${monthName(month.month)}`}
+        onClick={() => onGenerate(month)}
+      >
+        Generate
       </button>
     );
   if (month.state === "GENERATED" && month.generatable && items > 0 && onGenerate)
     return (
-      <button type="button" onClick={() => onGenerate(month)}>
+      <button type="button" className="compact-button" onClick={() => onGenerate(month)}>
         Add {items} new {noun}
       </button>
     );
@@ -134,25 +159,16 @@ export function ForecastTable({
           <caption>12-month cash forecast · NZD, GST-inclusive</caption>
           <thead>
             <tr>
-              {[
-                "Month",
-                "Status",
-                "Opening balance",
-                "Money In",
-                "Money Out",
-                "Net",
-                "Closing balance",
-                "Action",
-              ].map((h) => (
-                <th key={h} scope="col">
-                  {h}
+              {columns.map((column) => (
+                <th key={column.label} scope="col" className={column.numeric ? "money" : undefined}>
+                  {column.label}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {months.map((month, index) => (
-              <tr key={month.month}>
+              <tr key={month.month} data-state={month.state}>
                 <th scope="row">
                   {onOpen ? (
                     <button
@@ -168,6 +184,12 @@ export function ForecastTable({
                 </th>
                 <td>
                   <StateBadge month={month} />
+                  {month.containsOverdue ? (
+                    <>
+                      {" "}
+                      <span className="badge warning">Includes overdue cash</span>
+                    </>
+                  ) : null}
                 </td>
                 <td className="money">
                   <OpeningCell
@@ -176,11 +198,17 @@ export function ForecastTable({
                     provisional={isProvisional(months, index)}
                   />
                 </td>
-                <td className="money">{figure(month, month.receipts)}</td>
-                <td className="money">{figure(month, month.payments)}</td>
-                <td className="money">{figure(month, month.net)}</td>
                 <td className="money">
-                  {figure(month, month.closing)} {warning(month)}
+                  <FigureCell month={month} value={month.receipts} />
+                </td>
+                <td className="money">
+                  <FigureCell month={month} value={month.payments} />
+                </td>
+                <td className="money total">
+                  <FigureCell month={month} value={month.net} />
+                </td>
+                <td className="money total">
+                  <FigureCell month={month} value={month.closing} /> {warning(month)}
                 </td>
                 <td>
                   <MonthAction month={month} onGenerate={onGenerate} />
@@ -190,49 +218,11 @@ export function ForecastTable({
           </tbody>
         </table>
       </div>
-      <div className="forecast-mobile">
-        {months.map((month, index) => (
-          <article className="forecast-card" key={month.month}>
-            <h3>{monthName(month.month)}</h3>
-            <p>
-              <StateBadge month={month} />
-            </p>
-            <dl>
-              {(
-                [
-                  ["Money In", month.receipts, true],
-                  ["Money Out", month.payments, true],
-                  ["Net", month.net, true],
-                  ["Closing balance", month.closing, true],
-                ] as const
-              ).map(([label, value, figured]) => (
-                <div key={label}>
-                  <dt>{label}</dt>
-                  <dd>{figured ? figure(month, value) : formatMoney(value, "NZD")}</dd>
-                </div>
-              ))}
-            </dl>
-            <div className="forecast-card-opening">
-              <span>Opening balance</span>
-              <OpeningCell
-                month={month}
-                onOpening={onOpening}
-                provisional={isProvisional(months, index)}
-              />
-            </div>
-            {warning(month)}
-            {month.containsOverdue ? (
-              <span className="badge warning">Includes overdue cash</span>
-            ) : null}
-            <MonthAction month={month} onGenerate={onGenerate} />
-            {onOpen ? (
-              <button type="button" className="link-button" onClick={() => onOpen(month.month)}>
-                View {monthName(month.month)}
-              </button>
-            ) : null}
-          </article>
-        ))}
-      </div>
+      {months.some((month) => month.state === "NOT_GENERATED") ? (
+        <p className="forecast-muted table-note">
+          — Not generated: figures appear once the month is generated.
+        </p>
+      ) : null}
     </>
   );
 }

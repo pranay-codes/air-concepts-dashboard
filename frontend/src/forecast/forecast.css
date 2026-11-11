@@ -42,36 +42,68 @@
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
-.forecast-mobile {
-  display: none;
-}
 .forecast-desktop {
+  --table-header: var(--workspace, #f5f6f8);
+  --table-stripe: #fafbfc;
   max-width: 100%;
   overflow-x: auto;
+  background: var(--surface, #fff);
+  border: 1px solid var(--divider, #e2e7ec);
+  border-radius: 8px;
+}
+.forecast-desktop + .table-note {
+  margin: 8px 0 16px;
 }
 .forecast-desktop table {
-  width: 100%;
+  /* Columns size to their content; the table does not stretch to fill the page. */
+  width: max-content;
   border-collapse: collapse;
+  font-size: var(--font-small);
 }
-.forecast-desktop td,
-.forecast-desktop th {
-  padding: 6px 8px;
+.forecast-desktop caption {
+  caption-side: top;
+  text-align: left;
+  padding: 8px 10px;
+  font-weight: 600;
   border-bottom: 1px solid var(--divider, #e2e7ec);
+}
+.forecast-desktop th,
+.forecast-desktop td {
+  padding: 8px 10px;
+  border: 1px solid var(--divider, #e2e7ec);
   vertical-align: middle;
   line-height: 1.3;
-}
-.forecast-desktop th[scope="row"] {
   text-align: left;
   white-space: nowrap;
 }
-.forecast-desktop th[scope="col"]:not(:first-child),
+.forecast-desktop tbody th,
+.forecast-desktop tbody td {
+  height: 42px;
+}
+.forecast-desktop thead th {
+  background: var(--table-header);
+  color: var(--secondary, #52616b);
+  font-weight: 600;
+}
+.forecast-desktop tbody tr:nth-child(even) > * {
+  background: var(--table-stripe);
+}
+.forecast-desktop tbody tr:hover > * {
+  background: var(--selected, #e7f2f5);
+}
+.forecast-desktop th[scope="row"] {
+  font-weight: 400;
+}
 .forecast-desktop .money {
+  min-width: 7.5rem;
   text-align: right;
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
-.forecast-desktop td button {
-  margin-left: auto;
+.forecast-desktop .money.total {
+  font-weight: 600;
+}
+.forecast-desktop tr[data-state="PREVIEW"] .money {
+  color: var(--information, #245e9b);
 }
 .forecast-table .link-button,
 .link-button {
@@ -85,28 +117,24 @@
   cursor: pointer;
 }
 .compact-button {
+  min-height: 1.75rem;
   padding: 2px 10px;
-  font-size: 0.85rem;
+  font-size: var(--font-small);
   line-height: 1.4;
+  white-space: nowrap;
 }
 .opening-cell {
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  white-space: nowrap;
 }
+/* Amounts right-align within a fixed slot, so digits line up and Edit stays 8 px from its value. */
 .opening-amount {
+  min-width: 8.5rem;
+  text-align: right;
   font-variant-numeric: tabular-nums;
-}
-.opening-source {
-  font-size: 0.8rem;
-}
-.forecast-card-opening {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
 }
 .forecast-panel form,
 .forecast-form {
@@ -234,12 +262,6 @@
   overflow-wrap: anywhere;
 }
 @media (max-width: 48rem) {
-  .forecast-desktop {
-    display: none;
-  }
-  .forecast-mobile {
-    display: block;
-  }
   .forecast-header {
     display: block;
   }
