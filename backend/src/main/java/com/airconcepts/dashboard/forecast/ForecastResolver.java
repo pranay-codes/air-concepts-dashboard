@@ -51,14 +51,15 @@ public class ForecastResolver {
       else if(generatable){state=STATE_PREVIEW;lines=pending;}
       else {state=STATE_NOT_GENERATED;lines=null;notGenerated.add(month);}
       if(lines==null) {
-        rows.add(new MonthRow(month,opening,null,null,null,null,0,0,false,state,generatable,null,pendingCount));
+        rows.add(new MonthRow(month,opening,null,null,null,null,0,0,false,state,generatable,null,pendingCount,openingSource(month,generatedSet,anchors)));
         continue;
       }
       contributions.addAll(lines);
       var receipts=sum(lines,"IN");var payments=sum(lines,"OUT");var net=receipts.subtract(payments);
       rows.add(new MonthRow(month,opening,receipts,payments,net,opening==null?null:opening.add(net),
           (int)lines.stream().filter(c->c.direction().equals("IN")).count(),(int)lines.stream().filter(c->c.direction().equals("OUT")).count(),
-          lines.stream().anyMatch(Contribution::overdue),state,generatable,generatedMonth==null?null:generatedMonth.generatedAt(),pendingCount));
+          lines.stream().anyMatch(Contribution::overdue),state,generatable,generatedMonth==null?null:generatedMonth.generatedAt(),pendingCount,
+          openingSource(month,generatedSet,anchors)));
     }
     if(!notGenerated.isEmpty()) exceptions.add(new ForecastException("NOT_GENERATED",null,"Not generated: "+notGenerated.stream()
         .map(m->m.getMonth().getDisplayName(java.time.format.TextStyle.SHORT,Locale.ENGLISH)+" "+m.getYear()).reduce((a,b)->a+", "+b).orElse("")+
@@ -70,6 +71,14 @@ public class ForecastResolver {
     var totals=new Totals(sumNullable(rows,MonthRow::receipts),sumNullable(rows,MonthRow::payments),rows.getLast().closing());
     return new Resolved(withOpening(base,openings.get(start),source),new ForecastResult(List.copyOf(rows),totals,List.copyOf(exceptions),beyond,
         List.copyOf(contributions),calculated.exclusions()),source);
+  }
+
+  /** How a month's opening was set: an explicit entry (MANUAL), an override of the carried value (OVERRIDE), or the carried closing (CARRIED_FORWARD). */
+  static String openingSource(YearMonth month,Set<YearMonth> generated,Map<YearMonth,OpeningBalance> anchors) {
+    boolean anchored=anchors.containsKey(month)&&anchors.get(month).openingBalance()!=null;
+    boolean carried=generated.contains(month.minusMonths(1));
+    if(anchored) return carried?"OVERRIDE":"MANUAL";
+    return carried?"CARRIED_FORWARD":null;
   }
 
   static Map<YearMonth,BigDecimal> anchorValues(Map<YearMonth,OpeningBalance> anchors) {

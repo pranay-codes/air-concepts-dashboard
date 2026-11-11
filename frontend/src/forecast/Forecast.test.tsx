@@ -20,6 +20,7 @@ function data(entityId: string, year: number | null, amount: string): ForecastVi
       generatable: false,
       generatedAt: null,
       pendingNewItems: 0,
+      openingSource: null,
       opening: amount,
       receipts: "0.00",
       payments: "0.00",

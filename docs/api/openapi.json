@@ -2548,6 +2548,10 @@
           "pendingNewItems" : {
             "type" : "integer",
             "format" : "int32"
+          },
+          "openingSource" : {
+            "type" : [ "string", "null" ],
+            "enum" : [ "MANUAL", "OVERRIDE", "CARRIED_FORWARD" ]
           }
         },
         "required" : [ "containsOverdue", "generatable", "month", "paymentCount", "pendingNewItems", "receiptCount", "state" ]

@@ -21,7 +21,7 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       page.getByRole("heading", { name: "Financial forecast", exact: true }),
     ).toBeVisible();
     await page
-      .getByRole("button", { name: "Enter opening balance", exact: true })
+      .getByRole("button", { name: /^Edit opening balance for / })
       .filter({ visible: true })
       .first()
       .click();

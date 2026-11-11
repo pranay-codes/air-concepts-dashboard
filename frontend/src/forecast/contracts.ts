@@ -10,6 +10,9 @@ export type ForecastMonth = Nullable<
 >;
 /** GENERATED = frozen lines; PREVIEW = the one month that can be generated now; NOT_GENERATED = no figures. */
 export type ForecastMonthState = "GENERATED" | "PREVIEW" | "NOT_GENERATED";
+/** MANUAL = entered for a month with no generated month before it; OVERRIDE = entered over a carried closing; CARRIED_FORWARD = previous month's closing. */
+export type OpeningSource = "MANUAL" | "OVERRIDE" | "CARRIED_FORWARD";
+const openingSources = new Set<string>(["MANUAL", "OVERRIDE", "CARRIED_FORWARD"]);
 export type ForecastView = Omit<
   Nullable<Present<S["ForecastView"]>, "lastSuccessfulSyncAt" | "lastRun" | "openingBalanceSource">,
   "months"
@@ -85,7 +88,10 @@ export function isMonth(v: unknown): v is ForecastMonth {
     monthState(v.state) &&
     typeof v.generatable === "boolean" &&
     nullable(v.generatedAt, text) &&
-    count(v.pendingNewItems)
+    count(v.pendingNewItems) &&
+    (v.openingSource === null ||
+      v.openingSource === undefined ||
+      (typeof v.openingSource === "string" && openingSources.has(v.openingSource)))
   );
 }
 export function isForecast(v: unknown): v is ForecastView {
