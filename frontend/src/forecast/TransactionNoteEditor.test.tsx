@@ -94,3 +94,17 @@ it("closes without a server call when the text is unchanged", () => {
   expect(onSave).not.toHaveBeenCalled();
   expect(screen.queryByRole("textbox")).toBeNull();
 });
+
+it("keeps the visible hint to a few words and gives the keyboard shortcut as an accessible description", () => {
+  render(<TransactionNoteEditor label={label} note={null} onSave={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: `Add note for ${label}` }));
+  const field = screen.getByRole("textbox", { name: `Note for ${label}` });
+  const description = (field.getAttribute("aria-describedby") ?? "")
+    .split(" ")
+    .map((id) => document.getElementById(id)?.textContent ?? "")
+    .join(" ");
+  expect(description).toContain("Blank removes the note.");
+  expect(description).toContain("Ctrl or Cmd with Enter to save.");
+  expect(screen.queryByText(/Leave blank/)).toBeNull();
+  expect(screen.getByText("Blank removes the note.", { exact: false })).toBeTruthy();
+});

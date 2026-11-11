@@ -339,6 +339,84 @@ it("FR-UC04-20 keeps two invoices for the same debtor as separate rows, and excl
   expect(moneyOut.textContent).not.toContain("Wages");
   expect(screen.getByText("No expected money out for this month.")).toBeTruthy();
 });
+it("states NZD once in each ledger caption, keeps two decimals and signs without repeating the currency per row, and marks overdue due dates by text and colour", async () => {
+  const api = new DashboardApi(
+    new ApiClient("", {
+      getAccessToken: async () => null,
+      requestCode: vi.fn(),
+      verifyCode: vi.fn(),
+      signOut: vi.fn(),
+      onSessionChange: () => () => {},
+    }),
+  );
+  vi.spyOn(api, "forecast").mockImplementation(async (entity, year) => data(entity, year, "0.00"));
+  vi.spyOn(api, "forecastItems").mockImplementation(
+    async (_entity, month) =>
+      ({
+        month,
+        state: "PREVIEW" as const,
+        generatable: true,
+        items: [
+          {
+            sourceId: "20000000-0000-4000-8000-000000000001",
+            source: "DOCUMENT",
+            direction: "IN",
+            category: "ACCREC",
+            number: "INV-0028",
+            label: "City Limousines",
+            date: `${month}-25`,
+            bucket: month,
+            amount: "19.95",
+            rule: "DUE_DATE",
+            overdue: true,
+            splitSequence: null,
+            splitCount: null,
+          },
+          {
+            sourceId: "20000000-0000-4000-8000-000000000002",
+            source: "DOCUMENT",
+            direction: "OUT",
+            category: "ACCPAY",
+            number: "BILL-0007",
+            label: "Basket Case",
+            date: `${month}-28`,
+            bucket: month,
+            amount: "-40.00",
+            rule: "DUE_DATE",
+            overdue: false,
+            splitSequence: null,
+            splitCount: null,
+          },
+        ],
+        notes: [],
+      }) as unknown as Awaited<ReturnType<DashboardApi["forecastItems"]>>,
+  );
+  render(
+    <Forecast
+      api={api}
+      profile={{ subject: a.id, displayName: "Admin", role: "FINANCIAL_ADMIN" as const }}
+      entities={[a, b]}
+      combined={false}
+      entity={a}
+      onDirty={vi.fn()}
+      onAccessDenied={vi.fn()}
+    />,
+  );
+  fireEvent.click((await screen.findAllByRole("button", { name: "View November 2026" }))[0]!);
+  const moneyIn = await screen.findByRole("table", { name: /^Money In/ });
+  const moneyOut = screen.getByRole("table", { name: /^Money Out/ });
+  expect(moneyIn.querySelector("caption")?.textContent).toBe("Money In · NZD");
+  expect(moneyOut.querySelector("caption")?.textContent).toBe("Money Out · NZD");
+  expect(moneyIn.querySelector("tbody")?.textContent).not.toContain("NZD");
+  const inRows = within(moneyIn.querySelector("tbody") as HTMLElement);
+  const outRows = within(moneyOut.querySelector("tbody") as HTMLElement);
+  expect(inRows.getByRole("cell", { name: "19.95" })).toHaveClass("money");
+  expect(outRows.getByRole("cell", { name: "-40.00" })).toHaveClass("money");
+  expect(within(moneyIn).getByText("Was due 25 Nov 2026 (overdue)")).toHaveClass(
+    "forecast-overdue",
+  );
+  expect(within(moneyOut).getByText("Bill due 28 Nov 2026")).not.toHaveClass("forecast-overdue");
+});
 it("adds a transaction note from the Money In table and shows the saved preview", async () => {
   const api = new DashboardApi(
     new ApiClient("", {

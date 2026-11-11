@@ -166,7 +166,8 @@ export function TransactionNoteEditor({
           Cancel
         </button>
         <span id={hintId} className="supporting">
-          Leave blank to remove the note. Ctrl or Cmd + Enter saves.
+          Blank removes the note.
+          <span className="visually-hidden"> Press Ctrl or Cmd with Enter to save.</span>
         </span>
       </div>
       {error ? (

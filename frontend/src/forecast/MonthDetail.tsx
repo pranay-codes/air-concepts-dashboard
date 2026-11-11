@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useResource } from "../api/useResource";
 import { Failure, Loading, Notice } from "../ui/Feedback";
-import { formatDate, formatFetchTime, formatMoney } from "../ui/format";
+import { formatDate, formatDecimal, formatFetchTime, formatMoney } from "../ui/format";
 import { monthName, signClass } from "./ForecastTable";
 import { TransactionNoteEditor } from "./TransactionNoteEditor";
 import type { Contribution, ForecastMonth } from "./contracts";
@@ -160,21 +160,26 @@ export function MonthDetail(
                   aria-labelledby={`forecast-${direction}-heading`}
                   tabIndex={0}
                 >
-                  <table className="forecast-ledger forecast-ledger-cards">
-                    <caption id={`forecast-${direction}-heading`}>{title}</caption>
-                    <thead>
-                      <tr>
-                        <th scope="col">Transaction</th>
-                        <th scope="col">Notes</th>
-                        <th scope="col" className="money">
+                  {/* Amounts are shown without a per-row currency; the caption states NZD once. */}
+                  <table role="table" className="forecast-ledger">
+                    <caption id={`forecast-${direction}-heading`}>{title} · NZD</caption>
+                    <thead role="rowgroup">
+                      <tr role="row">
+                        <th role="columnheader" scope="col">
+                          Transaction
+                        </th>
+                        <th role="columnheader" scope="col">
+                          Notes
+                        </th>
+                        <th role="columnheader" scope="col" className="money">
                           Amount
                         </th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody role="rowgroup">
                       {rows.length === 0 ? (
-                        <tr>
-                          <td colSpan={3}>
+                        <tr role="row">
+                          <td role="cell" colSpan={3}>
                             <Notice>
                               No expected {direction === "IN" ? "money in" : "money out"} for this
                               month.
@@ -183,29 +188,43 @@ export function MonthDetail(
                         </tr>
                       ) : (
                         rows.map((item) => (
-                          <tr key={`${item.sourceId}:${item.splitSequence ?? "single"}`}>
-                            <th scope="row">
+                          <tr role="row" key={`${item.sourceId}:${item.splitSequence ?? "single"}`}>
+                            <th role="rowheader" scope="row">
                               <span className="forecast-ledger-label">{rowLabel(item)}</span>
-                              <span className="forecast-muted">{rowSubtitle(item)}</span>
+                              <span
+                                className={
+                                  item.overdue
+                                    ? "forecast-ledger-meta forecast-overdue"
+                                    : "forecast-ledger-meta"
+                                }
+                              >
+                                {rowSubtitle(item)}
+                              </span>
                             </th>
-                            <td className="note-column">
+                            <td role="cell" className="note-column">
                               <TransactionNoteEditor
                                 label={rowLabel(item)}
                                 note={noteFor(item)}
                                 onSave={(text) => saveNote(item, text)}
                               />
                             </td>
-                            <td className="money">{formatMoney(item.amount, "NZD")}</td>
+                            <td role="cell" className="money">
+                              {formatDecimal(item.amount, 2)}
+                            </td>
                           </tr>
                         ))
                       )}
                     </tbody>
                     {total !== null ? (
-                      <tfoot>
-                        <tr>
-                          <th scope="row">Total {title}</th>
-                          <td />
-                          <td className="money">{formatMoney(total, "NZD")}</td>
+                      <tfoot role="rowgroup">
+                        <tr role="row">
+                          <th role="rowheader" scope="row">
+                            Total {title}
+                          </th>
+                          <td role="cell" />
+                          <td role="cell" className="money">
+                            {formatDecimal(total, 2)}
+                          </td>
                         </tr>
                       </tfoot>
                     ) : null}
