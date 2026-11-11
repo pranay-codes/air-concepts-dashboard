@@ -8,7 +8,6 @@ import { Loading, Failure, Notice } from "../ui/Feedback";
 import { formatMoney } from "../ui/format";
 import { ForecastTable } from "./ForecastTable";
 import { ForecastHeader, currentMonth } from "./ForecastHeader";
-import { ExceptionsPanel } from "./ExceptionsPanel";
 import { OpeningBalanceForm } from "./OpeningBalanceForm";
 import { ExcelExportDialog } from "./ExcelExportDialog";
 import { MonthDetail } from "./MonthDetail";
@@ -192,11 +191,6 @@ function EntityForecast(props: Props & { entity: Entity }) {
             />
           ) : resource.data ? (
             <div className="forecast-overview">
-              <ExceptionsPanel
-                exceptions={resource.data.exceptions}
-                onOpening={() => setDialog("opening")}
-                onReview={(id) => setDocument({ id, mode: "conflict" })}
-              />
               <ForecastTable
                 months={resource.data.months}
                 onOpen={(value) => {
