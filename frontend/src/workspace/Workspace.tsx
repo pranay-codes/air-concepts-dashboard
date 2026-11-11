@@ -215,7 +215,15 @@ export function Workspace({
               <>
                 <p>
                   <span
-                    className={`badge ${connection.data.status === "CONNECTED" && !connection.data.errorCode ? "success" : "warning"}`}
+                    className={`badge ${
+                      connection.data.status === "CONNECTED"
+                        ? connection.data.errorCode
+                          ? "warning"
+                          : "success"
+                        : connection.data.status === "NEEDS_RECONNECTION"
+                          ? "warning"
+                          : "error"
+                    }`}
                   >
                     {connection.data.status === "CONNECTED"
                       ? "Connected to Xero"
