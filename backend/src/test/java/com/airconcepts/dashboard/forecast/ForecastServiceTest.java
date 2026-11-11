@@ -67,6 +67,22 @@ class ForecastServiceTest {
     assertThat(april.receipts()).isNull();assertThat(april.closing()).isNull();
     assertThat(april.opening()).isEqualByComparingTo("1000.00");
   }
+  @Test void frUc04_05_previewClosingCarriesIntoTheNextOpening(){
+    UUID entity=UUID.randomUUID();setup(entity,null);
+    // November is the preview month: nothing is generated yet. Its closing is provisional, but December's opening follows it (D13).
+    when(assumptions.openingAnchors(entity)).thenReturn(Map.of(NOVEMBER,new OpeningBalance(new BigDecimal("1000.00"),"Statement")));
+    var receipt=new ForecastDataset.Document(UUID.randomUUID(),"ACCREC","INV-3","Customer",LocalDate.of(2026,11,1),LocalDate.of(2026,11,25),null,null,
+        new BigDecimal("999.00"),false,null,List.of(),false);
+    setDataset(entity,List.of(receipt));
+    var rows=service.view(user,entity,"2026").months();
+    assertThat(rows.get(7).state()).isEqualTo("PREVIEW");
+    assertThat(rows.get(7).closing()).isEqualByComparingTo("1999.00");
+    assertThat(rows.get(8).state()).isEqualTo("NOT_GENERATED");
+    assertThat(rows.get(8).opening()).isEqualByComparingTo("1999.00");
+    assertThat(rows.get(8).openingSource()).isEqualTo("CARRIED_FORWARD");
+    assertThat(rows.get(8).receipts()).isNull();
+    assertThat(rows.get(9).opening()).isNull();
+  }
   private void setup(UUID id,BigDecimal opening){
     var entity=new Entity(id,"Synthetic");when(access.requireRead(user,id)).thenReturn(entity);
     if(opening!=null) when(assumptions.openingAnchors(id)).thenReturn(Map.of(APRIL,new OpeningBalance(opening,"Statement")));

@@ -106,3 +106,24 @@ it("keeps every row's opening and Edit control within its own row", () => {
   expect(within(rows[0]!).getByText("NZD 5.00")).toBeInTheDocument();
   expect(within(rows[1]!).getByText("Not set")).toBeInTheDocument();
 });
+
+it("labels a carried opening that follows a preview month as Provisional", () => {
+  render(
+    <ForecastTable
+      months={[
+        base({
+          month: "2026-11",
+          opening: "1000.00",
+          openingSource: "MANUAL",
+          state: "PREVIEW",
+          generatable: true,
+          closing: "1999.00",
+        }),
+        base({ month: "2026-12", opening: "1999.00", openingSource: "CARRIED_FORWARD" }),
+      ]}
+      onOpening={vi.fn()}
+    />,
+  );
+  expect(screen.getAllByText("Provisional").length).toBeGreaterThan(0);
+  expect(screen.queryByText("Carried forward")).toBeNull();
+});
