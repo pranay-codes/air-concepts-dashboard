@@ -206,8 +206,8 @@ function EntityForecast(props: Props & { entity: Entity }) {
                 onOpening={() => setDialog("opening")}
               />
               <p>
-                Beyond this 12-month window: receipts{" "}
-                {formatMoney(resource.data.beyondWindow.receipts, "NZD")}, payments{" "}
+                Beyond this 12-month window: money in{" "}
+                {formatMoney(resource.data.beyondWindow.receipts, "NZD")}, money out{" "}
                 {formatMoney(resource.data.beyondWindow.payments, "NZD")}.
               </p>
               {resource.data.exclusions.length ? (
@@ -248,7 +248,7 @@ function EntityForecast(props: Props & { entity: Entity }) {
       <details className="forecast-panel">
         <summary>How this is calculated</summary>
         <p>
-          Receipts and payments use outstanding Xero balances and the forecast dates shown in each
+          Money in and money out use outstanding Xero balances and the forecast dates shown in each
           month. Split schedules replace the single document amount. Excluded items contribute
           nothing. Overdue cash is placed in the current month.
         </p>

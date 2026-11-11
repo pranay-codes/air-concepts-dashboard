@@ -122,7 +122,7 @@ for (const switchContext of ["entity", "period"] as const) {
     expect(screen.getAllByText(/222\.00/)).not.toHaveLength(0);
   });
 }
-it("FR-UC04-20 opens a month as a full page listing Xero invoices with due dates and a Xero subtotal", async () => {
+it("FR-UC04-20 opens a month as a full page listing Xero invoices with due dates and a total", async () => {
   const api = new DashboardApi(
     new ApiClient("", {
       getAccessToken: async () => null,
@@ -179,11 +179,11 @@ it("FR-UC04-20 opens a month as a full page listing Xero invoices with due dates
   fireEvent.click(firstMonth!);
   expect(await screen.findByRole("heading", { name: /cash forecast$/ })).toBeTruthy();
   expect(screen.queryByText("12-month cash forecast · NZD, GST-inclusive")).toBeNull();
-  const moneyIn = screen.getByRole("table", { name: /^Money in/ });
+  const moneyIn = screen.getByRole("table", { name: /^Money In/ });
   expect(moneyIn.textContent).toContain("INV-0028 · City Limousines");
   expect(moneyIn.textContent).toContain("Was due 25 Nov 2026 (overdue)");
-  expect(moneyIn.textContent).toContain("Total Xero money in");
-  expect(screen.getByText("No expected payments for this month.")).toBeTruthy();
+  expect(moneyIn.textContent).toContain("Total Money In");
+  expect(screen.getByText("No expected money out for this month.")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Back to forecast" }));
   expect(await screen.findByText("12-month cash forecast · NZD, GST-inclusive")).toBeTruthy();
 });
@@ -266,12 +266,12 @@ it("FR-UC04-20 keeps two invoices for the same debtor as separate rows, and excl
   );
   const [firstMonth] = await screen.findAllByRole("button", { name: /^View / });
   fireEvent.click(firstMonth!);
-  const moneyIn = await screen.findByRole("table", { name: /^Money in/ });
+  const moneyIn = await screen.findByRole("table", { name: /^Money In/ });
   expect((moneyIn.textContent?.match(/City Limousines/g) ?? []).length).toBe(2);
   expect(moneyIn.textContent).toContain("INV-0028");
   expect(moneyIn.textContent).toContain("INV-0040");
   expect(moneyIn.textContent).toContain("120.00");
-  const moneyOut = screen.getByRole("table", { name: /^Money out/ });
+  const moneyOut = screen.getByRole("table", { name: /^Money Out/ });
   expect(moneyOut.textContent).not.toContain("Wages");
-  expect(screen.getByText("No expected payments for this month.")).toBeTruthy();
+  expect(screen.getByText("No expected money out for this month.")).toBeTruthy();
 });

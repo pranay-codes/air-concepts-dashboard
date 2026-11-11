@@ -72,8 +72,8 @@ export function MonthDetail(
   const figures = summary
     ? [
         ["Opening balance", summary.opening],
-        ["Expected in", summary.receipts],
-        ["Expected out", summary.payments],
+        ["Money In", summary.receipts],
+        ["Money Out", summary.payments],
         ["Closing balance", summary.closing],
       ]
     : [];
@@ -100,7 +100,7 @@ export function MonthDetail(
       {resource.data
         ? (["IN", "OUT"] as const).map((direction) => {
             const rows = items.filter((item) => item.direction === direction);
-            const title = direction === "IN" ? "Money in" : "Money out";
+            const title = direction === "IN" ? "Money In" : "Money Out";
             const total = rows.length ? sumMoney(rows.map((item) => item.amount)) : null;
             return (
               <section key={direction} aria-labelledby={`forecast-${direction}-heading`}>
@@ -127,7 +127,7 @@ export function MonthDetail(
                         <tr>
                           <td colSpan={2}>
                             <Notice>
-                              No expected {direction === "IN" ? "receipts" : "payments"} for this
+                              No expected {direction === "IN" ? "money in" : "money out"} for this
                               month.
                             </Notice>
                           </td>
@@ -147,7 +147,7 @@ export function MonthDetail(
                     {total !== null ? (
                       <tfoot>
                         <tr>
-                          <th scope="row">Total Xero {title.toLowerCase()}</th>
+                          <th scope="row">Total {title}</th>
                           <td className="money">{formatMoney(total, "NZD")}</td>
                         </tr>
                       </tfoot>
@@ -159,10 +159,11 @@ export function MonthDetail(
           })
         : null}
       <p className="forecast-muted">
-        Closing = opening + expected in − expected out. Overdue invoices stay in the current month;
-        drafts are excluded. These tables list Xero invoices and bills; manual items and staffing
-        are on the Manual items and Staffing tabs, and will be added here in a later update. To
-        change an invoice's expected date, split it or exclude it, use the Xero items tab.
+        Closing balance = opening balance + money in − money out. Overdue invoices stay in the
+        current month; drafts are excluded. These tables list Xero invoices and bills; manual items
+        and staffing are on the Manual items and Staffing tabs, and will be added here in a later
+        update. To change an invoice's expected date, split it or exclude it, use the Xero items
+        tab.
       </p>
     </section>
   );
