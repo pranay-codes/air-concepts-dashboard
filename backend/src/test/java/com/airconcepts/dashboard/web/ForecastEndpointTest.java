@@ -30,6 +30,7 @@ class ForecastEndpointTest {
   @MockitoBean com.airconcepts.dashboard.xero.XeroConnectionService connections;
   @MockitoBean com.airconcepts.dashboard.xero.XeroReadHealth health;
   @MockitoBean ForecastAdjustmentRepository adjustments;
+  @MockitoBean ForecastNoteRepository notes;
   @MockitoBean ForecastDatasetLoader datasets;
   @MockitoBean org.springframework.jdbc.core.JdbcTemplate jdbc;
   @MockitoBean org.springframework.transaction.PlatformTransactionManager transactions;
@@ -63,13 +64,36 @@ class ForecastEndpointTest {
         get(base()+"/manual-items"),post(base()+"/manual-items"),patch(base()+"/manual-items/"+id),post(base()+"/manual-items/"+id+"/deactivate"),
         get(base()+"/staffing"),post(base()+"/staffing"),patch(base()+"/staffing/"+id),post(base()+"/staffing/"+id+"/deactivate"),
         get(base()+"/audit"),put(base()+"/documents/"+id+"/adjustment"),put(base()+"/documents/"+id+"/splits"),post(base()+"/documents/"+id+"/conflict"),
+        put(base()+"/transactions/DOCUMENT/"+id+"/note"),
         post(base()+"/export"));
     for(Role role:Arrays.asList(Role.STANDARD_USER,null)) {
       as(role);
       for(var request:routes) mvc.perform(request.header("Authorization","Bearer "+TestJwts.TOKEN))
           .andExpect(status().isForbidden());
     }
-    verifyNoInteractions(assumptions,documents,entities,connections,health);
+    verifyNoInteractions(assumptions,documents,entities,connections,health,notes);
+  }
+  @Test void notes_directorSavesTrimmedNoteAndBlankClearsIt()throws Exception{
+    as(Role.DIRECTOR);var id=UUID.randomUUID();
+    when(entities.get(any(),eq(entity))).thenReturn(new Entity(entity,"Synthetic"));
+    when(notes.targetExists(entity,"DOCUMENT",id)).thenReturn(true);
+    when(notes.upsert(eq(entity),eq("DOCUMENT"),eq(id),eq("Chase on Friday"),any()))
+        .thenReturn(new ForecastNoteRepository.TransactionNote("DOCUMENT",id,"Chase on Friday",Instant.parse("2026-11-11T00:00:00Z")));
+    mvc.perform(put(base()+"/transactions/DOCUMENT/"+id+"/note").header("Authorization","Bearer "+TestJwts.TOKEN).contentType("application/json")
+        .content("{\"note\":\"  Chase on Friday  \"}")).andExpect(status().isOk()).andExpect(header().string("Cache-Control","no-store"))
+        .andExpect(jsonPath("$.note").value("Chase on Friday")).andExpect(jsonPath("$.sourceId").value(id.toString()));
+    mvc.perform(put(base()+"/transactions/DOCUMENT/"+id+"/note").header("Authorization","Bearer "+TestJwts.TOKEN).contentType("application/json")
+        .content("{\"note\":\"   \"}")).andExpect(status().isOk()).andExpect(content().string(org.hamcrest.Matchers.containsString("\"note\":null")));
+    verify(notes).delete(entity,"DOCUMENT",id);
+  }
+  @Test void sec_notes_itemOutsideEntityIs404AndNothingIsWritten()throws Exception{
+    as(Role.DIRECTOR);var id=UUID.randomUUID();
+    when(entities.get(any(),eq(entity))).thenReturn(new Entity(entity,"Synthetic"));
+    when(notes.targetExists(entity,"STAFFING",id)).thenReturn(false);
+    mvc.perform(put(base()+"/transactions/STAFFING/"+id+"/note").header("Authorization","Bearer "+TestJwts.TOKEN).contentType("application/json")
+        .content("{\"note\":\"Not ours\"}")).andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("FORECAST_RECORD_UNAVAILABLE"));
+    verify(notes,never()).upsert(any(),any(),any(),any(),any());
+    verify(notes,never()).delete(any(),any(),any());
   }
   @Test void frUc04_17_manualRateLimitIs429WithRetryAfter()throws Exception{
     as(Role.FINANCIAL_ADMIN);var run=UUID.randomUUID();var access=new com.airconcepts.dashboard.xero.TenantAccess(entity,UUID.randomUUID(),UUID.randomUUID(),"synthetic");

@@ -23,7 +23,7 @@ const openingSourceLabel: Record<Exclude<OpeningSource, "MANUAL">, string> = {
 };
 
 /** Colour class for a financial amount, decided from its digits: positive green, negative red, zero or missing neutral. */
-function signClass(value: string | null | undefined) {
+export function signClass(value: string | null | undefined) {
   const sign = amountSign(value);
   return sign > 0 ? "amount-positive" : sign < 0 ? "amount-negative" : undefined;
 }

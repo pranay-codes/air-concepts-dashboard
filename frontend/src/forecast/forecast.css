@@ -193,10 +193,12 @@
   color: var(--information, #245e9b);
 }
 /* Applied to the amount only, never the cell: the preview tint above does not override these. */
-.forecast-desktop .amount-positive {
+.forecast-desktop .amount-positive,
+.forecast-summary-strip .amount-positive {
   color: var(--success, #18794e);
 }
-.forecast-desktop .amount-negative {
+.forecast-desktop .amount-negative,
+.forecast-summary-strip .amount-negative {
   color: var(--error, #b42318);
 }
 .forecast-table .link-button,
@@ -286,6 +288,78 @@
 .forecast-muted {
   color: var(--text-secondary, #5b6672);
   font-size: 14px;
+}
+/* Transaction notes: one line of preview by default, so rows keep their height. */
+.note-column {
+  min-width: 13rem;
+  max-width: 24rem;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+.note-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.note-preview,
+.note-add {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: var(--font-small, 14px);
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+  color: var(--text-secondary, #5b6672);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.note-preview {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.note-add {
+  font-weight: 400;
+  white-space: nowrap;
+}
+.note-editor {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.note-editor textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.5rem;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: var(--font-small, 14px);
+  border: 1px solid var(--divider, #e2e7ec);
+  border-radius: 6px;
+  resize: vertical;
+}
+.note-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.note-editor-actions .supporting {
+  font-size: 13px;
+}
+.note-error {
+  margin: 0;
+  color: var(--error, #b42318);
+  font-size: 13px;
+}
+.note-saved {
+  color: var(--success, #18794e);
+  font-size: 13px;
+  white-space: nowrap;
 }
 .forecast-ledger {
   width: 100%;

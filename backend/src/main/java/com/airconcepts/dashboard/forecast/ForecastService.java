@@ -9,15 +9,15 @@ import java.util.function.Function;
 import org.springframework.stereotype.Service;
 @Service
 public class ForecastService {
-  private final ForecastAccess access;private final ForecastResolver resolver;private final ForecastCalendar calendar;
-  public ForecastService(ForecastAccess access,ForecastResolver resolver,ForecastCalendar calendar){this.access=access;this.resolver=resolver;this.calendar=calendar;}
+  private final ForecastAccess access;private final ForecastResolver resolver;private final ForecastCalendar calendar;private final ForecastNoteRepository notes;
+  public ForecastService(ForecastAccess access,ForecastResolver resolver,ForecastCalendar calendar,ForecastNoteRepository notes){this.access=access;this.resolver=resolver;this.calendar=calendar;this.notes=notes;}
   public record LastRun(String status,Instant finishedAt,String errorCode){}
   @io.swagger.v3.oas.annotations.media.Schema(requiredProperties={"entityId","entityName","financialYearStart","financialYearLabel","months","totals","exceptions","beyondWindow","exclusions","syncStale"})
   public record ForecastView(UUID entityId,String entityName,YearMonth financialYearStart,String financialYearLabel,List<MonthRow> months,Totals totals,
       List<ForecastException> exceptions,BeyondWindow beyondWindow,List<Exclusion> exclusions,Instant lastSuccessfulSyncAt,LastRun lastRun,boolean syncStale,
       String openingBalanceSource){}
-  @io.swagger.v3.oas.annotations.media.Schema(requiredProperties={"month","state","generatable","items"})
-  public record MonthItems(YearMonth month,String state,boolean generatable,List<Contribution> items){}
+  @io.swagger.v3.oas.annotations.media.Schema(requiredProperties={"month","state","generatable","items","notes"})
+  public record MonthItems(YearMonth month,String state,boolean generatable,List<Contribution> items,List<ForecastNoteRepository.TransactionNote> notes){}
   public record EntitySummary(UUID entityId,String entityName,List<MonthRow> months,List<String> exceptions,boolean complete){}
   public record CombinedView(YearMonth financialYearStart,String financialYearLabel,List<MonthRow> months,List<EntitySummary> entities,boolean complete){}
 
@@ -36,7 +36,13 @@ public class ForecastService {
     var resolved=resolver.resolve(authorised,calendar.financialYearContaining(month));
     var row=resolved.result().months().stream().filter(m->m.month().equals(month)).findFirst().orElseThrow(ForecastValidation::missing);
     var items=resolved.result().contributions().stream().filter(c->c.bucket().equals(month)&&(direction==null||c.direction().equals(direction))).toList();
-    return new MonthItems(month,row.state(),row.generatable(),items);
+    // Notes are keyed by transaction, so they follow an item into any month it appears in. Only notes for this month's items are returned.
+    return new MonthItems(month,row.state(),row.generatable(),items,notesFor(items,notes.notes(authorised.id())));
+  }
+  /** Keeps only the notes whose transaction (source and source id) appears in these items. */
+  static List<ForecastNoteRepository.TransactionNote> notesFor(List<Contribution> items,List<ForecastNoteRepository.TransactionNote> notes){
+    var keys=items.stream().map(c->c.source()+":"+c.sourceId()).collect(java.util.stream.Collectors.toSet());
+    return notes.stream().filter(n->keys.contains(n.source()+":"+n.sourceId())).toList();
   }
   public CombinedView combined(CurrentUser user,List<UUID> ids,String financialYear){
     // Recheck role before even validating the requested entity set.

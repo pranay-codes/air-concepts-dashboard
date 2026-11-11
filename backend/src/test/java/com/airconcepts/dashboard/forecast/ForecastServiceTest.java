@@ -20,7 +20,7 @@ class ForecastServiceTest {
   private final Clock clock=Clock.fixed(Instant.parse("2026-11-10T00:00:00Z"),ZoneOffset.UTC);
   private final ForecastCalendar calendar=new ForecastCalendar(4,clock);
   private final ForecastResolver resolver=new ForecastResolver(loader,months,assumptions,calendar);
-  private final ForecastService service=new ForecastService(access,resolver,calendar);
+  private final ForecastService service=new ForecastService(access,resolver,calendar,mock(ForecastNoteRepository.class));
   private final CurrentUser user=new CurrentUser(UUID.randomUUID().toString(),Role.DIRECTOR);
   private static final YearMonth APRIL=YearMonth.of(2026,4),NOVEMBER=YearMonth.of(2026,11);
 
