@@ -11,7 +11,7 @@
   "cloudFrontDistributionId": "E289BQTF93Q92S",
   "ecrRepositoryUri": "923079246426.dkr.ecr.ap-southeast-2.amazonaws.com/air-concepts-test-backend",
   "ssmPrefix": "/air-concepts/live/",
-  "supabaseProjectRef": " ",
+  "supabaseProjectRef": "REPLACE_ME_LIVE_SUPABASE_PROJECT_REF",
   "apiMemoryLimit": "1024m",
   "allowTestOnlyFeatures": false
 }

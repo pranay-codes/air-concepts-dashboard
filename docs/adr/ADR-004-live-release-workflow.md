@@ -29,3 +29,7 @@ Accepted. Date: 2026-11-12. Decisions directed by the project owner (INF-006). B
 - The Test workflow now depends on `infra/environments/test.json` instead of GitHub variables. A wrong value fails the Test deploy, so the file must be checked against the stack outputs (`environment_config.py from-stack test --check`) before the first run.
 - The first Live push applies all existing migrations, including two `drop constraint` statements, so it needs one acknowledgement.
 - Memory and disk alarms, EBS backups and uptime checks for Live stay manual or external until INF-005.
+
+## Amendment (2026-11-13): shared ECR repository, temporary
+- Owner decision: Live and Test may share the ECR repository `air-concepts-test-backend` for now. `ecrRepositoryUri` is the only value exempt from the no-shared-value rule and the naming rule (`SHARED_ALLOWED` in `infra/scripts/environment_config.py`). Every other isolating value stays unique.
+- Consequence to resolve before the first Live release: the Live deployer role denies `ecr:PutImage` on the Test repository (`NeverWriteTestImages`), so the promote step is refused. The Live stack's instance role can also pull from the Test repository. Reconcile by creating `air-concepts-live-backend` (clear `ExistingRepositoryName` in the Live parameters) and restoring the separate value, then remove the exemption and its test.

@@ -77,7 +77,11 @@ def test_live_gets_its_own_sizing_not_tests():
 
 # --- Isolation invariants -----------------------------------------------------------------------
 
-@pytest.mark.parametrize("key", cfg.ISOLATED)
+def test_the_only_shared_value_is_the_approved_ecr_repository():
+    assert cfg.SHARED_ALLOWED == ("ecrRepositoryUri",)
+
+
+@pytest.mark.parametrize("key", [k for k in cfg.ISOLATED if k not in cfg.SHARED_ALLOWED])
 def test_no_isolating_value_may_be_shared_between_test_and_live(key):
     live = complete_live()
     test = copy.deepcopy(COMMITTED["test"])
@@ -102,7 +106,7 @@ def test_a_test_value_pasted_into_live_is_caught_even_if_other_fields_differ(tmp
 
 def test_resource_names_must_not_name_the_other_environment():
     live = complete_live()
-    live["ecrRepositoryUri"] = COMMITTED["test"]["ecrRepositoryUri"]
+    live["frontendBucket"] = COMMITTED["test"]["frontendBucket"]
     assert any("names the test environment" in line for line in cfg.problems("live", live))
     test = copy.deepcopy(COMMITTED["test"])
     test["frontendBucket"] = "air-concepts-live-infrast-bucket-abc123"
@@ -204,7 +208,8 @@ def test_export_for_live_works_once_complete(tmp_path):
     assert "ALLOW_TEST_ONLY_FEATURES=false" in lines
     assert "SSM_PREFIX=/air-concepts/live/" in lines
     assert "API_MEMORY_LIMIT=1024m" in lines
-    assert not any("/air-concepts/test/" in line or "-test-" in line for line in lines)
+    # The approved shared ECR repository is the only Test name allowed in the Live export.
+    assert not any("/air-concepts/test/" in line or "-test-" in line for line in lines if not line.startswith("ECR_REPOSITORY_URI="))
 
 
 def test_export_refuses_when_live_shares_a_value_with_test(tmp_path):
@@ -264,7 +269,7 @@ def test_get_returns_one_value_after_validating_both_environments(capsys):
 
 def test_get_refuses_when_the_environments_overlap(tmp_path):
     live = complete_live()
-    live["ecrRepositoryUri"] = COMMITTED["test"]["ecrRepositoryUri"]
+    live["instanceId"] = COMMITTED["test"]["instanceId"]
     directory = write(tmp_path / "environments", {"test": COMMITTED["test"], "live": live})
     with pytest.raises(cfg.ConfigError):
-        cfg.get_value("test", "ecrRepositoryUri", directory)
+        cfg.get_value("test", "instanceId", directory)
