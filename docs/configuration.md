@@ -8,7 +8,7 @@ Placeholders such as `<project-ref>` and `<api-host>` stand for real values. Rea
 
 ## Backend runtime (Spring API)
 
-The API reads these as environment variables. Locally it also reads the repository root `.env` under the `local` profile (see `backend/src/main/resources/application.yml`). On Test, `infra/deploy/deploy-test.sh` writes them to `/opt/air-concepts/runtime/backend.env` from Parameter Store at deploy time.
+The API reads these as environment variables. Locally it also reads the repository root `.env` under the `local` profile (see `backend/src/main/resources/application.yml`). On Test and Live, `infra/deploy/deploy-backend.sh` writes them to `/opt/air-concepts/runtime/backend.env` from Parameter Store at deploy time.
 
 | Variable | Required | Read by | Local `.env` | Parameter Store | Format and notes |
 |---|---|---|---|---|---|
@@ -17,7 +17,7 @@ The API reads these as environment variables. Locally it also reads the reposito
 | `DATABASE_PASSWORD` | Yes | `application.yml` | yes | `backend/db/password` (SecureString) | Secret. |
 | `SUPABASE_JWT_ISSUER_URI` | Yes | `application.yml`, `JwtDecoderConfig`, `SupabaseAdminConfig` | yes | `backend/supabase/jwt-issuer-uri` (String) | Exactly `https://<project-ref>.supabase.co/auth/v1`. `SupabaseAdminConfig` refuses to start the API with a different path, query, fragment or user info. The token's `iss` must match it. |
 | `SUPABASE_JWKS_URI` | Yes | `application.yml`, `JwtDecoderConfig` | yes | `backend/supabase/jwks-uri` (String) | Exactly `https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.json`. **Not** the issuer URL: the base `/auth/v1` path requires an API key, and the key fetch fails without one. The startup guard checks the host only, so a wrong path is not caught at startup. |
-| `SUPABASE_TEST_PROJECT_REF` | Yes | `RequiredSettingsPostProcessor` | yes | `backend/supabase/project-ref` (String) | The Test project ref. Startup fails unless the issuer, JWKS and database settings point at it. |
+| `SUPABASE_PROJECT_REF` | Yes | `RequiredSettingsPostProcessor` | yes | `backend/supabase/project-ref` (String) | The ref of the one Supabase project this environment may use. Startup fails unless the issuer, JWKS and database settings point at it. `SUPABASE_TEST_PROJECT_REF` is the legacy name, read only when this one is absent (INF-006). |
 | `SUPABASE_JWT_AUDIENCE` | No (default `authenticated`) | `application.yml`, `JwtDecoderConfig` | commented | none | Supabase puts `authenticated` on user tokens. Leave the default unless Supabase changes. |
 | `CORS_ALLOWED_ORIGINS` | No (default `http://localhost:5173`) | `application.yml`, `CorsProperties` | commented | `backend/cors/allowed-origins` (String) | Browser origins allowed to call the API. Scheme and host only, no path. Use a comma to separate several. On Test, the CloudFront origin of the frontend. |
 | `SUPABASE_SERVICE_ROLE_KEY` | No | `SupabaseAdminConfig`, `SupabaseAdminClient` | not in example | `backend/supabase/service-role-key` (SecureString) | Secret. Used only by staff administration, through the Supabase Auth admin API. When blank, staff administration returns `AUTH_ADMIN_NOT_CONFIGURED` (503). Never send it to the browser or put it under `frontend/`. See the UC5 auth operations notes. |
@@ -67,30 +67,34 @@ Read only by the test runners. They aren't application settings and aren't deplo
 
 The Playwright setup in `frontend/e2e/setup.ts` sets synthetic `VITE_*` values for the browser tests. They never reach a deployed build.
 
-## Deployment (Test)
+## Deployment (Test and Live)
 
-Set by the deploy workflow and `infra/deploy/compose.yaml`, not by Parameter Store.
+Set by the deploy workflows and `infra/deploy/compose.yaml`, not by Parameter Store. Every value that differs between environments comes from `infra/environments/<env>.json` (see [docs/environments.md](environments.md)), never from a GitHub variable.
 
 | Variable | Set by | Notes |
 |---|---|---|
-| `ENVIRONMENT` | Workflow (`test`) | `deploy-test.sh` refuses anything other than `test`. Compose requires it. |
-| `API_HOSTNAME` | Workflow from the `TEST_API_HOSTNAME` repository variable | Hostname Caddy serves over HTTPS. |
-| `BACKEND_REPOSITORY_URI` | Workflow | ECR repository URI, with no digest. |
+| `ENVIRONMENT` | Workflow, from `environment` in the config file | `deploy-backend.sh` accepts only `test` or `live`. Compose requires it. |
+| `API_HOSTNAME` | Workflow, from `apiHostname` | Hostname Caddy serves over HTTPS. |
+| `BACKEND_REPOSITORY_URI` | Workflow, from `ecrRepositoryUri` | ECR repository URI, with no digest. |
 | `BACKEND_IMAGE_DIGEST` / `NEW_BACKEND_DIGEST` | Workflow | 64 lowercase hex characters, without `sha256:`. |
-| `CADDY_IMAGE_DIGEST` | Workflow (pinned) | 64 lowercase hex characters. Must be an ARM64-capable Caddy image. |
+| `CADDY_IMAGE_DIGEST` | `infra/deploy/caddy-image.digest` (pinned, shared) | 64 lowercase hex characters. Must be an ARM64-capable Caddy image. |
+| `API_MEMORY_LIMIT` | Workflow, from `apiMemoryLimit` | Container memory limit such as `512m` or `1g`. Sized per host. |
+| `EXPECTED_SUPABASE_PROJECT_REF` | Workflow, from `supabaseProjectRef` | The host script refuses to deploy if Parameter Store names a different project. Empty for Test means "not pinned". |
+| `ALLOW_TEST_ONLY_FEATURES` | Workflow, from `allowTestOnlyFeatures` | `true` only on Test. When not `true`, the Xero diagnostics parameters are ignored whatever Parameter Store holds. |
 
-## Repository variables and secrets (GitHub)
+## GitHub secrets
+
+Environment values are not GitHub variables any more. Only credentials for the migration steps are stored in GitHub, as repository secrets (this private repository is on the Free plan, so environment-scoped secrets are not available).
 
 | Name | Kind | Used by |
 |---|---|---|
-| `TEST_DEPLOY_ROLE_ARN` | Variable | Deploy workflows, to assume the Test deploy role |
-| `ECR_REPOSITORY_URI` | Variable | Backend image repository |
-| `TEST_INSTANCE_ID` | Variable | SSM Run Command target (Test host) |
-| `TEST_API_HOSTNAME` | Variable | `API_HOSTNAME` |
-| `TEST_FRONTEND_URL` | Variable | Frontend URL |
-| `TEST_BUCKET` | Variable | Frontend S3 bucket |
-| `TEST_DISTRIBUTION_ID` | Variable | CloudFront distribution to invalidate |
-| `SUPABASE_TEST_PROJECT_REF` | **Secret** | `.github/workflows/supabase-migrations.yml` only. It has the same name as the runtime variable but is a separate GitHub secret. |
+| `SUPABASE_ACCESS_TOKEN` | **Secret** | `supabase-migrations.yml` (Test deploy job) |
+| `SUPABASE_TEST_PROJECT_REF` | **Secret** | `supabase-migrations.yml` only. It has the same name as the old runtime variable but is a separate GitHub secret. |
+| `SUPABASE_TEST_DB_PASSWORD` | **Secret** | `supabase-migrations.yml` (Test deploy job) |
+| `SUPABASE_LIVE_ACCESS_TOKEN` | **Secret** | `deploy-live.yml` only. Create a separate Supabase token for Live. |
+| `SUPABASE_LIVE_DB_PASSWORD` | **Secret** | `deploy-live.yml` only |
+
+The `TEST_DEPLOY_ROLE_ARN`, `ECR_REPOSITORY_URI`, `TEST_INSTANCE_ID`, `TEST_API_HOSTNAME`, `TEST_FRONTEND_URL`, `TEST_BUCKET` and `TEST_DISTRIBUTION_ID` variables from CI-002 are no longer read. After one Test deploy succeeds on the new workflow, delete them.
 
 ## CI-only placeholders
 
@@ -100,7 +104,7 @@ Set by the deploy workflow and `infra/deploy/compose.yaml`, not by Parameter Sto
 
 Parameters live under `/air-concepts/<environment>/`, where the environment is `test` or `live`. The Parameter Store names in the tables above are relative to that prefix. For Test, the full name is `/air-concepts/test/` followed by the name.
 
-Test and Live share one AWS account, so the prefix is what separates them. `infra/scripts/setup-test-parameters.py` writes only Test parameters and does not handle Live. `docs/security-access.md` records who may read and write them.
+Test and Live share one AWS account, so the prefix is what separates them. `infra/scripts/setup-parameters.py --environment test|live` writes only the chosen environment's parameters and refuses any name that mentions the other one. `docs/security-access.md` records who may read and write them.
 
 To list what is set, use the read-only script `infra/scripts/list-parameters.py`:
 

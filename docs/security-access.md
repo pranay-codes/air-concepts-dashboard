@@ -1,11 +1,11 @@
 # Security access
 
-This page records who and what may read or write the Test environment's secrets and configuration. It covers AWS Systems Manager Parameter Store for the dashboard API. Live is out of scope here and is released through a separate human-triggered workflow (ADR-001). Every setting, its format and where it is read: [configuration.md](configuration.md).
+This page records who and what may read or write each environment's secrets and configuration. It covers AWS Systems Manager Parameter Store for the dashboard API. Live uses the same layout under its own prefix and is released through a separate human-triggered workflow (ADR-001, ADR-004); the Live-specific controls are in [Live access (INF-006)](#live-access-inf-006) below. Every setting, its format and where it is read: [configuration.md](configuration.md).
 
 ## Parameter Store layout
 
 - Region: `ap-southeast-2`.
-- Test prefix: `/air-concepts/test/`, with `backend/` and `frontend/` below it. Live parameters use `/air-concepts/live/`. Nothing in this repository writes there.
+- Test prefix: `/air-concepts/test/`, with `backend/` and `frontend/` below it. Live parameters use `/air-concepts/live/`. Only `infra/scripts/setup-parameters.py --environment live`, run by a human with a Live-authorised profile, writes there.
 - Account: `923079246426`. **Test and Live currently share this account.** The account check in the setup script therefore does not separate them. The name prefix and the IAM policies below do.
 - Types: `SecureString` for passwords and secrets. `String` for everything else.
 - Encryption: the AWS default SSM key unless a customer-managed key is given with `--kms-key-id`.
@@ -15,7 +15,7 @@ This page records who and what may read or write the Test environment's secrets 
 | `backend/db/jdbc-url` | String | API `DATABASE_URL` | Yes |
 | `backend/db/username` | String | API `DATABASE_USER` | Yes |
 | `backend/db/password` | SecureString | API `DATABASE_PASSWORD` | Yes |
-| `backend/supabase/project-ref` | String | API `SUPABASE_TEST_PROJECT_REF` | Yes |
+| `backend/supabase/project-ref` | String | API `SUPABASE_PROJECT_REF` | Yes |
 | `backend/supabase/jwt-issuer-uri` | String | API `SUPABASE_JWT_ISSUER_URI` | Yes |
 | `backend/supabase/jwks-uri` | String | API `SUPABASE_JWKS_URI`, must end `/.well-known/jwks.json` | Yes |
 | `backend/supabase/service-role-key` | SecureString | API `SUPABASE_SERVICE_ROLE_KEY` (staff administration only) | No |
@@ -33,7 +33,7 @@ This page records who and what may read or write the Test environment's secrets 
 Notes:
 
 - The frontend values are inlined into the browser bundle by Vite at build time. They are public by design, so they are stored as `String`. Never put a service-role key or other secret under `frontend/`.
-- The API reads plain environment variables only. `infra/deploy/deploy-test.sh` reads these parameters on the Test host through SSM Run Command at deploy time and writes `runtime/backend.env`. The API never calls Parameter Store itself.
+- The API reads plain environment variables only. `infra/deploy/deploy-backend.sh` reads these parameters on the environment's host through SSM Run Command at deploy time and writes `runtime/backend.env`. The API never calls Parameter Store itself.
 - A blank answer in the script skips that key. The API will not start without the required backend keys, so skipping one is a deliberate choice. Xero code is wired (see [configuration.md](configuration.md)), but no Xero capability counts as implemented until a spike note confirms it. vWork has no code yet (AGENTS.md section 2).
 - The Supabase service-role key is stored as a SecureString at `backend/supabase/service-role-key`. Only the staff administration code (`SupabaseAdminConfig`, `SupabaseAdminClient`) reads it. It is never sent to the browser.
 - Xero access and refresh tokens are never stored as static parameters. They stay server-side and encrypted.
@@ -119,11 +119,29 @@ Drop the KMS statement if the AWS default key is used. The explicit deny keeps L
 
 ## Setup script
 
-`infra/scripts/setup-test-parameters.py`. Usage is in [infra/README.md](../infra/README.md#parameter-store-setup-test). It is tested with mocked AWS calls (`infra/scripts/test_setup_test_parameters.py`). The tests include a drift check against `application.yml` and the startup guard in `RequiredSettingsPostProcessor.java`.
+`infra/scripts/setup-parameters.py`. Usage is in [infra/README.md](../infra/README.md#parameter-store-setup-test). It is tested with mocked AWS calls (`infra/scripts/test_setup_parameters.py`). The tests include a drift check against `application.yml` and the startup guard in `RequiredSettingsPostProcessor.java`.
 
 ## Open items
 
 - Confirm whether Live will move to a separate AWS account. If it does, change the account check to a value per environment and update the policies above.
 - Decide whether to use a customer-managed KMS key. Replace `REPLACE_WITH_KEY_ID` if so.
 - Name the EC2 Test role once it exists, and attach the read policy above.
-- Confirm on the Test host that `deploy-test.sh` is the only path that writes `runtime/backend.env`.
+- Confirm on each host that `deploy-backend.sh` is the only path that writes `runtime/backend.env`.
+
+## Live access (INF-006)
+
+Live uses its own prefix, roles and secrets. The controls, and the check that proves each:
+
+| Control | How it is enforced | How to verify |
+|---|---|---|
+| Live host reads only Live backend parameters | The instance role from `infrastructure.json` allows `/air-concepts/live/backend/*` and denies `/air-concepts/test/*` | On the Live host, `aws ssm get-parameter --name /air-concepts/test/backend/db/jdbc-url` is denied |
+| Test host cannot read Live | The same template denies the opposite environment | Same check on the Test host against `/air-concepts/live/` |
+| Only the Live workflow can assume the Live deploy role | `deployer-role.json` trusts `repo:<owner>/<repo>:environment:live`, and `job_workflow_ref` of `deploy-live.yml` on `main` | A run of any other workflow or branch fails at "Assume the environment's deploy role" |
+| The Live deploy role cannot reach Test secrets or write Test images | Explicit `Deny` on `/air-concepts/test/*` and on Test ECR writes | `aws ssm get-parameter` against a Test path with the Live role fails |
+| The deploy role cannot read Live backend secrets | It has no statement for `/air-concepts/live/backend/*`; only the host role reads them | Review of the policy; test in `infra/scripts/test_live_release.py` |
+| Test credentials cannot work on Live | Separate Supabase project, JWKS and issuer, enforced by the startup guard and by `EXPECTED_SUPABASE_PROJECT_REF` | A Test-issued token returns 401 from the Live API |
+| Test and Live never share an identifier | `infra/scripts/environment_config.py validate` runs in CI and before every deploy | CI fails if `test.json` and `live.json` share an instance, bucket, distribution, role, repository, prefix or Supabase ref |
+
+GitHub secrets for Live (`SUPABASE_LIVE_ACCESS_TOKEN`, `SUPABASE_LIVE_DB_PASSWORD`) are repository secrets because environment-scoped secrets need a paid plan for a private repository. Anyone with write access can create a workflow that reads them, so: keep write access small, use a Supabase token created only for Live, and rotate both secrets (Supabase dashboard, then GitHub) whenever a person with write access leaves and after any suspected exposure. No AWS credentials are stored in GitHub at all.
+
+The Live DB URL must be the Supabase **session pooler** on port 5432 with user `postgres.<project-ref>` and `sslmode=require`. The host has an IPv4 address only, so the IPv6-only direct host does not work, and the transaction pooler (port 6543) is not compatible with prepared statements.

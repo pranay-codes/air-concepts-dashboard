@@ -1,6 +1,6 @@
-"""Tests for setup-test-parameters.py. AWS is mocked: no test contacts AWS.
+"""Tests for setup-parameters.py. AWS is mocked: no test contacts AWS.
 
-Requirement IDs: none supplied for this task.
+Requirement IDs: INF-006 (live environment); earlier cases predate it.
 """
 
 from __future__ import annotations
@@ -13,10 +13,10 @@ from pathlib import Path
 import pytest
 from botocore.exceptions import ClientError
 
-_SCRIPT = Path(__file__).with_name("setup-test-parameters.py")
-_spec = importlib.util.spec_from_file_location("setup_test_parameters", _SCRIPT)
+_SCRIPT = Path(__file__).with_name("setup-parameters.py")
+_spec = importlib.util.spec_from_file_location("setup_parameters", _SCRIPT)
 setup = importlib.util.module_from_spec(_spec)
-sys.modules["setup_test_parameters"] = setup
+sys.modules["setup_parameters"] = setup
 _spec.loader.exec_module(setup)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -111,6 +111,14 @@ def custom_keys(*entries):
 
 def puts_by_name(ssm):
     return {request["Name"]: request for request in ssm.puts}
+
+
+@pytest.fixture(autouse=True)
+def _reset_environment():
+    """The script keeps the selected environment in module state. Every test starts on Test."""
+    setup.configure("test")
+    yield
+    setup.configure("test")
 
 
 # --- Names and guards ------------------------------------------------------------------------
@@ -386,7 +394,10 @@ def _required_env_vars_in_application_yml():
 def _required_env_vars_in_startup_guard():
     text = REQUIRED_SETTINGS_JAVA.read_text(encoding="utf-8")
     block = re.search(r"REQUIRED = List\.of\((.*?)\);", text, re.S).group(1)
-    return set(re.findall(r'"([A-Z_]+)"', block))
+    names = set(re.findall(r'"([A-Z_]+)"', block))
+    # The project ref is checked separately from the list, under one environment-neutral name.
+    names.add(re.search(r'PROJECT_REF = "([A-Z_]+)"', text).group(1))
+    return names
 
 
 def test_every_setting_the_startup_guard_requires_has_a_backend_key():
@@ -405,3 +416,71 @@ def test_frontend_keys_cover_the_vite_settings_the_build_reads():
     frontend_text = " ".join(key.used_by for key in setup.KEYS if key.path.startswith("frontend/"))
     for var in ("VITE_API_BASE_URL", "VITE_SUPABASE_URL", "VITE_SUPABASE_PUBLISHABLE_KEY"):
         assert var in frontend_text
+
+
+# --- INF-006: one script for Test and Live -----------------------------------------------------
+
+def test_live_run_writes_only_under_the_live_root():
+    values = {key.path: f"live-value-{i}" for i, key in enumerate(setup.keys_for("live"))}
+    code, ssm, _ = run_cli(BASE + ["--environment", "live", "--apply"], ask=answers(values))
+    assert code == setup.EXIT_OK
+    assert ssm.puts, "nothing was written"
+    assert all(request["Name"].startswith("/air-concepts/live/") for request in ssm.puts)
+    assert not any("/air-concepts/test/" in request["Name"] for request in ssm.puts)
+
+
+def test_live_run_does_not_offer_test_only_diagnostics_keys():
+    asked = []
+
+    def record(key):
+        asked.append(key.path)
+        return ""
+
+    run_cli(BASE + ["--environment", "live", "--apply"], ask=record)
+    assert asked, "no key was offered"
+    assert not any(path.startswith("backend/diagnostics/") for path in asked)
+
+
+def test_test_run_still_offers_diagnostics_keys():
+    asked = []
+
+    def record(key):
+        asked.append(key.path)
+        return ""
+
+    run_cli(BASE + ["--apply"], ask=record)
+    assert "backend/diagnostics/xero-enabled" in asked
+
+
+@pytest.mark.parametrize("name", [
+    "/air-concepts/test/backend/db/password",
+    "/air-concepts/live/../test/db/password",
+    "/air-concepts/live/test/db/password",
+    "/air-concepts/prod/backend/db/password",
+])
+def test_live_refuses_names_that_belong_to_another_environment(name):
+    setup.configure("live")
+    with pytest.raises(setup.Refused):
+        setup.check_name(name)
+
+
+def test_live_accepts_its_own_names():
+    setup.configure("live")
+    setup.check_name("/air-concepts/live/backend/db/password")
+
+
+def test_unknown_environment_is_refused():
+    with pytest.raises(setup.Refused):
+        setup.configure("staging")
+
+
+def test_live_dry_run_writes_nothing():
+    code, ssm, _ = run_cli(BASE + ["--environment", "live"])
+    assert code == setup.EXIT_OK
+    assert ssm.puts == []
+
+
+def test_live_still_checks_the_account_before_asking():
+    code, ssm, message = run_cli(BASE + ["--environment", "live", "--apply"], account="111111111111", ask=nobody_asked)
+    assert code == setup.EXIT_REFUSED
+    assert ssm.puts == []

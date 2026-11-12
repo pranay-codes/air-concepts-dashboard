@@ -1,0 +1,315 @@
+# INF-006: promote one tested release to the Live environment. Manual only.
+# Spec: docs/specs/INF-006-live-environment.md. Plan: docs/plans/INF-006.md. Runbook: docs/live-environment-runbook.md.
+#
+# A release is a commit already deployed to Test plus the backend image digest Test built for it. This workflow
+# never builds the backend: it copies that exact image into the Live repository, applies reviewed migrations,
+# deploys through SSM and records what it did. Rollback redeploys the last known-good release from the record.
+# Every environment value comes from infra/environments/live.json through the shared actions in .github/actions/.
+name: deploy-live
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: release promotes a tested release; rollback redeploys the last known-good release.
+        type: choice
+        options: [release, rollback]
+        default: release
+      release_sha:
+        description: "release: the full 40-character commit that was deployed to Test."
+        type: string
+        default: ""
+      image_digest:
+        description: "release: the backend image digest Test built for that commit (sha256:...)."
+        type: string
+        default: ""
+      confirm:
+        description: Type DEPLOY LIVE to continue.
+        type: string
+        default: ""
+      backup_confirmed:
+        description: "release: I confirmed a recent Supabase production backup or recovery point exists."
+        type: boolean
+        default: false
+      destructive_ack:
+        description: "release: a human reviewed every DROP, TRUNCATE or unscoped DELETE flagged in the pending migrations."
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# One release at a time, and never cancel one that is half done.
+concurrency:
+  group: deploy-live
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    name: check the request
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Refuse anything that is not a deliberate release from main
+        env:
+          MODE: ${{ inputs.mode }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          IMAGE_DIGEST: ${{ inputs.image_digest }}
+          CONFIRM: ${{ inputs.confirm }}
+          BACKUP_CONFIRMED: ${{ inputs.backup_confirmed }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          fail() { echo "REFUSED: $*" >&2; exit 1; }
+          [ "$GITHUB_REF" = "refs/heads/main" ] || fail "run this workflow from the main branch, not $GITHUB_REF"
+          [ "$CONFIRM" = "DEPLOY LIVE" ] || fail "type DEPLOY LIVE in the confirm input"
+          if [ "$MODE" = "rollback" ]; then
+            echo "Rollback requested; the last known-good release is read from the release record."
+            exit 0
+          fi
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "release_sha must be a full 40-character commit hash"
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || fail "image_digest must look like sha256: followed by 64 hex characters"
+          [ "$BACKUP_CONFIRMED" = "true" ] || fail "confirm a recent production backup first (backup_confirmed)"
+          git cat-file -e "${RELEASE_SHA}^{commit}" 2>/dev/null || fail "release_sha is not a commit in this repository"
+          git merge-base --is-ancestor "$RELEASE_SHA" origin/main || fail "release_sha is not part of the main branch"
+          # The release must already have gone through Test: the app deploy and the Test migration run both succeeded.
+          for workflow in deploy-test.yml supabase-migrations.yml; do
+            count="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?head_sha=${RELEASE_SHA}&branch=main&status=success&per_page=1" --jq '.total_count')"
+            [ "$count" -ge 1 ] || fail "no successful $workflow run on main for $RELEASE_SHA; deploy it to Test first"
+          done
+          echo "Release $RELEASE_SHA passed the Test gates."
+
+  release:
+    name: release to Live
+    needs: guard
+    if: inputs.mode == 'release'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: live
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      RELEASE_SHA: ${{ inputs.release_sha }}
+      IMAGE_DIGEST: ${{ inputs.image_digest }}
+    steps:
+      # Everything below runs from the release commit, so the Compose file, Caddyfile, deploy script,
+      # migrations and frontend are exactly what Test ran.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup-environment
+        with:
+          environment: live
+          require-complete: "true"
+
+      - name: Confirm the target is the Live instance
+        run: |
+          set -euo pipefail
+          tag="$(aws ec2 describe-instances --instance-ids "$INSTANCE_ID" \
+            --query 'Reservations[0].Instances[0].Tags[?Key==`environment`].Value | [0]' --output text)"
+          if [ "$tag" != "live" ]; then
+            echo "REFUSED: instance $INSTANCE_ID is tagged environment=$tag, expected live" >&2
+            exit 1
+          fi
+
+      - name: Read the current release record
+        run: |
+          set -euo pipefail
+          current="$(aws ssm get-parameter --name "${SSM_PREFIX}release/current" --query Parameter.Value --output text 2>/dev/null || true)"
+          echo "PREVIOUS_RELEASE_RECORD=${current:-none}" >> "$GITHUB_ENV"
+
+      - name: Confirm Test built this image for this commit
+        run: |
+          set -euo pipefail
+          test_uri="$(python3 infra/scripts/environment_config.py get test ecrRepositoryUri)"
+          test_repo="${test_uri#*/}"
+          tags="$(aws ecr describe-images --repository-name "$test_repo" --image-ids "imageDigest=$IMAGE_DIGEST" \
+            --query 'imageDetails[0].imageTags' --output text)"
+          for tag in $tags; do
+            case "$tag" in "${RELEASE_SHA}-"*) exit 0 ;; esac
+          done
+          echo "REFUSED: $IMAGE_DIGEST in $test_repo is not tagged for commit $RELEASE_SHA" >&2
+          exit 1
+
+      - name: Promote the tested image to the Live repository without rebuilding it
+        run: |
+          set -euo pipefail
+          test_uri="$(python3 infra/scripts/environment_config.py get test ecrRepositoryUri)"
+          registry="${ECR_REPOSITORY_URI%%/*}"
+          aws ecr get-login-password | docker login --username AWS --password-stdin "$registry" > /dev/null
+          live_tag="${RELEASE_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker buildx imagetools create --tag "${ECR_REPOSITORY_URI}:${live_tag}" "${test_uri}@${IMAGE_DIGEST}"
+          live_repo="${ECR_REPOSITORY_URI#*/}"
+          copied="$(aws ecr describe-images --repository-name "$live_repo" --image-ids "imageTag=$live_tag" \
+            --query 'imageDetails[0].imageDigest' --output text)"
+          if [ "$copied" != "$IMAGE_DIGEST" ]; then
+            echo "REFUSED: the Live copy has digest $copied, not $IMAGE_DIGEST. Nothing was deployed." >&2
+            exit 1
+          fi
+          echo "Promoted $IMAGE_DIGEST to $ECR_REPOSITORY_URI:$live_tag"
+
+      - name: List the migrations this release would apply
+        uses: ./.github/actions/supabase-migrate
+        with:
+          project-ref: ${{ env.SUPABASE_PROJECT_REF }}
+          expected-project-ref: ${{ env.SUPABASE_PROJECT_REF }}
+          access-token: ${{ secrets.SUPABASE_LIVE_ACCESS_TOKEN }}
+          db-password: ${{ secrets.SUPABASE_LIVE_DB_PASSWORD }}
+          mode: dry-run
+      - name: Stop on destructive migration statements unless a human approved them
+        env:
+          DESTRUCTIVE_ACK: ${{ inputs.destructive_ack }}
+        run: |
+          set -euo pipefail
+          flag=()
+          if [ "$DESTRUCTIVE_ACK" = "true" ]; then flag=(--acknowledge-destructive); fi
+          python3 infra/scripts/check_migrations.py --migrations supabase/migrations \
+            --pending-file "$RUNNER_TEMP/migration-dry-run.txt" "${flag[@]}"
+      - name: Apply the migrations and run the read-only schema tests
+        uses: ./.github/actions/supabase-migrate
+        with:
+          project-ref: ${{ env.SUPABASE_PROJECT_REF }}
+          expected-project-ref: ${{ env.SUPABASE_PROJECT_REF }}
+          access-token: ${{ secrets.SUPABASE_LIVE_ACCESS_TOKEN }}
+          db-password: ${{ secrets.SUPABASE_LIVE_DB_PASSWORD }}
+          mode: push
+
+      - name: Mark this release as in flight
+        run: |
+          set -euo pipefail
+          latest_migration="$(ls supabase/migrations | sort | tail -n 1)"
+          record="$(jq -cn --arg sha "$RELEASE_SHA" --arg digest "$IMAGE_DIGEST" --arg run "$GITHUB_RUN_ID" \
+            --arg migration "$latest_migration" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{releaseSha:$sha,imageDigest:$digest,frontendRunId:$run,frontendArtifact:"frontend-dist",latestMigration:$migration,startedAt:$at}')"
+          aws ssm put-parameter --name "${SSM_PREFIX}release/attempt" --type String --overwrite --value "$record" > /dev/null
+          echo "RELEASE_RECORD=$record" >> "$GITHUB_ENV"
+
+      - uses: ./.github/actions/deploy-backend
+        with:
+          image-digest: ${{ inputs.image_digest }}
+          comment: INF-006 live release
+      - uses: ./.github/actions/build-frontend
+      - name: Keep the built frontend so a rollback can restore it
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 90
+          if-no-files-found: error
+      - uses: ./.github/actions/publish-frontend
+      - uses: ./.github/actions/smoke
+        with:
+          expect-unauthenticated-rejected: "true"
+
+      - name: Record the release
+        run: |
+          set -euo pipefail
+          if [ "$PREVIOUS_RELEASE_RECORD" != "none" ]; then
+            aws ssm put-parameter --name "${SSM_PREFIX}release/previous" --type String --overwrite \
+              --value "$PREVIOUS_RELEASE_RECORD" > /dev/null
+          fi
+          aws ssm put-parameter --name "${SSM_PREFIX}release/current" --type String --overwrite --value "$RELEASE_RECORD" > /dev/null
+          aws ssm put-parameter --name "${SSM_PREFIX}release/attempt" --type String --overwrite --value none > /dev/null
+          {
+            echo "### Live release succeeded"
+            echo "- Commit: \`$RELEASE_SHA\`"
+            echo "- Backend image: \`$IMAGE_DIGEST\`"
+            echo "- Frontend artifact: \`frontend-dist\` in run $GITHUB_RUN_ID"
+            echo "- Latest migration: \`$(ls supabase/migrations | sort | tail -n 1)\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  rollback:
+    name: roll back Live
+    needs: guard
+    if: inputs.mode == 'rollback'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: live
+    permissions:
+      contents: read
+      id-token: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-environment
+        with:
+          environment: live
+          require-complete: "true"
+
+      - name: Choose the last known-good release
+        run: |
+          set -euo pipefail
+          read_record() { aws ssm get-parameter --name "${SSM_PREFIX}release/$1" --query Parameter.Value --output text 2>/dev/null || echo none; }
+          attempt="$(read_record attempt)"
+          current="$(read_record current)"
+          previous="$(read_record previous)"
+          if [ "$attempt" != "none" ]; then
+            # A release started but never finished, so the one before it (current) is the known-good one.
+            target="$current"; kind=attempt
+          else
+            target="$previous"; kind=previous
+          fi
+          if [ "$target" = "none" ]; then
+            echo "REFUSED: there is no earlier release recorded to roll back to" >&2
+            exit 1
+          fi
+          {
+            echo "ROLLBACK_KIND=$kind"
+            echo "ROLLBACK_SHA=$(jq -r .releaseSha <<< "$target")"
+            echo "ROLLBACK_DIGEST=$(jq -r .imageDigest <<< "$target")"
+            echo "ROLLBACK_RUN_ID=$(jq -r .frontendRunId <<< "$target")"
+            echo "ROLLBACK_RECORD_CURRENT=$current"
+            echo "ROLLBACK_RECORD_TARGET=$target"
+          } >> "$GITHUB_ENV"
+          echo "Rolling back to $(jq -r .releaseSha <<< "$target")"
+
+      # Run from the release being restored, so its Compose file, Caddyfile and deploy script go to the host.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.ROLLBACK_SHA }}
+          persist-credentials: false
+      - uses: ./.github/actions/deploy-backend
+        with:
+          image-digest: ${{ env.ROLLBACK_DIGEST }}
+          comment: INF-006 live rollback
+      - name: Fetch the frontend that matches that release
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          run-id: ${{ env.ROLLBACK_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: restored-dist
+      - uses: ./.github/actions/publish-frontend
+        with:
+          dist: restored-dist
+      - uses: ./.github/actions/smoke
+        with:
+          expect-unauthenticated-rejected: "true"
+
+      - name: Record the rollback
+        run: |
+          set -euo pipefail
+          if [ "$ROLLBACK_KIND" = "previous" ]; then
+            # A finished release is being undone: the release now serving becomes the one to forget.
+            aws ssm put-parameter --name "${SSM_PREFIX}release/previous" --type String --overwrite \
+              --value "$ROLLBACK_RECORD_CURRENT" > /dev/null
+            aws ssm put-parameter --name "${SSM_PREFIX}release/current" --type String --overwrite \
+              --value "$ROLLBACK_RECORD_TARGET" > /dev/null
+          fi
+          aws ssm put-parameter --name "${SSM_PREFIX}release/attempt" --type String --overwrite --value none > /dev/null
+          {
+            echo "### Live rollback succeeded"
+            echo "- Restored commit: \`$ROLLBACK_SHA\`"
+            echo "- Restored backend image: \`$ROLLBACK_DIGEST\`"
+            echo "- The database was not changed. If the undone release changed the schema in a way the restored release cannot use, write a reviewed forward fix."
+          } >> "$GITHUB_STEP_SUMMARY"

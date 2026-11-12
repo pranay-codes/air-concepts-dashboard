@@ -1,0 +1,29 @@
+{
+  "Statement": [
+    {
+      "Sid": "NeverReplaceOrDeleteStatefulOrPublicResources",
+      "Effect": "Deny",
+      "Action": ["Update:Replace", "Update:Delete"],
+      "Principal": "*",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "ResourceType": [
+            "AWS::S3::Bucket",
+            "AWS::ECR::Repository",
+            "AWS::CloudFront::Distribution",
+            "AWS::EC2::Instance",
+            "AWS::EC2::EIP"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "AllowEverythingElse",
+      "Effect": "Allow",
+      "Action": "Update:*",
+      "Principal": "*",
+      "Resource": "*"
+    }
+  ]
+}

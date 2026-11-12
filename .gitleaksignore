@@ -1,0 +1,3 @@
+# Test fixture: made-up EC2 instance id under a key named ApiInstanceId (generic-api-key false positive).
+# The fixture value was changed in the next commit; this entry covers the original commit.
+c6c158584c61efb933351e4fe38b37df6b87d096:infra/scripts/test_environment_config.py:generic-api-key:233

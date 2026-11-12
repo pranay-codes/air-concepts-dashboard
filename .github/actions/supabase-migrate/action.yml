@@ -1,0 +1,71 @@
+# DB-002 / INF-006: apply new migrations to one hosted Supabase project, then run the read-only integration tests.
+# Used by the Test deploy on merge and by the Live release. It never resets, repairs or seeds.
+name: Migrate Supabase project
+description: Link a hosted Supabase project, apply new migrations (or only list them), and run the read-only schema tests.
+inputs:
+  project-ref:
+    description: Supabase project ref.
+    required: true
+  expected-project-ref:
+    description: The ref from infra/environments/<env>.json. When set, the action refuses if project-ref differs.
+    default: ""
+  access-token:
+    description: Supabase access token.
+    required: true
+  db-password:
+    description: Database password for the project.
+    required: true
+  mode:
+    description: push applies migrations; dry-run only lists what would be applied.
+    default: push
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/install-supabase-cli
+    - name: Link the project
+      shell: bash
+      env:
+        SUPABASE_ACCESS_TOKEN: ${{ inputs.access-token }}
+        SUPABASE_DB_PASSWORD: ${{ inputs.db-password }}
+        PROJECT_REF: ${{ inputs.project-ref }}
+        EXPECTED_PROJECT_REF: ${{ inputs.expected-project-ref }}
+      run: |
+        set -euo pipefail
+        [[ "$PROJECT_REF" =~ ^[a-z0-9]{10,30}$ ]] || { echo "project-ref is not a Supabase project ref" >&2; exit 1; }
+        if [ -n "$EXPECTED_PROJECT_REF" ] && [ "$PROJECT_REF" != "$EXPECTED_PROJECT_REF" ]; then
+          echo "REFUSED: the Supabase project ref does not match this environment's configured project" >&2
+          exit 1
+        fi
+        supabase link --project-ref "$PROJECT_REF" --yes
+    # db push and migration list default to the local database; --remote targets the linked project.
+    - name: List migrations that would be applied
+      if: inputs.mode == 'dry-run'
+      shell: bash
+      env:
+        SUPABASE_ACCESS_TOKEN: ${{ inputs.access-token }}
+        SUPABASE_DB_PASSWORD: ${{ inputs.db-password }}
+      # The output is kept in $RUNNER_TEMP/migration-dry-run.txt so infra/scripts/check_migrations.py can scan it.
+      run: |
+        set -euo pipefail
+        supabase db push --remote --dry-run | tee "$RUNNER_TEMP/migration-dry-run.txt"
+    - name: Apply new migrations
+      if: inputs.mode == 'push'
+      shell: bash
+      env:
+        SUPABASE_ACCESS_TOKEN: ${{ inputs.access-token }}
+        SUPABASE_DB_PASSWORD: ${{ inputs.db-password }}
+      run: supabase db push --remote --yes
+    - name: Confirm Git and remote migration histories match
+      if: inputs.mode == 'push'
+      shell: bash
+      env:
+        SUPABASE_ACCESS_TOKEN: ${{ inputs.access-token }}
+        SUPABASE_DB_PASSWORD: ${{ inputs.db-password }}
+      run: supabase migration list --remote
+    - name: Run schema integration tests (read-only)
+      if: inputs.mode == 'push'
+      shell: bash
+      env:
+        SUPABASE_ACCESS_TOKEN: ${{ inputs.access-token }}
+        SUPABASE_DB_PASSWORD: ${{ inputs.db-password }}
+      run: supabase db query --remote --read-only -f supabase/tests/schema_integration.sql

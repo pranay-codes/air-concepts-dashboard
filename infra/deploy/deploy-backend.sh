@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
-# CI-002: deploy one backend image to the Test host. Runs on the host, sent through SSM Run Command.
+# CI-002 / INF-006: deploy one backend image to the host of one environment. Runs on the host, sent through
+# SSM Run Command. The same script serves Test and Live; every difference arrives as an input, never as code.
 #
-# Environment inputs: ENVIRONMENT (must be test), NEW_BACKEND_DIGEST, CADDY_IMAGE_DIGEST,
+# Environment inputs: ENVIRONMENT (test or live), NEW_BACKEND_DIGEST, CADDY_IMAGE_DIGEST,
 # BACKEND_REPOSITORY_URI, API_HOSTNAME, AWS_REGION (optional, default ap-southeast-2).
+# Optional inputs, taken from infra/environments/<env>.json by the workflow:
+#   API_MEMORY_LIMIT               container memory limit passed to Compose (Compose default 512m).
+#   EXPECTED_SUPABASE_PROJECT_REF  refuse to deploy unless SSM supabase/project-ref equals this value.
+#   ALLOW_TEST_ONLY_FEATURES       "true" lets the Xero diagnostics parameters through; anything else
+#                                  ignores them, so Live can never enable request or body logging.
 # AIR_CONCEPTS_DIR overrides /opt/air-concepts and exists for tests only.
 #
 # Never prints parameter values and never enables shell tracing.
@@ -22,7 +28,7 @@ declare -A key_for=(
   [db/jdbc-url]=DATABASE_URL
   [db/username]=DATABASE_USER
   [db/password]=DATABASE_PASSWORD
-  [supabase/project-ref]=SUPABASE_TEST_PROJECT_REF
+  [supabase/project-ref]=SUPABASE_PROJECT_REF
   [supabase/jwt-issuer-uri]=SUPABASE_JWT_ISSUER_URI
   [supabase/jwks-uri]=SUPABASE_JWKS_URI
   [supabase/service-role-key]=SUPABASE_SERVICE_ROLE_KEY
@@ -32,11 +38,19 @@ declare -A key_for=(
   [xero/frontend-callback-uri]=XERO_FRONTEND_CALLBACK_URI
   [xero/token-encryption-key]=XERO_TOKEN_ENCRYPTION_KEY
   [cors/allowed-origins]=CORS_ALLOWED_ORIGINS
-  # Optional Xero request diagnostics (Test only; default off when absent). See docs/xero-diagnostics.md.
+)
+# Optional Xero request diagnostics (default off when absent). Read only when the environment allows
+# Test-only features, so Live ignores them whatever is in Parameter Store. See docs/xero-diagnostics.md.
+declare -A test_only_key_for=(
   [diagnostics/xero-enabled]=DASHBOARD_DIAGNOSTICS_XERO_ENABLED
   [diagnostics/xero-include-bodies]=DASHBOARD_DIAGNOSTICS_XERO_INCLUDE_BODIES
   [diagnostics/xero-max-body-chars]=DASHBOARD_DIAGNOSTICS_XERO_MAX_BODY_CHARS
 )
+if [ "${ALLOW_TEST_ONLY_FEATURES:-false}" = "true" ]; then
+  for suffix in "${!test_only_key_for[@]}"; do
+    key_for[$suffix]="${test_only_key_for[$suffix]}"
+  done
+fi
 docker_config=""
 
 fail() {
@@ -56,13 +70,22 @@ is_digest() {
   [[ "${1:-}" =~ ^[0-9a-f]{64}$ ]]
 }
 
-[ "${ENVIRONMENT:-}" = "test" ] || fail "ENVIRONMENT must be test, got '${ENVIRONMENT:-unset}'"
+case "${ENVIRONMENT:-}" in
+  test|live) ;;
+  *) fail "ENVIRONMENT must be test or live, got '${ENVIRONMENT:-unset}'" ;;
+esac
 is_digest "${NEW_BACKEND_DIGEST:-}" || fail "NEW_BACKEND_DIGEST must be 64 lowercase hex characters without a sha256: prefix"
 is_digest "${CADDY_IMAGE_DIGEST:-}" || fail "CADDY_IMAGE_DIGEST must be 64 lowercase hex characters without a sha256: prefix"
 [[ "${BACKEND_REPOSITORY_URI:-}" =~ ^[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com/[a-z0-9._/-]+$ ]] \
   || fail "BACKEND_REPOSITORY_URI is not an ECR repository URI"
 [[ "${API_HOSTNAME:-}" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]] \
   || fail "API_HOSTNAME is not a hostname"
+if [ -n "${API_MEMORY_LIMIT:-}" ]; then
+  [[ "$API_MEMORY_LIMIT" =~ ^[0-9]+[mg]$ ]] || fail "API_MEMORY_LIMIT must look like 512m or 1g"
+fi
+if [ -n "${EXPECTED_SUPABASE_PROJECT_REF:-}" ]; then
+  [[ "$EXPECTED_SUPABASE_PROJECT_REF" =~ ^[a-z0-9]{10,30}$ ]] || fail "EXPECTED_SUPABASE_PROJECT_REF is not a Supabase project ref"
+fi
 
 param_root="/air-concepts/${ENVIRONMENT}/backend/"
 registry="${BACKEND_REPOSITORY_URI%%/*}"
@@ -81,7 +104,7 @@ export DOCKER_CONFIG="$docker_config"
 aws ecr get-login-password --region "$region" \
   | docker login --username AWS --password-stdin "$registry" > /dev/null
 
-# Builds $env_new from the Test backend parameters. Refuses before any container changes.
+# Builds $env_new from this environment's backend parameters. Refuses before any container changes.
 write_env_file() {
   local -a names=()
   local raw="" chunk name value short key required offset seen=" "
@@ -106,11 +129,15 @@ write_env_file() {
     case "$value" in
       *$'\r'*) fail "$key contains a carriage return" ;;
     esac
+    if [ "$key" = "SUPABASE_PROJECT_REF" ] && [ -n "${EXPECTED_SUPABASE_PROJECT_REF:-}" ] \
+      && [ "$value" != "$EXPECTED_SUPABASE_PROJECT_REF" ]; then
+      fail "SUPABASE_PROJECT_REF in SSM does not match the project the $ENVIRONMENT environment expects"
+    fi
     printf '%s=%s\n' "$key" "$value" >> "$env_new"
     seen="$seen$key "
   done <<< "$raw"
 
-  for required in DATABASE_URL DATABASE_USER DATABASE_PASSWORD SUPABASE_TEST_PROJECT_REF \
+  for required in DATABASE_URL DATABASE_USER DATABASE_PASSWORD SUPABASE_PROJECT_REF \
     SUPABASE_JWT_ISSUER_URI SUPABASE_JWKS_URI; do
     case "$seen" in
       *" $required "*) ;;
@@ -145,6 +172,7 @@ deploy_digest() {
   (
     cd "$air_dir"
     export ENVIRONMENT BACKEND_REPOSITORY_URI API_HOSTNAME CADDY_IMAGE_DIGEST
+    if [ -n "${API_MEMORY_LIMIT:-}" ]; then export API_MEMORY_LIMIT; fi
     export BACKEND_IMAGE_DIGEST="$digest"
     docker compose up -d --wait --wait-timeout 180 || { show_api_diagnostics; exit 1; }
   )
@@ -161,7 +189,7 @@ if deploy_digest "$NEW_BACKEND_DIGEST"; then
   printf '%s\n' "$NEW_BACKEND_DIGEST" > "$digest_file.tmp"
   mv -f -- "$digest_file.tmp" "$digest_file"
   rm -f -- "$env_prev"
-  echo "Deployed backend digest $NEW_BACKEND_DIGEST to the Test host"
+  echo "Deployed backend digest $NEW_BACKEND_DIGEST to the $ENVIRONMENT host"
   exit 0
 fi
 
@@ -172,8 +200,16 @@ fi
 if [ -n "$previous" ] && deploy_digest "$previous"; then
   echo "Restored previous backend digest $previous" >&2
 elif [ -n "$previous" ]; then
-  echo "Rollback to $previous also failed; check the Test host" >&2
+  echo "Rollback to $previous also failed; check the $ENVIRONMENT host" >&2
 else
-  echo "No previous digest is recorded; nothing to restore" >&2
+  # First deploy on a fresh host: there is nothing to restore, so stop the failed containers rather than
+  # leave a half-started release running.
+  echo "No previous digest is recorded (first deploy on this host); nothing to restore" >&2
+  (
+    cd "$air_dir"
+    export ENVIRONMENT BACKEND_REPOSITORY_URI API_HOSTNAME CADDY_IMAGE_DIGEST
+    export BACKEND_IMAGE_DIGEST="$NEW_BACKEND_DIGEST"
+    docker compose down >&2
+  ) || true
 fi
 exit 1

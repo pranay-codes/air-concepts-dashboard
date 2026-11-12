@@ -1,0 +1,22 @@
+# INF-006: publish a built frontend to the environment's private bucket and invalidate CloudFront.
+# Needs setup-environment in the same job.
+name: Publish frontend
+description: Sync a built frontend to the environment's S3 bucket and invalidate its CloudFront distribution.
+inputs:
+  dist:
+    description: Directory holding the built frontend.
+    default: frontend/dist
+runs:
+  using: composite
+  steps:
+    - name: Upload to the bucket and invalidate CloudFront
+      shell: bash
+      env:
+        DIST_DIR: ${{ inputs.dist }}
+      run: |
+        set -euo pipefail
+        test -f "$DIST_DIR/index.html"
+        aws s3 sync "$DIST_DIR" "s3://${FRONTEND_BUCKET}/" --delete --exclude index.html \
+          --cache-control "public,max-age=31536000,immutable"
+        aws s3 cp "$DIST_DIR/index.html" "s3://${FRONTEND_BUCKET}/index.html" --cache-control "no-cache"
+        aws cloudfront create-invalidation --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" --paths '/*'

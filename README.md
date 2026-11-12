@@ -22,7 +22,7 @@ Copy `.env.EXAMPLE` in the repo root to `.env` and fill in. `.env` is untracked.
 Backend, from `backend/`, with `SPRING_PROFILES_ACTIVE=local`:
 - `DATABASE_URL`, `DATABASE_USER`, `DATABASE_PASSWORD`: PostgreSQL connection
 - `SUPABASE_JWT_ISSUER_URI`, `SUPABASE_JWKS_URI`: Supabase Auth endpoints
-- `SUPABASE_TEST_PROJECT_REF`: the Test project ref. Startup fails unless the Supabase and database settings point at it.
+- `SUPABASE_PROJECT_REF`: the ref of the one Supabase project this environment may use (Test locally and on Test, the production project on Live). Startup fails unless the Supabase and database settings point at it. The older name `SUPABASE_TEST_PROJECT_REF` is still read when this one is absent.
 - `SUPABASE_JWT_AUDIENCE`: optional, defaults to `authenticated`
 - `CORS_ALLOWED_ORIGINS`: optional, defaults to the Vite dev origin
 - `SUPABASE_SERVICE_ROLE_KEY`: optional, secret; staff administration only

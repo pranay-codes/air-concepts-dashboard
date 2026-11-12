@@ -1,0 +1,57 @@
+# INF-006: send one backend image digest to the environment's host through SSM Run Command.
+# Needs setup-environment to have run in the same job. The host script (infra/deploy/deploy-backend.sh) waits for
+# the container to be healthy and restores the previous release itself if it is not.
+name: Deploy backend
+description: Write the committed Compose, Caddyfile and deploy script to the host and run the deploy through SSM.
+inputs:
+  image-digest:
+    description: Backend image digest, with or without the sha256 prefix.
+    required: true
+  comment:
+    description: Short label stored on the SSM command.
+    default: deploy
+runs:
+  using: composite
+  steps:
+    - name: Send the deploy to the host through SSM
+      shell: bash
+      env:
+        NEW_BACKEND_DIGEST: ${{ inputs.image-digest }}
+        COMMAND_COMMENT: ${{ inputs.comment }}
+      run: |
+        set -euo pipefail
+        test -n "$INSTANCE_ID"
+        test -n "$NEW_BACKEND_DIGEST"
+        # Digests arrive as "sha256:<hex>". The host script and Compose take bare hex.
+        digest="${NEW_BACKEND_DIGEST#sha256:}"
+        [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || { echo "Image digest is not 64 hex characters: $NEW_BACKEND_DIGEST" >&2; exit 1; }
+        caddy_digest="$(tr -d '\n' < infra/deploy/caddy-image.digest)"
+        [[ "$caddy_digest" =~ ^[0-9a-f]{64}$ ]] || { echo "infra/deploy/caddy-image.digest is not 64 hex characters" >&2; exit 1; }
+        # The remote command writes the committed Compose and Caddy files and the deploy script to the host,
+        # then runs the script. Only public, non-secret values are exported; the script reads secrets from
+        # Parameter Store itself.
+        {
+          echo 'set -euo pipefail'
+          echo 'umask 077'
+          echo 'cd /opt/air-concepts'
+          echo "export ENVIRONMENT=$ENV_NAME AWS_REGION=$AWS_REGION NEW_BACKEND_DIGEST=$digest CADDY_IMAGE_DIGEST=$caddy_digest BACKEND_REPOSITORY_URI=$ECR_REPOSITORY_URI API_HOSTNAME=$API_HOSTNAME"
+          echo "export API_MEMORY_LIMIT=$API_MEMORY_LIMIT ALLOW_TEST_ONLY_FEATURES=$ALLOW_TEST_ONLY_FEATURES"
+          if [ -n "$SUPABASE_PROJECT_REF" ]; then echo "export EXPECTED_SUPABASE_PROJECT_REF=$SUPABASE_PROJECT_REF"; fi
+          echo "echo '$(base64 -w0 infra/deploy/compose.yaml)' | base64 -d > compose.yaml.new && mv -f compose.yaml.new compose.yaml"
+          echo "echo '$(base64 -w0 infra/deploy/Caddyfile)' | base64 -d > Caddyfile.new && mv -f Caddyfile.new Caddyfile"
+          echo "echo '$(base64 -w0 infra/deploy/deploy-backend.sh)' | base64 -d > deploy-backend.sh"
+          echo "bash deploy-backend.sh"
+        } > remote-command.sh
+        parameters="$(python3 -c 'import json, sys; print(json.dumps({"commands": open(sys.argv[1]).read().splitlines()}))' remote-command.sh)"
+        rm -f remote-command.sh
+        command_id="$(aws ssm send-command \
+          --instance-ids "$INSTANCE_ID" \
+          --document-name AWS-RunShellScript \
+          --comment "${COMMAND_COMMENT} ${GITHUB_SHA}" \
+          --parameters "$parameters" \
+          --query Command.CommandId --output text)"
+        status=0
+        aws ssm wait command-executed --command-id "$command_id" --instance-id "$INSTANCE_ID" || status=$?
+        aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" \
+          --query '[Status,StandardOutputContent,StandardErrorContent]' --output text
+        exit "$status"

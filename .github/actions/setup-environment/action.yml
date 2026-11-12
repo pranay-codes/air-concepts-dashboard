@@ -1,0 +1,55 @@
+# INF-006: load one environment's configuration, assume its AWS role and prove the identity is the right one.
+# The caller job checks out the repository first and grants `id-token: write`. Nothing here is specific to
+# Test or Live: the values come from infra/environments/<environment>.json.
+name: Set up environment
+description: Load infra/environments/<environment>.json into the job, assume that environment's deploy role and confirm the AWS identity.
+inputs:
+  environment:
+    description: test or live
+    required: true
+  require-complete:
+    description: Refuse REPLACE_ME placeholders. Always true for a Live deploy.
+    default: "false"
+  aws:
+    description: Set to false for a job that never calls AWS (a smoke test).
+    default: "true"
+runs:
+  using: composite
+  steps:
+    - name: Load the environment configuration
+      shell: bash
+      env:
+        ENVIRONMENT_NAME: ${{ inputs.environment }}
+        REQUIRE_COMPLETE: ${{ inputs.require-complete }}
+      run: |
+        set -euo pipefail
+        flag=()
+        if [ "$REQUIRE_COMPLETE" = "true" ]; then flag=(--require-complete); fi
+        # The module validates the file and the Test-vs-Live invariants, and prints nothing on failure.
+        python3 infra/scripts/environment_config.py export "$ENVIRONMENT_NAME" "${flag[@]}" > "$RUNNER_TEMP/environment.env"
+        cat "$RUNNER_TEMP/environment.env" >> "$GITHUB_ENV"
+        rm -f "$RUNNER_TEMP/environment.env"
+    - name: Assume the environment's deploy role
+      if: inputs.aws == 'true'
+      uses: aws-actions/configure-aws-credentials@v6.3.0
+      with:
+        role-to-assume: ${{ env.DEPLOY_ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
+    - name: Confirm the AWS identity belongs to this environment
+      if: inputs.aws == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        identity="$(aws sts get-caller-identity --query '[Account,Arn]' --output text)"
+        account="${identity%%$'\t'*}"
+        arn="${identity#*$'\t'}"
+        role_name="${DEPLOY_ROLE_ARN##*/}"
+        if [ "$account" != "$AWS_ACCOUNT_ID" ]; then
+          echo "REFUSED: AWS account $account is not the $ENV_NAME account $AWS_ACCOUNT_ID" >&2
+          exit 1
+        fi
+        case "$arn" in
+          "arn:aws:sts::${AWS_ACCOUNT_ID}:assumed-role/${role_name}/"*) ;;
+          *) echo "REFUSED: the assumed role is not the $ENV_NAME deploy role ($role_name)" >&2; exit 1 ;;
+        esac
+        echo "Environment: $ENV_NAME, account $account, role $role_name"

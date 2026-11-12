@@ -1,5 +1,7 @@
 # CI-002: deploy the backend and frontend to the Test environment after a merge to main.
-# Spec: docs/specs/CI-002-deploy-test.md. Plan: docs/plans/CI-002.md. Test only; no other environment.
+# Spec: docs/specs/CI-002-deploy-test.md. Plan: docs/plans/CI-002.md.
+# INF-006: every environment value comes from infra/environments/test.json through the shared actions in
+# .github/actions/, which the production release workflow also uses. This workflow can only target Test.
 name: deploy-test
 
 on:
@@ -13,11 +15,6 @@ permissions:
 concurrency:
   group: deploy-test
   cancel-in-progress: false
-
-env:
-  AWS_REGION: ap-southeast-2
-  # Multi-arch index digest of caddy:2. The build job checks that it includes linux/arm64.
-  CADDY_IMAGE_DIGEST: dee6bce21b6c3d17c78805046901f9558f0bcfe9d3853f26ab7eb5cf06021ba4
 
 jobs:
   build:
@@ -37,19 +34,19 @@ jobs:
       - name: Package the backend jar
         working-directory: backend
         run: ./mvnw -q -B -DskipTests package
-      - uses: aws-actions/configure-aws-credentials@v6.3.0
+      - uses: ./.github/actions/setup-environment
         with:
-          role-to-assume: ${{ vars.TEST_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+          environment: test
       - uses: aws-actions/amazon-ecr-login@v2
       - name: Check the base images include linux/arm64
         env:
           RUNNER_TEMP_DIR: ${{ runner.temp }}
         run: |
           set -euo pipefail
+          caddy_digest="$(tr -d '\n' < infra/deploy/caddy-image.digest)"
           docker buildx imagetools inspect "eclipse-temurin:25-jre-noble@sha256:a98128a57de944a72bd31fbc79b898edd5a5864d3652071d5bbd2160ab7d7dce" > "$RUNNER_TEMP_DIR/temurin.txt"
           grep -q 'linux/arm64' "$RUNNER_TEMP_DIR/temurin.txt"
-          docker buildx imagetools inspect "caddy@sha256:${CADDY_IMAGE_DIGEST}" > "$RUNNER_TEMP_DIR/caddy.txt"
+          docker buildx imagetools inspect "caddy@sha256:${caddy_digest}" > "$RUNNER_TEMP_DIR/caddy.txt"
           grep -q 'linux/arm64' "$RUNNER_TEMP_DIR/caddy.txt"
       - name: Build and push the arm64 backend image
         id: push
@@ -59,7 +56,7 @@ jobs:
           platforms: linux/arm64
           push: true
           # Tags are immutable in ECR, so each run attempt gets its own tag. Deploys use the digest.
-          tags: ${{ vars.ECR_REPOSITORY_URI }}:${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          tags: ${{ env.ECR_REPOSITORY_URI }}:${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
 
   deploy-backend:
     needs: build
@@ -69,47 +66,13 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v6.3.0
+      - uses: ./.github/actions/setup-environment
         with:
-          role-to-assume: ${{ vars.TEST_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-      - name: Send the deploy to the Test host through SSM
-        env:
-          TEST_INSTANCE_ID: ${{ vars.TEST_INSTANCE_ID }}
-          NEW_BACKEND_DIGEST: ${{ needs.build.outputs.image_digest }}
-          BACKEND_REPOSITORY_URI: ${{ vars.ECR_REPOSITORY_URI }}
-          API_HOSTNAME: ${{ vars.TEST_API_HOSTNAME }}
-        run: |
-          set -euo pipefail
-          test -n "$TEST_INSTANCE_ID"
-          test -n "$NEW_BACKEND_DIGEST"
-          # The build output is "sha256:<hex>". The host script and Compose take bare hex.
-          digest="${NEW_BACKEND_DIGEST#sha256:}"
-          [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || { echo "Image digest is not 64 hex characters: $NEW_BACKEND_DIGEST" >&2; exit 1; }
-          # The remote command writes the committed Compose and Caddy files and the deploy script
-          # to the host, then runs the script. Only public, non-secret values are exported.
-          {
-            echo 'set -euo pipefail'
-            echo 'umask 077'
-            echo 'cd /opt/air-concepts'
-            echo "export ENVIRONMENT=test AWS_REGION=$AWS_REGION NEW_BACKEND_DIGEST=$digest CADDY_IMAGE_DIGEST=$CADDY_IMAGE_DIGEST BACKEND_REPOSITORY_URI=$BACKEND_REPOSITORY_URI API_HOSTNAME=$API_HOSTNAME"
-            echo "echo '$(base64 -w0 infra/deploy/compose.yaml)' | base64 -d > compose.yaml.new && mv -f compose.yaml.new compose.yaml"
-            echo "echo '$(base64 -w0 infra/deploy/Caddyfile)' | base64 -d > Caddyfile.new && mv -f Caddyfile.new Caddyfile"
-            echo "echo '$(base64 -w0 infra/deploy/deploy-test.sh)' | base64 -d > deploy-test.sh"
-            echo "bash deploy-test.sh"
-          } > remote-command.sh
-          parameters="$(python3 -c 'import json, sys; print(json.dumps({"commands": open(sys.argv[1]).read().splitlines()}))' remote-command.sh)"
-          command_id="$(aws ssm send-command \
-            --instance-ids "$TEST_INSTANCE_ID" \
-            --document-name AWS-RunShellScript \
-            --comment "CI-002 deploy ${GITHUB_SHA}" \
-            --parameters "$parameters" \
-            --query Command.CommandId --output text)"
-          status=0
-          aws ssm wait command-executed --command-id "$command_id" --instance-id "$TEST_INSTANCE_ID" || status=$?
-          aws ssm get-command-invocation --command-id "$command_id" --instance-id "$TEST_INSTANCE_ID" \
-            --query '[Status,StandardOutputContent,StandardErrorContent]' --output text
-          exit "$status"
+          environment: test
+      - uses: ./.github/actions/deploy-backend
+        with:
+          image-digest: ${{ needs.build.outputs.image_digest }}
+          comment: CI-002 deploy
 
   deploy-frontend:
     needs: deploy-backend
@@ -119,76 +82,19 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v6.3.0
+      - uses: ./.github/actions/setup-environment
         with:
-          role-to-assume: ${{ vars.TEST_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-      - name: Read the public frontend settings from Test Parameter Store
-        run: |
-          set -euo pipefail
-          aws ssm get-parameters-by-path --path /air-concepts/test/frontend/ --recursive \
-            --query 'Parameters[].[Name,Value]' --output text > frontend-params.tsv
-          found=" "
-          while IFS=$'\t' read -r name value; do
-            case "$name" in
-              /air-concepts/test/frontend/api-base-url) key=VITE_API_BASE_URL ;;
-              /air-concepts/test/frontend/supabase-url) key=VITE_SUPABASE_URL ;;
-              /air-concepts/test/frontend/supabase-publishable-key) key=VITE_SUPABASE_PUBLISHABLE_KEY ;;
-              *) continue ;;
-            esac
-            echo "$key=$value" >> "$GITHUB_ENV"
-            found="$found$key "
-          done < frontend-params.tsv
-          rm -f frontend-params.tsv
-          # A missing parameter would otherwise build a bundle with blank settings that fails in the browser.
-          for key in VITE_API_BASE_URL VITE_SUPABASE_URL VITE_SUPABASE_PUBLISHABLE_KEY; do
-            case "$found" in
-              *" $key "*) ;;
-              *) echo "Missing frontend setting: $key. Set its /air-concepts/test/frontend/ parameter, then re-run." >&2; exit 1 ;;
-            esac
-          done
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - name: Build the frontend
-        working-directory: frontend
-        run: |
-          npm ci --silent
-          npm run build --silent
-      - name: Upload to the Test bucket and invalidate CloudFront
-        working-directory: frontend
-        env:
-          TEST_BUCKET: ${{ vars.TEST_BUCKET }}
-          TEST_DISTRIBUTION_ID: ${{ vars.TEST_DISTRIBUTION_ID }}
-        run: |
-          set -euo pipefail
-          aws s3 sync dist "s3://${TEST_BUCKET}/" --delete --exclude index.html \
-            --cache-control "public,max-age=31536000,immutable"
-          aws s3 cp dist/index.html "s3://${TEST_BUCKET}/index.html" --cache-control "no-cache"
-          aws cloudfront create-invalidation --distribution-id "$TEST_DISTRIBUTION_ID" --paths '/*'
+          environment: test
+      - uses: ./.github/actions/build-frontend
+      - uses: ./.github/actions/publish-frontend
 
   smoke:
     needs: deploy-frontend
     runs-on: ubuntu-24.04
     steps:
-      - name: Check the Test frontend and API health
-        env:
-          FRONTEND_URL: ${{ vars.TEST_FRONTEND_URL }}
-          API_HEALTH_URL: https://${{ vars.TEST_API_HOSTNAME }}/actuator/health
-        run: |
-          set -euo pipefail
-          if ! curl -fsS --retry 5 --retry-delay 5 --retry-all-errors -o /dev/null "$FRONTEND_URL"; then
-            echo "Frontend check failed: $FRONTEND_URL" >&2
-            exit 1
-          fi
-          if ! body="$(curl -fsS --retry 5 --retry-delay 5 --retry-all-errors "$API_HEALTH_URL")"; then
-            echo "API health check failed: $API_HEALTH_URL" >&2
-            exit 1
-          fi
-          if ! grep -q '"status":"UP"' <<< "$body"; then
-            echo "API health is not UP: $API_HEALTH_URL" >&2
-            exit 1
-          fi
-          echo "Frontend and API health checks passed"
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-environment
+        with:
+          environment: test
+          aws: "false"
+      - uses: ./.github/actions/smoke

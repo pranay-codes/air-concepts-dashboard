@@ -1,7 +1,7 @@
-"""Behaviour tests for infra/deploy/deploy-test.sh with stub aws and docker commands.
+"""Behaviour tests for infra/deploy/deploy-backend.sh with stub aws and docker commands.
 
-Spec: docs/specs/CI-002-deploy-test.md (AC-4, AC-5, AC-9, AC-10). Plan: docs/plans/CI-002.md.
-Requirement IDs: TBD. No Docker and no AWS are used; the stubs record their calls.
+Spec: docs/specs/CI-002-deploy-test.md (AC-4, AC-5, AC-9, AC-10) and docs/specs/INF-006-live-environment.md.
+Plans: docs/plans/CI-002.md, docs/plans/INF-006.md. Requirement IDs: INF-006 for the Live cases, TBD earlier. No Docker and no AWS are used; the stubs record their calls.
 
 Bash is taken from TEST_BASH when set, otherwise from PATH. On Windows, point TEST_BASH at
 Git Bash so that WSL's bash.exe is not used.
@@ -16,7 +16,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = ROOT / "infra/deploy/deploy-test.sh"
+SCRIPT = ROOT / "infra/deploy/deploy-backend.sh"
 
 NEW = "a" * 64
 PREV = "b" * 64
@@ -156,11 +156,99 @@ class DeployTestScriptTests(unittest.TestCase):
             return []
         return self.log.read_text(encoding="utf-8").splitlines()
 
-    def test_wrong_environment_is_refused_before_any_aws_or_docker_call(self):
+    def test_unknown_environment_is_refused_before_any_aws_or_docker_call(self):
+        for bad in ("staging", "prod", "", "Test", "test live"):
+            with self.subTest(environment=bad):
+                result = self.run_script(ENVIRONMENT=bad)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(self.calls(), [])
+                self.assertIn("environment", (result.stdout + result.stderr).lower())
+
+    def test_live_reads_only_the_live_parameter_path(self):
+        live_prefix = "/air-concepts/live/backend/"
+        self.params.write_text(
+            "".join(f"{live_prefix}{k}\t{v}\n" for k, v in PARAMS.items()),
+            encoding="utf-8",
+            newline="\n",
+        )
+        result = self.run_script(ENVIRONMENT="live")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        ssm_calls = [c for c in self.calls() if c.startswith("aws ssm get-parameters")]
+        self.assertTrue(ssm_calls)
+        for call in ssm_calls:
+            self.assertIn(live_prefix, call)
+            self.assertNotIn("/air-concepts/test/", call)
+        self.assertIn("Deployed backend digest " + NEW + " to the live host", result.stdout)
+
+    def test_live_does_not_find_test_parameters(self):
+        # Parameter Store only holds Test values here, so a Live deploy must stop instead of using them.
         result = self.run_script(ENVIRONMENT="live")
         self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(any("compose" in call for call in self.calls()))
+        self.assertIn("required setting", (result.stdout + result.stderr).lower())
+
+    def test_project_ref_is_written_under_the_neutral_name(self):
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        lines = (self.air / "runtime" / "backend.env").read_text(encoding="utf-8").splitlines()
+        self.assertIn("SUPABASE_PROJECT_REF=testref123", lines)
+        self.assertFalse(any(line.startswith("SUPABASE_TEST_PROJECT_REF") for line in lines))
+
+    def test_expected_project_ref_mismatch_is_refused_before_any_container_change(self):
+        known_good = self.air / "runtime" / "backend.env"
+        known_good.write_text("DATABASE_URL=known-good\n", encoding="utf-8", newline="\n")
+        result = self.run_script(EXPECTED_SUPABASE_PROJECT_REF="otherproject123")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(any("compose" in call for call in self.calls()))
+        self.assertEqual(known_good.read_text(encoding="utf-8"), "DATABASE_URL=known-good\n")
+        output = result.stdout + result.stderr
+        self.assertIn("does not match", output)
+        self.assertNotIn("testref123", output)
+
+    def test_expected_project_ref_match_is_accepted(self):
+        result = self.run_script(EXPECTED_SUPABASE_PROJECT_REF="testref123")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_malformed_expected_project_ref_is_refused(self):
+        result = self.run_script(EXPECTED_SUPABASE_PROJECT_REF="BAD REF; rm -rf /")
+        self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.calls(), [])
-        self.assertIn("environment", (result.stdout + result.stderr).lower())
+
+    def test_memory_limit_reaches_compose_and_malformed_values_are_refused(self):
+        result = self.run_script(API_MEMORY_LIMIT="1024m")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        bad = self.run_script(API_MEMORY_LIMIT="lots")
+        self.assertNotEqual(bad.returncode, 0)
+        self.assertIn("API_MEMORY_LIMIT", bad.stdout + bad.stderr)
+
+    def _add_diagnostics(self):
+        with self.params.open("a", encoding="utf-8", newline="\n") as output:
+            output.write(f"{PARAM_PREFIX}diagnostics/xero-enabled\ttrue\n")
+            output.write(f"{PARAM_PREFIX}diagnostics/xero-include-bodies\ttrue\n")
+
+    def test_diagnostics_reach_the_backend_only_when_test_only_features_are_allowed(self):
+        self._add_diagnostics()
+        result = self.run_script(ALLOW_TEST_ONLY_FEATURES="true")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        runtime = (self.air / "runtime" / "backend.env").read_text(encoding="utf-8")
+        self.assertIn("DASHBOARD_DIAGNOSTICS_XERO_ENABLED=true", runtime)
+
+    def test_diagnostics_are_ignored_unless_test_only_features_are_allowed(self):
+        # Live must never turn on Xero request or body logging, whatever Parameter Store holds.
+        self._add_diagnostics()
+        for flag in (None, "false", "TRUE", ""):
+            with self.subTest(flag=flag):
+                result = self.run_script(ALLOW_TEST_ONLY_FEATURES=flag)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                runtime = (self.air / "runtime" / "backend.env").read_text(encoding="utf-8")
+                self.assertNotIn("DIAGNOSTICS", runtime)
+
+    def test_first_deploy_failure_with_no_previous_release_stops_the_new_containers(self):
+        result = self.run_script(STUB_FAIL_DIGEST=NEW)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("first deploy", result.stdout + result.stderr)
+        self.assertIn(f"docker compose down digest={NEW}", self.calls())
+        self.assertFalse((self.air / "current-digest").exists())
 
     def test_invalid_digests_are_refused(self):
         for bad in ("sha256:" + NEW, "a" * 63, "A" * 64, "g" * 64):

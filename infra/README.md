@@ -120,13 +120,13 @@ Give CI-002 `EcrRepositoryUri`, `ApiInstanceId`, `FrontendBucketName`, `CloudFro
 
 Bootstrap creates `/opt/air-concepts` and `runtime/`, owned by root with mode 0700. CI-002 delivers the committed `deploy/compose.yaml` and `deploy/Caddyfile` there through SSM Run Command. No SSH/SCP or manual copies. Run Compose from that directory as the authorised host deploy identity.
 
-Non-secret Compose configuration: `ENVIRONMENT` (`test` or `live`), `API_HOSTNAME`, `BACKEND_REPOSITORY_URI`, `BACKEND_IMAGE_DIGEST` and `CADDY_IMAGE_DIGEST`. Digests are 64 hex characters **without** `sha256:`. `API_MEMORY_LIMIT` defaults to `512m`; review `1024m` for Live after measurement. Images are pulled by digest, never `latest`. CI-002 must validate environment names and digest syntax before issuing commands.
+Non-secret Compose configuration: `ENVIRONMENT` (`test` or `live`), `API_HOSTNAME`, `BACKEND_REPOSITORY_URI`, `BACKEND_IMAGE_DIGEST` and `CADDY_IMAGE_DIGEST`. Digests are 64 hex characters **without** `sha256:`. `API_MEMORY_LIMIT` defaults to `512m` and is set per environment by `apiMemoryLimit` in `environments/<env>.json` (Live proposes `1024m`; confirm it against measured headroom on the Live host). Images are pulled by digest, never `latest`. CI-002 must validate environment names and digest syntax before issuing commands.
 
 The backend image interface is Java 25, `linux/arm64`, port 8080, UID/GID 10001, a writable `/tmp` only, `/bin/bash` for its HTTP health probe, and `/actuator/health` returning 200 when ready. The backend Dockerfile and release workflow do not exist yet. Verify the chosen Caddy digest supports ARM64, validate the Caddyfile in that image and smoke-test both containers before deployment. Caddy certificate/config volumes survive container recreation.
 
 CI-002 must read the exact required parameter names from the selected backend path on the host, decrypt in memory, and write `runtime/backend.env` atomically with mode 0600 under the 0700 directory. Use `KEY=literal-value` lines without added quoting: Compose raw format preserves dollar signs and literal quotes. Reject CR/LF and NUL in values before serializing; never silently split or interpolate values. Map keys using [security-access.md](../docs/security-access.md). Refuse missing/empty required settings, wrong environment, invalid values and provider failures before changing containers. Never print decrypted values, enable shell tracing, run Compose config with real secrets in output, or place secrets in UserData, images or frontend variables. Preserve known-good runtime files until the replacement is validated. Remove temporary files on failure.
 
-The current backend startup contract explicitly requires `SUPABASE_TEST_PROJECT_REF`; it was built for Test. **Live application readiness needs a separately reviewed environment-neutral startup guard and secret mapping.** Do not bypass the Test guard or rename Live values to look like Test in this infrastructure task. The shared AWS template supports Live resources; this is not an assertion that the current application is ready for Live.
+The backend startup guard is environment-neutral (INF-006). It requires `SUPABASE_PROJECT_REF`, the one Supabase project this environment may use, and refuses to start unless the issuer, JWKS and database settings all point at it. The same backend image therefore runs on Test and Live; only the configuration differs. `SUPABASE_TEST_PROJECT_REF` is the legacy name and is still read when the new one is absent. See [docs/environments.md](../docs/environments.md) for everything that differs between Test and Live, and [docs/live-environment-runbook.md](../docs/live-environment-runbook.md) to set Live up.
 
 Use profile `hosted`, not Spring profile `test`, because `test` disables the database health check. API has a 512 MiB container limit and conservative JVM limits; Caddy has 96 MiB. Both rotate JSON logs and restart unless stopped. Health checks gate initial proxy startup; CI-002 must also check health after release and restore the previous digest on failure. Docker does not automatically restart a merely unhealthy running container.
 
@@ -153,23 +153,33 @@ AWS references: [rule assertions](https://docs.aws.amazon.com/AWSCloudFormation/
 `.github/workflows/deploy-test.yml` deploys to Test after a merge to `main`, and can also be started by hand. It only deploys when started from `main`. Four jobs run in order:
 
 1. `build`: packages the jar and builds the `linux/arm64` backend image, then pushes it to ECR under the commit SHA.
-2. `deploy-backend`: sends `infra/deploy/compose.yaml`, `Caddyfile` and `deploy-test.sh` to the Test host through SSM Run Command, then runs the script. No SSH.
+2. `deploy-backend`: sends `infra/deploy/compose.yaml`, `Caddyfile` and `deploy-backend.sh` to the Test host through SSM Run Command, then runs the script. No SSH.
 3. `deploy-frontend`: builds the frontend, uploads it to the Test bucket and invalidates CloudFront.
 4. `smoke`: checks the frontend URL and `https://<API hostname>/actuator/health`.
 
-The script on the host reads the backend parameters under `/air-concepts/test/backend/`, writes `runtime/backend.env` with mode 0600, and starts Compose with the new digest. If the new container is not healthy within 180 seconds, it restores the previous digest and previous `backend.env`, then fails the job.
+Since INF-006 the steps are shared actions in `.github/actions/` (`setup-environment`, `deploy-backend`, `build-frontend`, `publish-frontend`, `smoke`, `supabase-migrate`), and the workflow contains no environment values. The release workflow for Live, `deploy-live.yml`, uses the same actions. Every environment value comes from `environments/test.json` (see [environments/README.md](environments/README.md)); the old `TEST_*` repository variables and `ECR_REPOSITORY_URI` are no longer read and can be deleted once a Test deploy has succeeded.
 
-Repository variables, set by a human in GitHub. They are not secrets: `TEST_DEPLOY_ROLE_ARN`, `ECR_REPOSITORY_URI`, `TEST_INSTANCE_ID`, `TEST_API_HOSTNAME`, `TEST_FRONTEND_URL`, `TEST_BUCKET`, `TEST_DISTRIBUTION_ID`.
+The script on the host reads the backend parameters under `/air-concepts/<environment>/backend/`, writes `runtime/backend.env` with mode 0600, and starts Compose with the new digest. If the new container is not healthy within 180 seconds, it restores the previous digest and previous `backend.env`, then fails the job. On a fresh host with no previous release it stops the failed containers instead.
 
-The Test deploy role needs: `ecr:GetAuthorizationToken` and push to the Test repository; `ssm:SendCommand` on the Test instance with `AWS-RunShellScript`; `ssm:GetCommandInvocation` (the wait uses it, and `ssm:ListCommandInvocations` may also be needed); `ssm:GetParametersByPath` on `/air-concepts/test/frontend/*`; S3 list, put and delete on the Test bucket; and `cloudfront:CreateInvalidation` on the Test distribution. A human checks these in AWS. The workflow does not verify them, and the first run confirms them.
+The Test deploy role needs: `ecr:GetAuthorizationToken` and push to the Test repository; `ssm:SendCommand` on the Test instance with `AWS-RunShellScript`; `ssm:GetCommandInvocation` (the wait uses it, and `ssm:ListCommandInvocations` may also be needed); `ssm:GetParametersByPath` on `/air-concepts/test/frontend/*`; S3 list, put and delete on the Test bucket; and `cloudfront:CreateInvalidation` on the Test distribution. A human checks these in AWS. The workflow does not verify them, and the first run confirms them. `sts:GetCallerIdentity` needs no permission.
 
-The `Caddy` digest is pinned in the workflow, and the Temurin digest is pinned in `backend/Dockerfile`. The build job checks that both include `linux/arm64` before it pushes.
+The `Caddy` digest is pinned in `deploy/caddy-image.digest`, and the Temurin digest is pinned in `backend/Dockerfile`. The build job checks that both include `linux/arm64` before it pushes.
 
-Manual rollback is not yet decided. Re-running an older workflow run rebuilds that commit and pushes its SHA tag again, which fails with immutable tags and overwrites the tag otherwise. See [docs/plans/CI-002.md](../docs/plans/CI-002.md).
+Rollback for Test is a new merge or a manual run of the previous commit. Live has its own recorded rollback (below).
 
-## Parameter Store setup (Test)
+## Live environment (INF-006)
 
-`scripts/setup-test-parameters.py` asks you for each value and writes it to AWS Systems Manager Parameter Store under `/air-concepts/test/` in `ap-southeast-2`. It covers the backend API and the frontend. Parameter list, IAM and policy JSON: [docs/security-access.md](../docs/security-access.md).
+Live is the same template, the same shared actions and the same host script, with its own configuration. Start with [docs/live-environment-runbook.md](../docs/live-environment-runbook.md); the differences from Test are in [docs/environments.md](../docs/environments.md).
+
+- **Stack:** `air-concepts-live-infrastructure`, created from `cloudformation/infrastructure.json` with `params/live.local.json` (copy `params/live.example.json`). Review a change set as in the Test commands above, using the Live profile and stack name.
+- **After creation:** run `aws cloudformation update-termination-protection --enable-termination-protection --stack-name air-concepts-live-infrastructure`, and set `cloudformation/live-stack-policy.json` as the stack policy (`aws cloudformation set-stack-policy --stack-name air-concepts-live-infrastructure --stack-policy-body file://infra/cloudformation/live-stack-policy.json`). The policy blocks any update that would replace or delete the instance, Elastic IP, bucket, repository or distribution. To approve one deliberately, pass `--stack-policy-during-update-body` on that update only.
+- **Deploy role:** `cloudformation/deployer-role.json`, a second small stack created after the first, so the role can name the Live instance, bucket and distribution. It trusts only `deploy-live.yml` on `main`, running in the `live` GitHub environment.
+- **Release:** `.github/workflows/deploy-live.yml` is started by hand. It promotes a Test-built image by digest, applies migrations, deploys and records the release. It never builds the backend.
+- **Config:** `environments/live.json`. Fill it with `python infra/scripts/environment_config.py from-stack live --profile <live-profile>`.
+
+## Parameter Store setup (Test and Live)
+
+`scripts/setup-parameters.py` asks you for each value and writes it to AWS Systems Manager Parameter Store under `/air-concepts/<environment>/` in `ap-southeast-2`. Choose the environment with `--environment test` (the default) or `--environment live`. It covers the backend API and the frontend. Parameter list, IAM and policy JSON: [docs/security-access.md](../docs/security-access.md). The commands below use Test; for Live add `--environment live` and a Live profile. Live does not offer the Test-only Xero diagnostics keys.
 
 How it works:
 
@@ -177,8 +187,8 @@ How it works:
 - With `--apply` it asks for each key that is not set. Type the value and press Enter. Secret values are hidden as you type. A blank answer skips that key.
 - Existing keys are kept. `--overwrite` asks for them too and replaces them. In a dry run it shows them as `would replace`.
 - Values are never printed or saved to a file.
-- `--add-custom` (with `--apply`) asks after the built-in keys for your own parameter names under `/air-concepts/test/`, such as `app/feature/limit`. For each name, choose `String` or `SecureString`, then type the value. A blank name finishes. Names may use letters, digits, `-`, `_`, `.` and `/`. A name that is already listed, or that names `live`, is refused.
-- The script stops before anything is written if the caller is not in `--expected-account-id`, or if a path is outside `/air-concepts/test/` or names `live`.
+- `--add-custom` (with `--apply`) asks after the built-in keys for your own parameter names under the chosen root, such as `app/feature/limit`. For each name, choose `String` or `SecureString`, then type the value. A blank name finishes. Names may use letters, digits, `-`, `_`, `.` and `/`. A name that is already listed, or that names another environment, is refused.
+- The script stops before anything is written if the caller is not in `--expected-account-id`, or if a path is outside the chosen root or names another environment.
 
 The script does not check the values. A wrong value is written as typed. A required key left blank means the API may not start, so check the values before the next deploy.
 
@@ -198,19 +208,19 @@ Commands. Use your own named Test profile. Agents do not run any of these.
 
 ```bash
 # 1. List every key and what is set. Writes nothing.
-python infra/scripts/setup-test-parameters.py --profile <test-profile> --expected-account-id 923079246426
+python infra/scripts/setup-parameters.py --profile <test-profile> --expected-account-id 923079246426
 
 # 2. Enter values for keys that are not set yet. Blank skips a key.
-python infra/scripts/setup-test-parameters.py --profile <test-profile> --expected-account-id 923079246426 --apply
+python infra/scripts/setup-parameters.py --profile <test-profile> --expected-account-id 923079246426 --apply
 
 # 3. Same, with a customer-managed KMS key for SecureString values
-python infra/scripts/setup-test-parameters.py --profile <test-profile> --expected-account-id 923079246426 --apply --kms-key-id alias/<test-key>
+python infra/scripts/setup-parameters.py --profile <test-profile> --expected-account-id 923079246426 --apply --kms-key-id alias/<test-key>
 
 # 4. Replace existing values as well (asks for every key)
-python infra/scripts/setup-test-parameters.py --profile <test-profile> --expected-account-id 923079246426 --apply --overwrite
+python infra/scripts/setup-parameters.py --profile <test-profile> --expected-account-id 923079246426 --apply --overwrite
 
 # 5. Enter values for the built-in keys, then your own parameters
-python infra/scripts/setup-test-parameters.py --profile <test-profile> --expected-account-id 923079246426 --apply --add-custom
+python infra/scripts/setup-parameters.py --profile <test-profile> --expected-account-id 923079246426 --apply --add-custom
 ```
 
 Exit codes: `0` success or dry run, `1` a write failed, `2` refused by a safety check. Nothing is written on exit `2`.

@@ -8,7 +8,7 @@ Every request made through the accounting `RestClient` (invoices, forecast sync,
 
 ## Enable it (Test environment only)
 
-On Test, set these SSM parameters under `/air-concepts/test/`. The Test deploy (`infra/deploy/deploy-test.sh`) writes them to the backend environment, and the backend reads them at startup:
+On Test, set these SSM parameters under `/air-concepts/test/`. The Test deploy (`infra/deploy/deploy-backend.sh`) writes them to the backend environment (Live ignores them: `allowTestOnlyFeatures` is `false` in `infra/environments/live.json`), and the backend reads them at startup:
 
 | SSM parameter | Environment variable | Default | Meaning |
 | --- | --- | --- | --- |
