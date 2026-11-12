@@ -41,8 +41,22 @@ export async function forecastBoundary(page: Page) {
         month: "2-digit",
       }).formatToParts(new Date());
       const current = `${parts.find((p) => p.type === "year")?.value}-${parts.find((p) => p.type === "month")?.value}`;
-      const start = url.searchParams.get("startMonth") ?? current;
-      const [year = "2026", month = "11"] = start.split("-");
+      // The backend's financial year starts in April; the query carries the four-digit start year.
+      const [currentYear = 2026, currentMonth = 11] = current.split("-").map(Number);
+      const requestedYear = url.searchParams.get("financialYearStart");
+      const fyYear = requestedYear ?? String(currentMonth >= 4 ? currentYear : currentYear - 1);
+      const start = `${fyYear}-04`;
+      const [year = "2026", month = "04"] = start.split("-");
+      const monthKey = (i: number) =>
+        new Date(Date.UTC(Number(year), Number(month) - 1 + i, 1)).toISOString().slice(0, 7);
+      // Fields every month row carries in the current contract.
+      const monthState = {
+        state: "PREVIEW",
+        generatable: false,
+        generatedAt: null,
+        pendingNewItems: 0,
+        openingSource: null,
+      };
       const adjustment = {
         documentId: INVOICE_A,
         expectedDateOverride: null,
@@ -95,6 +109,9 @@ export async function forecastBoundary(page: Page) {
       } else if (path.includes("/months/")) {
         result = {
           month: path.split("/").at(-2),
+          state: "PREVIEW",
+          generatable: false,
+          notes: [],
           items: excluded.has(entity)
             ? []
             : [
@@ -148,9 +165,7 @@ export async function forecastBoundary(page: Page) {
           );
       } else if (path.endsWith("/combined")) {
         const months = Array.from({ length: 12 }, (_, i) => ({
-          month: new Date(Date.UTC(Number(year), Number(month) - 1 + i, 1))
-            .toISOString()
-            .slice(0, 7),
+          month: monthKey(i),
           opening: null,
           closing: null,
           receipts: "0.00",
@@ -159,10 +174,12 @@ export async function forecastBoundary(page: Page) {
           receiptCount: 0,
           paymentCount: 0,
           containsOverdue: false,
+          ...monthState,
         }));
         const ids = (url.searchParams.get("entityIds") ?? "").split(",");
         result = {
-          startMonth: start,
+          financialYearStart: start,
+          financialYearLabel: `${fyYear}-${Number(fyYear) + 1}`,
           months,
           complete: false,
           entities: ids.map((id) => ({
@@ -182,9 +199,7 @@ export async function forecastBoundary(page: Page) {
           const initial = balance;
           if (balance !== null) balance += i === 0 ? receipt : 0;
           return {
-            month: new Date(Date.UTC(Number(year), Number(month) - 1 + i, 1))
-              .toISOString()
-              .slice(0, 7),
+            month: monthKey(i),
             opening: initial === null ? null : initial.toFixed(2),
             receipts: (i === 0 ? receipt : 0).toFixed(2),
             payments: "0.00",
@@ -193,12 +208,14 @@ export async function forecastBoundary(page: Page) {
             receiptCount: i === 0 && !excluded.has(entity) ? 1 : 0,
             paymentCount: 0,
             containsOverdue: false,
+            ...monthState,
           };
         });
         result = {
           entityId: entity,
           entityName: "Synthetic",
-          startMonth: start,
+          financialYearStart: start,
+          financialYearLabel: `${fyYear}-${Number(fyYear) + 1}`,
           months,
           totals: {
             receipts: receipt.toFixed(2),

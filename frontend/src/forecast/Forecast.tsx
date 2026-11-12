@@ -231,8 +231,17 @@ function EntityForecast(props: Props & { entity: Entity }) {
                 selectedMonth={selectedMonth}
                 summary={resource.data?.months.find((row) => row.month === selectedMonth) ?? null}
                 onBack={() => {
+                  const returningTo = selectedMonth;
                   setSelectedMonth(null);
-                  requestAnimationFrame(() => monthOpener.current?.focus());
+                  // The month page replaces the table, so the button that opened it is gone; focus the
+                  // freshly rendered button for the same month.
+                  requestAnimationFrame(() =>
+                    (
+                      window.document.querySelector<HTMLElement>(
+                        `[data-forecast-month="${returningTo}"]`,
+                      ) ?? monthOpener.current
+                    )?.focus(),
+                  );
                 }}
               />
             ) : resource.data ? (

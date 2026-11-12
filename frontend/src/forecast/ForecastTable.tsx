@@ -189,6 +189,7 @@ export function ForecastTable({
                     <button
                       type="button"
                       className="link-button"
+                      data-forecast-month={month.month}
                       onClick={() => onOpen(month.month)}
                     >
                       View {monthName(month.month)}

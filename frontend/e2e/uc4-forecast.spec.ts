@@ -43,23 +43,30 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       .filter({ visible: true })
       .first();
     await monthTrigger.click();
-    if (width < 1200)
-      await expect(
-        page.getByRole("button", { name: /^View / }).filter({ visible: true }),
-      ).toHaveCount(0);
+    // The month opens as a full page at every width: the table is replaced by the ledger.
+    await expect(page.getByRole("heading", { name: /cash forecast$/ })).toBeVisible();
     await expect(
-      page.getByRole("region", { name: /Details for/ }).getByText("INV-001", { exact: true }),
+      page.getByRole("button", { name: /^View / }).filter({ visible: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("region", { name: "Money In" }).getByText(/INV-001 · Forecast customer/),
     ).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath(`uc4-detail-${width}.png`), fullPage: true });
+    await page.getByRole("button", { name: "Back to forecast", exact: true }).click();
+    await expect(monthTrigger).toBeFocused();
+    // Exclusion is an invoice-level action on the Xero items tab.
     await page
-      .getByRole("region", { name: /Details for/ })
-      .getByRole("button", { name: "Exclude", exact: true })
+      .getByRole("tablist", { name: "Forecast sections" })
+      .getByRole("tab", { name: "Xero items", exact: true })
       .click();
+    await page.getByRole("button", { name: "Exclude", exact: true }).click();
     await page.getByLabel("Reason for exclusion").fill("No cash expected in this period");
     await page.getByRole("button", { name: "Exclude from forecast", exact: true }).click();
     await expect.poll(() => state.excluded.get(ENTITY_A)).toBe("No cash expected in this period");
-    await page.getByRole("button", { name: "Back to forecast", exact: true }).click();
-    await expect(monthTrigger).toBeFocused();
+    await page
+      .getByRole("tablist", { name: "Forecast sections" })
+      .getByRole("tab", { name: "Forecast", exact: true })
+      .click();
     await expect(page.getByText(/1,115\.00/).filter({ visible: true })).toHaveCount(0);
     await page.getByText("Excluded documents (1)", { exact: true }).click();
     await expect(page.getByRole("button", { name: "Include again", exact: true })).toHaveCount(1);
@@ -116,7 +123,7 @@ test("FR-UC04-06_07 failed forecast load retains context and Retry recovers", as
     12,
   );
   await expect(page.getByRole("alert")).toHaveCount(0);
-  await expect(page.getByLabel("Forecast start month", { exact: true })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Financial year" })).toBeVisible();
 });
 test("FR-UC04-03_13 manual and staffing edits, deactivation and combined view", async ({
   page,
@@ -131,8 +138,8 @@ test("FR-UC04-03_13 manual and staffing edits, deactivation and combined view", 
   for (const kind of ["manual", "staffing"] as const) {
     const tab = kind === "manual" ? "Manual items" : "Staffing";
     await page
-      .getByRole("navigation", { name: "Forecast sections" })
-      .getByRole("button", { name: tab, exact: true })
+      .getByRole("tablist", { name: "Forecast sections" })
+      .getByRole("tab", { name: tab, exact: true })
       .click();
     await page
       .getByRole("button", {
