@@ -53,9 +53,17 @@ def test_committed_files_have_exactly_the_same_keys():
     assert set(COMMITTED["test"]) == set(COMMITTED["live"]) == set(cfg.KEYS)
 
 
-def test_live_placeholders_are_accepted_by_ci_but_refused_for_a_deploy():
-    assert cfg.validate_all() == []
-    refused = cfg.validate_all(require_complete=["live"])
+def placeholder_live_dir(tmp_path):
+    """A Live file with the Supabase ref still unset, to exercise the placeholder rules."""
+    live = copy.deepcopy(COMMITTED["live"])
+    live["supabaseProjectRef"] = "REPLACE_ME_LIVE_SUPABASE_PROJECT_REF"
+    return write(tmp_path / "environments", {"test": COMMITTED["test"], "live": live})
+
+
+def test_live_placeholders_are_accepted_by_ci_but_refused_for_a_deploy(tmp_path):
+    directory = placeholder_live_dir(tmp_path)
+    assert cfg.validate_all(directory) == []
+    refused = cfg.validate_all(directory, require_complete=["live"])
     assert refused and all("placeholder" in line for line in refused)
 
 
@@ -196,9 +204,10 @@ def test_export_prints_every_value_for_the_environment():
     assert len(lines) == len(cfg.KEYS)
 
 
-def test_export_for_live_is_refused_while_placeholders_remain():
+def test_export_for_live_is_refused_while_placeholders_remain(tmp_path):
+    directory = placeholder_live_dir(tmp_path)
     with pytest.raises(cfg.ConfigError, match="placeholder"):
-        cfg.export_lines("live", require_complete=True)
+        cfg.export_lines("live", require_complete=True, directory=directory)
 
 
 def test_export_for_live_works_once_complete(tmp_path):
@@ -225,10 +234,12 @@ def test_unknown_environment_is_refused():
         cfg.config_path("staging")
 
 
-def test_cli_validate_succeeds_and_export_refuses_incomplete_live(capsys):
+def test_cli_validate_and_export_accept_the_committed_complete_live(capsys):
     assert cfg.main(["validate"]) == 0
-    assert cfg.main(["export", "live", "--require-complete"]) == 2
-    assert "placeholder" in capsys.readouterr().err
+    assert cfg.main(["export", "live", "--require-complete"]) == 0
+    out = capsys.readouterr().out
+    assert "ENV_NAME=live" in out
+    assert "REPLACE_ME" not in out
 
 
 # --- from-stack helpers (no AWS) ----------------------------------------------------------------
