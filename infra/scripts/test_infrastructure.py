@@ -181,6 +181,24 @@ class InfrastructureTests(unittest.TestCase):
         self.assertIn('LiveInstanceSize', rules)
         self.assertIn('ExistingRepositoryUri', self.template['Conditions'])
 
+    def test_INF002_fn_equals_takes_exactly_two_string_operands(self):
+        # CloudFormation rejects Fn::Equals unless it has exactly 2 operands and every literal is a string
+        # (a JSON number such as 10 fails template validation even though the list length is right).
+        def check(node, where):
+            if isinstance(node, dict):
+                for key, value in node.items():
+                    if key == 'Fn::Equals':
+                        self.assertIsInstance(value, list, where)
+                        self.assertEqual(len(value), 2, where)
+                        for operand in value:
+                            self.assertNotIsInstance(operand, (list, bool, int, float), where)
+                    check(value, f'{where}/{key}')
+            elif isinstance(node, list):
+                for index, value in enumerate(node):
+                    check(value, f'{where}/{index}')
+        for name in ('infrastructure.json', 'deployer-role.json'):
+            check(json.loads((ROOT / 'infra/cloudformation' / name).read_text()), name)
+
     def configuration_errors(self, **overrides):
         parameters = {k: v.get('Default', '') for k, v in self.template['Parameters'].items()}
         parameters.update({'ExpectedAccountId': '123456789012', 'AWS::AccountId': '123456789012',
@@ -190,6 +208,9 @@ class InfrastructureTests(unittest.TestCase):
         parameter_types = {}
         for pname, spec in self.template['Parameters'].items():
             parameter_types.setdefault(spec['Type'], []).append(pname)
+        # CloudFormation resolves Ref on a Number parameter to a string, and Fn::Equals accepts only strings.
+        for pname in parameter_types.get('Number', []):
+            parameters[pname] = str(parameters[pname])
         errors = []
         for name, rule in self.template['Rules'].items():
             if not evaluate(rule.get('RuleCondition', True), parameters, self.template['Mappings'],

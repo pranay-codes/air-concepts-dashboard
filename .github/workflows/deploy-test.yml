@@ -57,6 +57,26 @@ jobs:
           push: true
           # Tags are immutable in ECR, so each run attempt gets its own tag. Deploys use the digest.
           tags: ${{ env.ECR_REPOSITORY_URI }}:${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+      # The release tag's notes need these two lines to name the commit and image that Test deployed.
+      - name: Print the commit and image tag for the release notes
+        env:
+          IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Release notes fields for this Test deploy"
+            echo ""
+            echo "Add these lines to the release notes of the release tag (with a Tag line such as v0.1):"
+            echo ""
+            echo '```text'
+            echo "Commit: $GITHUB_SHA"
+            echo "Image: $IMAGE_TAG"
+            echo '```'
+            echo ""
+            echo "Start the notes from docs/release-notes-template.md and add a short summary of what is deployed."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Commit: $GITHUB_SHA"
+          echo "Image: $IMAGE_TAG"
 
   deploy-backend:
     needs: build
