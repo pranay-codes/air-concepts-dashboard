@@ -26,7 +26,7 @@ def complete_live():
     """A fully provisioned Live file, distinct from Test everywhere."""
     live = copy.deepcopy(COMMITTED["live"])
     live.update({
-        "instanceId": "i-0123456789abcdef0",
+        "instanceId": "i-00000000000000000",
         "apiHostname": "api.example.org",
         "frontendUrl": "https://app.example.org",
         "frontendBucket": "air-concepts-live-infrast-bucket-abc123",
@@ -230,7 +230,7 @@ def test_cli_validate_succeeds_and_export_refuses_incomplete_live(capsys):
 
 def test_stack_outputs_map_to_config_keys():
     values = cfg.stack_values({
-        "ApiInstanceId": "i-0123456789abcdef0",
+        "ApiInstanceId": "i-00000000000000000",
         "FrontendBucketName": "bucket-name-here",
         "CloudFrontDistributionId": "E1234567890ABC",
         "FrontendUrl": "https://dxxxx.cloudfront.net",
@@ -238,7 +238,7 @@ def test_stack_outputs_map_to_config_keys():
         "StackName": "ignored",
     })
     assert values == {
-        "instanceId": "i-0123456789abcdef0",
+        "instanceId": "i-00000000000000000",
         "frontendBucket": "bucket-name-here",
         "cloudFrontDistributionId": "E1234567890ABC",
         "frontendUrl": "https://dxxxx.cloudfront.net",
