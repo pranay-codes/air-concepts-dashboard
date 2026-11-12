@@ -1,0 +1,17 @@
+{
+  "environment": "live",
+  "awsRegion": "ap-southeast-2",
+  "awsAccountId": "923079246426",
+  "stackName": "air-concepts-live-infrastructure",
+  "deployRoleArn": "arn:aws:iam::923079246426:role/airconcepts-live-deployer",
+  "instanceId": "REPLACE_ME_LIVE_INSTANCE_ID",
+  "apiHostname": "REPLACE_ME_LIVE_API_HOSTNAME",
+  "frontendUrl": "REPLACE_ME_LIVE_FRONTEND_URL",
+  "frontendBucket": "REPLACE_ME_LIVE_FRONTEND_BUCKET",
+  "cloudFrontDistributionId": "REPLACE_ME_LIVE_DISTRIBUTION_ID",
+  "ecrRepositoryUri": "923079246426.dkr.ecr.ap-southeast-2.amazonaws.com/air-concepts-live-backend",
+  "ssmPrefix": "/air-concepts/live/",
+  "supabaseProjectRef": "REPLACE_ME_LIVE_SUPABASE_PROJECT_REF",
+  "apiMemoryLimit": "1024m",
+  "allowTestOnlyFeatures": false
+}

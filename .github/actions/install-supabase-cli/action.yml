@@ -1,0 +1,21 @@
+# DB-002 / INF-006: install the one pinned Supabase CLI version used by every migration job.
+name: Install Supabase CLI
+description: Install the pinned Supabase CLI from npm.
+inputs:
+  version:
+    description: Supabase CLI version.
+    default: "3.0.0"
+runs:
+  using: composite
+  steps:
+    - name: Install Supabase CLI
+      shell: bash
+      env:
+        SUPABASE_CLI_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        npm install --prefix "$RUNNER_TEMP/supabase-cli" "supabase@$SUPABASE_CLI_VERSION"
+        echo "$RUNNER_TEMP/supabase-cli/node_modules/.bin" >> "$GITHUB_PATH"
+    - name: Check Supabase CLI
+      shell: bash
+      run: supabase --version

@@ -1,0 +1,295 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "INF-006: GitHub OIDC deploy role for the Live environment. Created after the Live infrastructure stack. It can deploy only Live resources and read (never write) the Test image repository.",
+  "Parameters": {
+    "ExpectedAccountId": {
+      "Type": "String",
+      "Description": "12-digit AWS account ID. The stack refuses to create in any other account.",
+      "AllowedPattern": "[0-9]{12}"
+    },
+    "GitHubOidcProviderArn": {
+      "Type": "String",
+      "Description": "ARN of the existing token.actions.githubusercontent.com IAM OIDC provider in this account.",
+      "AllowedPattern": "arn:aws:iam::[0-9]{12}:oidc-provider/token\\.actions\\.githubusercontent\\.com"
+    },
+    "GitHubRepository": {
+      "Type": "String",
+      "Description": "owner/name of the repository whose deploy-live workflow may assume the role.",
+      "AllowedPattern": "[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+"
+    },
+    "GitHubEnvironment": {
+      "Type": "String",
+      "Description": "GitHub environment name that the Live jobs run in.",
+      "Default": "live",
+      "AllowedPattern": "[a-z0-9-]+"
+    },
+    "AllowedWorkflowFile": {
+      "Type": "String",
+      "Description": "Workflow file, on the main branch, that may assume the role.",
+      "Default": ".github/workflows/deploy-live.yml",
+      "AllowedPattern": "\\.github/workflows/[A-Za-z0-9_.-]+\\.yml"
+    },
+    "LiveInstanceId": {
+      "Type": "String",
+      "Description": "ApiInstanceId output of the Live infrastructure stack.",
+      "AllowedPattern": "i-[0-9a-f]{8,17}"
+    },
+    "LiveFrontendBucketName": {
+      "Type": "String",
+      "Description": "FrontendBucketName output of the Live infrastructure stack.",
+      "AllowedPattern": "[a-z0-9][a-z0-9.-]{2,62}"
+    },
+    "LiveDistributionId": {
+      "Type": "String",
+      "Description": "CloudFrontDistributionId output of the Live infrastructure stack.",
+      "AllowedPattern": "E[A-Z0-9]{8,20}"
+    },
+    "LiveRepositoryName": {
+      "Type": "String",
+      "Description": "Live backend ECR repository name (the infrastructure stack names it air-concepts-live-backend).",
+      "Default": "air-concepts-live-backend",
+      "AllowedPattern": "air-concepts-live-[a-z0-9-]+"
+    },
+    "TestRepositoryName": {
+      "Type": "String",
+      "Description": "Test backend ECR repository. Live only reads from it, to promote a tested image by digest.",
+      "Default": "air-concepts-test-backend",
+      "AllowedPattern": "air-concepts-test-[a-z0-9-]+"
+    },
+    "LiveStackName": {
+      "Type": "String",
+      "Description": "Name of the Live infrastructure stack.",
+      "Default": "air-concepts-live-infrastructure",
+      "AllowedPattern": "air-concepts-live-[a-z0-9-]+"
+    }
+  },
+  "Rules": {
+    "SydneyOnly": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Equals": [{ "Ref": "AWS::Region" }, "ap-southeast-2"]
+          },
+          "AssertDescription": "The Live deploy role stack belongs in ap-southeast-2."
+        }
+      ]
+    },
+    "ExpectedAccount": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Equals": [{ "Ref": "AWS::AccountId" }, { "Ref": "ExpectedAccountId" }]
+          },
+          "AssertDescription": "The account does not match ExpectedAccountId. Nothing was created."
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "AirConceptsLiveDeployRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "airconcepts-live-deployer",
+        "Description": "Assumed by the deploy-live GitHub workflow through OIDC. Live resources only.",
+        "MaxSessionDuration": 3600,
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "OnlyTheLiveWorkflowOnMain",
+              "Effect": "Allow",
+              "Principal": { "Federated": { "Ref": "GitHubOidcProviderArn" } },
+              "Action": "sts:AssumeRoleWithWebIdentity",
+              "Condition": {
+                "StringEquals": {
+                  "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+                  "token.actions.githubusercontent.com:sub": {
+                    "Fn::Sub": "repo:${GitHubRepository}:environment:${GitHubEnvironment}"
+                  },
+                  "token.actions.githubusercontent.com:job_workflow_ref": {
+                    "Fn::Sub": "${GitHubRepository}/${AllowedWorkflowFile}@refs/heads/main"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "LiveDeploy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "EcrLogin",
+                  "Effect": "Allow",
+                  "Action": "ecr:GetAuthorizationToken",
+                  "Resource": "*"
+                },
+                {
+                  "Sid": "PushAndPullLiveImages",
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecr:BatchCheckLayerAvailability",
+                    "ecr:BatchGetImage",
+                    "ecr:CompleteLayerUpload",
+                    "ecr:DescribeImages",
+                    "ecr:GetDownloadUrlForLayer",
+                    "ecr:InitiateLayerUpload",
+                    "ecr:ListImages",
+                    "ecr:PutImage",
+                    "ecr:UploadLayerPart"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/${LiveRepositoryName}"
+                  }
+                },
+                {
+                  "Sid": "ReadTestImagesToPromoteThem",
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecr:BatchCheckLayerAvailability",
+                    "ecr:BatchGetImage",
+                    "ecr:DescribeImages",
+                    "ecr:GetDownloadUrlForLayer"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/${TestRepositoryName}"
+                  }
+                },
+                {
+                  "Sid": "RunDeployCommandOnTheLiveInstanceOnly",
+                  "Effect": "Allow",
+                  "Action": "ssm:SendCommand",
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/${LiveInstanceId}"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:ssm:${AWS::Region}::document/AWS-RunShellScript"
+                    }
+                  ]
+                },
+                {
+                  "Sid": "ReadCommandResults",
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetCommandInvocation",
+                    "ssm:ListCommandInvocations"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Sid": "ReadPublicFrontendSettings",
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetParameter",
+                    "ssm:GetParameters",
+                    "ssm:GetParametersByPath"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/air-concepts/live/frontend"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/air-concepts/live/frontend/*"
+                    }
+                  ]
+                },
+                {
+                  "Sid": "RecordReleases",
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetParameter",
+                    "ssm:PutParameter"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/air-concepts/live/release/*"
+                  }
+                },
+                {
+                  "Sid": "ListLiveFrontendBucket",
+                  "Effect": "Allow",
+                  "Action": "s3:ListBucket",
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:s3:::${LiveFrontendBucketName}"
+                  }
+                },
+                {
+                  "Sid": "PublishLiveFrontend",
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:DeleteObject",
+                    "s3:GetObject",
+                    "s3:PutObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:s3:::${LiveFrontendBucketName}/*"
+                  }
+                },
+                {
+                  "Sid": "InvalidateLiveDistribution",
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudfront:CreateInvalidation",
+                    "cloudfront:GetInvalidation"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${LiveDistributionId}"
+                  }
+                },
+                {
+                  "Sid": "CheckTheTargetIsTaggedLive",
+                  "Effect": "Allow",
+                  "Action": "ec2:DescribeInstances",
+                  "Resource": "*"
+                },
+                {
+                  "Sid": "ReadTheLiveStack",
+                  "Effect": "Allow",
+                  "Action": "cloudformation:DescribeStacks",
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${LiveStackName}/*"
+                  }
+                },
+                {
+                  "Sid": "NeverTouchTestParameters",
+                  "Effect": "Deny",
+                  "Action": "ssm:*",
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/air-concepts/test/*"
+                  }
+                },
+                {
+                  "Sid": "NeverWriteTestImages",
+                  "Effect": "Deny",
+                  "Action": [
+                    "ecr:CompleteLayerUpload",
+                    "ecr:InitiateLayerUpload",
+                    "ecr:PutImage",
+                    "ecr:UploadLayerPart"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/${TestRepositoryName}"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          { "Key": "client", "Value": "air-concepts" },
+          { "Key": "environment", "Value": "live" },
+          { "Key": "project", "Value": "air-concepts" },
+          { "Key": "requirement", "Value": "INF-006" }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "DeployRoleArn": {
+      "Description": "Put this in infra/environments/live.json as deployRoleArn.",
+      "Value": { "Fn::GetAtt": ["AirConceptsLiveDeployRole", "Arn"] }
+    }
+  }
+}

@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-"""Enter Test values for the Air Concepts dashboard into AWS Parameter Store.
+"""Enter values for the Air Concepts dashboard into AWS Parameter Store, for one environment.
 
 Without --apply: lists every key, whether it is already set, and writes nothing.
 With --apply: asks for each key that is not set yet. Leave a prompt blank to skip it.
 Secret values are hidden as you type. Values are not printed or saved to disk.
 
-Only paths under /air-concepts/test/ are written. Live is not handled by this script.
+--environment picks the root, /air-concepts/test/ (the default) or /air-concepts/live/. Only paths under that
+one root are written, and any name that mentions another environment is refused. Keys that exist for Test only
+(Xero request diagnostics) are not offered for Live.
 
-  python setup-test-parameters.py --profile <name> --expected-account-id 923079246426
-  python setup-test-parameters.py --profile <name> --expected-account-id 923079246426 --apply
-  python setup-test-parameters.py --profile <name> --expected-account-id 923079246426 --apply --add-custom
+  python setup-parameters.py --profile <name> --expected-account-id 923079246426
+  python setup-parameters.py --environment live --profile <name> --expected-account-id 923079246426 --apply
+  python setup-parameters.py --profile <name> --expected-account-id 923079246426 --apply --add-custom
 
---add-custom asks, after the built-in keys, for your own parameter names under the Test root.
+--add-custom asks, after the built-in keys, for your own parameter names under the root.
 It works with --apply only. Leave the name blank to finish.
 """
 
@@ -28,9 +30,12 @@ from typing import Callable, Optional, Sequence, Set
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
-ROOT = "/air-concepts/test/"
+ENVIRONMENTS = ("test", "live")
 REGION = "ap-southeast-2"
-BLOCKED_SEGMENTS = frozenset({"live", "prod", "production"})
+# Every segment that names an environment. The one being configured is removed in configure().
+_ENVIRONMENT_SEGMENTS = frozenset({"test", "live", "prod", "production"})
+ROOT = "/air-concepts/test/"
+BLOCKED_SEGMENTS = _ENVIRONMENT_SEGMENTS - {"test"}
 EXIT_OK, EXIT_FAILED, EXIT_REFUSED = 0, 1, 2
 
 
@@ -44,6 +49,16 @@ class Key:
     kind: str  # SSM type: "String" or "SecureString"
     used_by: str  # where the value goes
     required: bool = True
+    test_only: bool = False  # not offered outside Test
+
+
+def configure(environment: str) -> None:
+    """Select the environment root. Names that mention any other environment are then refused."""
+    global ROOT, BLOCKED_SEGMENTS
+    if environment not in ENVIRONMENTS:
+        raise Refused(f"environment must be one of {', '.join(ENVIRONMENTS)}")
+    ROOT = f"/air-concepts/{environment}/"
+    BLOCKED_SEGMENTS = _ENVIRONMENT_SEGMENTS - {environment}
 
 
 KEYS = (
@@ -51,7 +66,7 @@ KEYS = (
     Key("backend/db/jdbc-url", "String", "API DATABASE_URL"),
     Key("backend/db/username", "String", "API DATABASE_USER"),
     Key("backend/db/password", "SecureString", "API DATABASE_PASSWORD"),
-    Key("backend/supabase/project-ref", "String", "API SUPABASE_TEST_PROJECT_REF"),
+    Key("backend/supabase/project-ref", "String", "API SUPABASE_PROJECT_REF"),
     Key("backend/supabase/jwt-issuer-uri", "String", "API SUPABASE_JWT_ISSUER_URI"),
     Key("backend/supabase/jwks-uri", "String", "API SUPABASE_JWKS_URI"),
     Key("backend/supabase/service-role-key", "SecureString", "API SUPABASE_SERVICE_ROLE_KEY (staff administration only)", required=False),
@@ -61,15 +76,19 @@ KEYS = (
     Key("backend/xero/redirect-uri", "String", "API XERO_REDIRECT_URI", required=False),
     Key("backend/xero/frontend-callback-uri", "String", "API XERO_FRONTEND_CALLBACK_URI", required=False),
     Key("backend/xero/token-encryption-key", "SecureString", "API XERO_TOKEN_ENCRYPTION_KEY (base64 32-byte key)", required=False),
-    Key("backend/diagnostics/xero-enabled", "String", "API DASHBOARD_DIAGNOSTICS_XERO_ENABLED (true or false; Test only)", required=False),
-    Key("backend/diagnostics/xero-include-bodies", "String", "API DASHBOARD_DIAGNOSTICS_XERO_INCLUDE_BODIES (true or false; synthetic Test data only)", required=False),
-    Key("backend/diagnostics/xero-max-body-chars", "String", "API DASHBOARD_DIAGNOSTICS_XERO_MAX_BODY_CHARS (integer)", required=False),
+    Key("backend/diagnostics/xero-enabled", "String", "API DASHBOARD_DIAGNOSTICS_XERO_ENABLED (true or false; Test only)", required=False, test_only=True),
+    Key("backend/diagnostics/xero-include-bodies", "String", "API DASHBOARD_DIAGNOSTICS_XERO_INCLUDE_BODIES (true or false; synthetic Test data only)", required=False, test_only=True),
+    Key("backend/diagnostics/xero-max-body-chars", "String", "API DASHBOARD_DIAGNOSTICS_XERO_MAX_BODY_CHARS (integer; Test only)", required=False, test_only=True),
     Key("backend/vwork/api-key", "SecureString", "placeholder, no code reads it yet", required=False),
     # Frontend. Vite inlines these at build time, so they reach the browser and are not secret.
     Key("frontend/api-base-url", "String", "frontend VITE_API_BASE_URL"),
     Key("frontend/supabase-url", "String", "frontend VITE_SUPABASE_URL"),
     Key("frontend/supabase-publishable-key", "String", "frontend VITE_SUPABASE_PUBLISHABLE_KEY"),
 )
+
+
+def keys_for(environment: str):
+    return tuple(key for key in KEYS if environment == "test" or not key.test_only)
 
 
 def full_name(key: Key) -> str:
@@ -80,7 +99,7 @@ def check_name(name: str) -> None:
     if not name.startswith(ROOT) or ".." in name or "//" in name:
         raise Refused(f"{name} is outside {ROOT}")
     if BLOCKED_SEGMENTS & {segment.lower() for segment in name.split("/")}:
-        raise Refused(f"{name} names a non-Test environment")
+        raise Refused(f"{name} names another environment")
 
 
 def existing_type(ssm, name: str) -> Optional[str]:
@@ -114,7 +133,7 @@ KIND_CHOICES = {"string": "String", "securestring": "SecureString"}
 
 
 def check_custom_name(name: str, taken: Set[str]) -> None:
-    """Refuse a custom name that is outside the Test root, unsafe, a Live name or already listed."""
+    """Refuse a custom name that is outside the root, unsafe, names another environment or is already listed."""
     check_name(name)
     if not CUSTOM_PATH.fullmatch(name[len(ROOT):]):
         raise Refused(f"{name} has characters or slashes that are not allowed")
@@ -149,8 +168,10 @@ def prompt_custom_key(taken: Set[str], input_fn: Callable[[str], str] = input) -
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Enter Test values for the Air Concepts dashboard into Parameter Store.")
-    parser.add_argument("--profile", help="AWS named profile for the Test account.")
+    parser = argparse.ArgumentParser(description="Enter values for the Air Concepts dashboard into Parameter Store, for one environment.")
+    parser.add_argument("--environment", choices=ENVIRONMENTS, default="test",
+                        help="Which environment root to write (default test).")
+    parser.add_argument("--profile", help="AWS named profile for the account.")
     parser.add_argument("--region", default=REGION, help=f"AWS region (default {REGION}).")
     parser.add_argument("--expected-account-id", required=True,
                         help="Stop if the caller is not in this 12-digit account.")
@@ -161,7 +182,7 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Optional KMS key id, alias or ARN for SecureString values. "
                              "Omit to use the AWS default SSM key.")
     parser.add_argument("--add-custom", action="store_true",
-                        help="After the built-in keys, ask for your own parameter names under the Test root. "
+                        help="After the built-in keys, ask for your own parameter names under the root. "
                              "Works with --apply only.")
     return parser
 
@@ -169,6 +190,7 @@ def build_parser() -> argparse.ArgumentParser:
 def run(argv: Sequence[str], *, session_factory, ask_fn,
         custom_key_fn: Callable[[Set[str]], Optional[Key]] = prompt_custom_key) -> int:
     args = build_parser().parse_args(list(argv))
+    configure(args.environment)
     if args.region != REGION:
         raise Refused(f"region must be {REGION}")
 
@@ -219,7 +241,7 @@ def run(argv: Sequence[str], *, session_factory, ask_fn,
         print(f"  written       {name}")
         counts["written"] += 1
 
-    for key in KEYS:
+    for key in keys_for(args.environment):
         check_name(full_name(key))
         handle(key)
 

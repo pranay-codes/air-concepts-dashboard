@@ -1,0 +1,37 @@
+# INF-006: check that an environment's frontend and API answer. Needs setup-environment (aws: false) in the same job.
+name: Smoke test
+description: Check the frontend loads and the API health endpoint reports UP; optionally check an unauthenticated API call is rejected.
+inputs:
+  expect-unauthenticated-rejected:
+    description: When true, GET /api/v1/me without a token must return 401.
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - name: Check the frontend and API health
+      shell: bash
+      env:
+        EXPECT_UNAUTHENTICATED_REJECTED: ${{ inputs.expect-unauthenticated-rejected }}
+      run: |
+        set -euo pipefail
+        api_health_url="https://${API_HOSTNAME}/actuator/health"
+        if ! curl -fsS --retry 5 --retry-delay 5 --retry-all-errors -o /dev/null "$FRONTEND_URL"; then
+          echo "Frontend check failed: $FRONTEND_URL" >&2
+          exit 1
+        fi
+        if ! body="$(curl -fsS --retry 5 --retry-delay 5 --retry-all-errors "$api_health_url")"; then
+          echo "API health check failed: $api_health_url" >&2
+          exit 1
+        fi
+        if ! grep -q '"status":"UP"' <<< "$body"; then
+          echo "API health is not UP: $api_health_url" >&2
+          exit 1
+        fi
+        if [ "$EXPECT_UNAUTHENTICATED_REJECTED" = "true" ]; then
+          code="$(curl -s -o /dev/null -w '%{http_code}' --retry 3 --retry-delay 3 "https://${API_HOSTNAME}/api/v1/me")"
+          if [ "$code" != "401" ]; then
+            echo "An unauthenticated call to /api/v1/me returned $code, expected 401" >&2
+            exit 1
+          fi
+        fi
+        echo "Frontend and API health checks passed"

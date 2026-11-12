@@ -15,3 +15,11 @@ Provisioned stack outputs, DNS/HTTPS acceptance and instance-capacity evidence
 have not been collected. Record them only after human Test provisioning and the
 CI-002 application release. Live infrastructure and application release require
 separate human approval and the documented production-readiness gates.
+
+## INF-006 Live environment
+
+- [environments.md](environments.md): what differs between Test and Live, and where each difference lives.
+- [live-environment-runbook.md](live-environment-runbook.md): step-by-step setup of Supabase production, AWS, DNS, GitHub, the first release, backups, verification and rollback.
+- [ADR-004](adr/ADR-004-live-release-workflow.md): the release workflow and configuration decisions.
+- [Spec pack](specs/INF-006-live-environment.md) and [plan](plans/INF-006.md): acceptance criteria, test mapping and the implementation ledger.
+- [infra/environments/README.md](../infra/environments/README.md): the per-environment configuration files.

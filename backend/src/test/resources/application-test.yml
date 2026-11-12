@@ -5,5 +5,5 @@ DATABASE_USER: placeholder
 DATABASE_PASSWORD: placeholder
 SUPABASE_JWT_ISSUER_URI: https://placeholder.supabase.co/auth/v1
 SUPABASE_JWKS_URI: https://placeholder.supabase.co/auth/v1/.well-known/jwks.json
-SUPABASE_TEST_PROJECT_REF: placeholder
+SUPABASE_PROJECT_REF: placeholder
 dashboard.forecast.sync.enabled: false

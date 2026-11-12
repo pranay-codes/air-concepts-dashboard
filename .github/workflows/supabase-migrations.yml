@@ -1,5 +1,6 @@
 # DB-002: validate migrations on every pull request; apply new migrations to hosted Test after merge, then run integration tests against Test.
 # Validate never touches hosted Test. Deploy only runs `db push` (new migrations), never reset. Integration tests on Test are read-only.
+# INF-006: the steps that touch a hosted project live in .github/actions/supabase-migrate, shared with the Live release.
 name: supabase-migrations
 
 on:
@@ -10,9 +11,6 @@ on:
 permissions:
   contents: read
 
-env:
-  SUPABASE_CLI_VERSION: 3.0.0
-
 jobs:
   validate:
     name: validate
@@ -21,13 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Supabase CLI
-        run: |
-          npm install --prefix "$RUNNER_TEMP/supabase-cli" "supabase@$SUPABASE_CLI_VERSION"
-          echo "$RUNNER_TEMP/supabase-cli/node_modules/.bin" >> "$GITHUB_PATH"
-
-      - name: Check Supabase CLI
-        run: supabase --version
+      - uses: ./.github/actions/install-supabase-cli
 
       - name: Start throwaway local database
         run: supabase db start
@@ -61,30 +53,11 @@ jobs:
     concurrency:
       group: supabase-test-deploy
       cancel-in-progress: false
-    env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_TEST_DB_PASSWORD }}
-      SUPABASE_TEST_PROJECT_REF: ${{ secrets.SUPABASE_TEST_PROJECT_REF }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Supabase CLI
-        run: |
-          npm install --prefix "$RUNNER_TEMP/supabase-cli" "supabase@$SUPABASE_CLI_VERSION"
-          echo "$RUNNER_TEMP/supabase-cli/node_modules/.bin" >> "$GITHUB_PATH"
-
-      - name: Check Supabase CLI
-        run: supabase --version
-
-      - name: Link Test project
-        run: supabase link --project-ref "$SUPABASE_TEST_PROJECT_REF" --yes
-
-      # db push and migration list default to the local database; --remote targets the linked Test project.
-      - name: Apply new migrations to Test
-        run: supabase db push --remote --yes
-
-      - name: Confirm Git and Test migration histories match
-        run: supabase migration list --remote
-
-      - name: Run schema integration tests against Test (read-only)
-        run: supabase db query --remote --read-only -f supabase/tests/schema_integration.sql
+      - uses: ./.github/actions/supabase-migrate
+        with:
+          project-ref: ${{ secrets.SUPABASE_TEST_PROJECT_REF }}
+          access-token: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          db-password: ${{ secrets.SUPABASE_TEST_DB_PASSWORD }}

@@ -1,0 +1,17 @@
+{
+  "environment": "test",
+  "awsRegion": "ap-southeast-2",
+  "awsAccountId": "923079246426",
+  "stackName": "air-concepts-test-infrastructure",
+  "deployRoleArn": "arn:aws:iam::923079246426:role/airconcepts-test-deployer",
+  "instanceId": "i-01b897b9899cecadc",
+  "apiHostname": "air-concepts-api-test.insyte-tech.com",
+  "frontendUrl": "https://d95r2yxgiabf4.cloudfront.net",
+  "frontendBucket": "air-concepts-test-infrast-airconceptsfrontendbucke-8spryertwbuf",
+  "cloudFrontDistributionId": "E18MS4R04I9HIA",
+  "ecrRepositoryUri": "923079246426.dkr.ecr.ap-southeast-2.amazonaws.com/air-concepts-test-backend",
+  "ssmPrefix": "/air-concepts/test/",
+  "supabaseProjectRef": "",
+  "apiMemoryLimit": "512m",
+  "allowTestOnlyFeatures": true
+}
