@@ -1,7 +1,7 @@
 # Spec pack: INF-006 Live infrastructure and deployment
 
-- Status: draft (written from the Notion task under the human's explicit instruction; awaiting human approval)
-- Approved by / date: not yet approved
+- Status: approved
+- Approved by / date: Pranay / 2026-11-12
 - Notion page URL: https://app.notion.com/p/40f5eb94886481859d00f39b3130cb97
 - Notion last-edited date: 2026-11-10 (09:30 UTC)
 - Requirement ID: INF-006 (placeholder confirmed by the human on 2026-11-12; replace if the Notion board uses another number)

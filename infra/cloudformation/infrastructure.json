@@ -245,7 +245,7 @@
                   {
                     "Ref": "RootVolumeSize"
                   },
-                  10
+                  "10"
                 ]
               }
             ]
@@ -355,7 +355,7 @@
         {
           "Ref": "RootVolumeSize"
         },
-        0
+        "0"
       ]
     },
     "ManageApiDns": {

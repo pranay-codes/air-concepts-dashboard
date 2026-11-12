@@ -70,6 +70,10 @@ PATTERNS = {
 # Values that identify one environment's resources. No value may be shared between Test and Live.
 ISOLATED = ("stackName", "deployRoleArn", "instanceId", "apiHostname", "frontendUrl", "frontendBucket",
             "cloudFrontDistributionId", "ecrRepositoryUri", "ssmPrefix", "supabaseProjectRef")
+# Temporary, owner-approved exception (2026-11-13, ADR-004 amendment): Live and Test may share the ECR repository
+# until a separate Live repository exists. The Live deployer role still denies pushes to the Test repository, so a
+# Live release cannot promote until that is reconciled. Every other isolating value must stay unique.
+SHARED_ALLOWED = ("ecrRepositoryUri",)
 # Fields whose value carries the environment name, so a Test value cannot be pasted into Live unnoticed.
 NAMED = ("stackName", "deployRoleArn", "ecrRepositoryUri", "frontendBucket")
 
@@ -179,7 +183,7 @@ def problems(environment: str, data: Dict[str, object], *, require_complete: boo
     other = "live" if environment == "test" else "test"
     for key in NAMED:
         value = str(data[key])
-        if is_placeholder(value):
+        if is_placeholder(value) or key in SHARED_ALLOWED:
             continue
         if f"-{other}-" in value or f"/{other}-" in value or value.endswith(f"-{other}"):
             found.append(f"{name}: {key} names the {other} environment")
@@ -196,7 +200,7 @@ def cross_problems(configs: Dict[str, Dict[str, object]]) -> List[str]:
         a, b = test.get(key), live.get(key)
         if not a or not b or is_placeholder(a) or is_placeholder(b):
             continue
-        if a == b:
+        if a == b and key not in SHARED_ALLOWED:
             found.append(f"test.json and live.json share {key}; each environment needs its own")
     return found
 

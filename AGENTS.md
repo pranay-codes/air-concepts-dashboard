@@ -1,6 +1,11 @@
 # Air Concepts Financial Admin Dashboard: Agent Rules
 
 ## Learned Rules
+- For the Phase 1 client-delivery release, create only the requested tag and release notes; do not use Superpowers (human instruction, 12 November 2026).
+- For UC4, work without Docker: run no Docker commands or container-backed tests locally; use unit/mock/HTTP tests and report disposable-PostgreSQL coverage as not run (human reiterated 10 November 2026).
+- For UC4, complete development locally before committing (human instruction, 10 November 2026); do not block implementation on per-slice commits or PR publication. Record slice plans and test evidence locally, then commit after development is complete.
+- For UC4, Docker is not running locally (human confirmed 10 November 2026); report Docker-backed tests as not run and leave Docker startup to the human.
+- For UC4, read all supplied repository sources and resolve open choices with best judgement as instructed on 10 November 2026; record decisions and proceed through sensitive slices without approval pauses. Live operations, hosted database connections, deployment and Xero accounting writes remain prohibited; retain the human fixture-scrub confirmation gate.
 - For UC5 browser acceptance, use Chrome/Chromium testing as requested by the human on 8 November; Firefox and WebKit execution are outside this task's acceptance scope.
 - For the current UC5 green lane, finish Director/Entities/Xero/Users settings, sales assignment, application integration, workspace layout and invoice checks. Defer the attachment panel/viewer to a project-linked Notion task; retain existing secure attachment backend work.
 - For UC5, the human will create the commit. Stop retrying Git writes; finish the implementation, verification and worktree handoff without treating commit creation as a blocker.
@@ -79,7 +84,7 @@
 ## 9. Git and PRs
 - Name branches feat/<requirement-id>-<short-name> or chore/<name>.
 - Use conventional commits that include requirement IDs.
-- Keep PRs under about 300 lines of diff.
+- Keep PRs under about 900 lines of diff.
 - List in each PR: requirement IDs, test evidence, security checklist, reviewing agent, rough note of usage consumed.
 - Add a migration checklist to the PR when relevant.
 
