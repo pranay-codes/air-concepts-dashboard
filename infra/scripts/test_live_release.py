@@ -48,7 +48,7 @@ class LiveWorkflowTests(unittest.TestCase):
 
     def test_inputs_force_a_deliberate_release(self):
         inputs = self.on["workflow_dispatch"]["inputs"]
-        self.assertEqual(set(inputs), {"mode", "release_sha", "image_digest", "confirm", "backup_confirmed", "destructive_ack"})
+        self.assertEqual(set(inputs), {"mode", "release_tag", "confirm", "backup_confirmed", "destructive_ack"})
         self.assertEqual(inputs["mode"]["options"], ["release", "rollback"])
         self.assertIs(inputs["backup_confirmed"]["default"], False)
         self.assertIs(inputs["destructive_ack"]["default"], False)
@@ -66,12 +66,31 @@ class LiveWorkflowTests(unittest.TestCase):
         self.assertIn('"$GITHUB_REF" = "refs/heads/main"', script)
         self.assertIn('"$CONFIRM" = "DEPLOY LIVE"', script)
         self.assertIn("^[0-9a-f]{40}$", script)
-        self.assertIn("^sha256:[0-9a-f]{64}$", script)
         self.assertIn('"$BACKUP_CONFIRMED" = "true"', script)
         self.assertIn("git merge-base --is-ancestor", script)
+        self.assertIn('git rev-list -n 1 "refs/tags/$tag"', script)
+        self.assertIn("gh release view", script)
+        self.assertIn("^v[0-9]+(\\.[0-9]+)+$", script)
+        # The release notes must name the same tag, commit and Test image that the workflow resolved.
+        self.assertIn('[ "$notes_tag" = "$tag" ]', script)
+        self.assertIn('[ "$notes_commit" = "$sha" ]', script)
+        self.assertIn('[ "$notes_image" = "$image_tag" ]', script)
+        self.assertIn("Image", script)
         for workflow in ("deploy-test.yml", "supabase-migrations.yml"):
             self.assertIn(workflow, script)
         self.assertIn("status=success", script)
+
+    def test_the_release_is_named_by_tag_and_the_workflow_holds_no_commit_or_image_hash(self):
+        self.assertNotIn("release_sha", self.on["workflow_dispatch"]["inputs"])
+        self.assertNotIn("image_digest", self.on["workflow_dispatch"]["inputs"])
+        self.assertIsNone(re.search(r"\b[0-9a-f]{40}\b|sha256:[0-9a-f]{64}", self.text))
+
+    def test_the_image_digest_is_found_by_tag_and_must_be_a_sha256_digest(self):
+        script = self.release["steps"][_index(self.release, "Find the backend image built for this release")]["run"]
+        self.assertIn("imageTag=$BUILD_IMAGE_TAG", script)
+        self.assertIn("^sha256:[0-9a-f]{64}$", script)
+        self.assertIn("IMAGE_DIGEST=$digest", script)
+        self.assertIn("exit 1", script)
 
     def test_untrusted_inputs_reach_scripts_only_through_environment_variables(self):
         for name, job in self.jobs.items():
@@ -151,11 +170,11 @@ class LiveWorkflowTests(unittest.TestCase):
         self.assertIn('"$copied" != "$IMAGE_DIGEST"', script)
         self.assertIn("exit 1", script)
 
-    def test_the_image_must_be_one_test_built_for_the_release_commit(self):
-        script = self.release["steps"][_index(self.release, "Confirm Test built this image")]["run"]
-        self.assertIn("aws ecr describe-images", script)
-        self.assertIn('"${RELEASE_SHA}-"*', script)
-        self.assertIn("exit 1", script)
+    def test_the_image_tag_is_the_one_the_app_deploy_pushed_for_the_release_commit(self):
+        guard = self.jobs["guard"]["steps"][1]["run"]
+        self.assertIn('image_tag="${sha}-${run// /-}"', guard)
+        self.assertIn('"$workflow" != supabase-migrations.yml', guard)
+        self.assertIn('"release_sha=$sha"', guard)
 
     def test_images_are_referenced_by_digest_never_latest(self):
         self.assertNotIn(":latest", self.text)
@@ -165,7 +184,7 @@ class LiveWorkflowTests(unittest.TestCase):
     def test_release_order(self):
         order = [
             "Confirm the target is the Live instance",
-            "Confirm Test built this image",
+            "Find the backend image built for this release",
             "Promote the tested image",
             "List the migrations this release would apply",
             "Stop on destructive migration statements",
@@ -184,7 +203,7 @@ class LiveWorkflowTests(unittest.TestCase):
 
     def test_the_release_runs_from_the_release_commit(self):
         checkout = self.release["steps"][0]
-        self.assertEqual(checkout["with"]["ref"], "${{ inputs.release_sha }}")
+        self.assertEqual(checkout["with"]["ref"], "${{ needs.guard.outputs.release_sha }}")
         self.assertIs(checkout["with"]["persist-credentials"], False)
 
     def test_destructive_migrations_need_a_human_acknowledgement(self):
@@ -420,6 +439,28 @@ class LiveStackPolicyTests(unittest.TestCase):
         for protected in self.policy["Statement"][0]["Condition"]["StringEquals"]["ResourceType"]:
             with self.subTest(type=protected):
                 self.assertIn(protected, types)
+
+
+class ReleaseNotesTemplateTests(unittest.TestCase):
+    TEMPLATE = ROOT / "docs/release-notes-template.md"
+
+    def test_the_template_carries_the_three_fields_the_release_workflow_reads(self):
+        text = self.TEMPLATE.read_text(encoding="utf-8")
+        lines = text.splitlines()
+        for label in ("Tag", "Commit", "Image"):
+            with self.subTest(field=label):
+                self.assertEqual(sum(1 for line in lines if line.startswith(f"{label}:")), 1)
+
+    def test_the_template_has_a_summary_of_what_was_deployed(self):
+        text = self.TEMPLATE.read_text(encoding="utf-8")
+        self.assertIn("## Summary", text)
+        self.assertIn("## Deployed", text)
+
+    def test_an_unedited_template_would_be_refused_by_the_guard(self):
+        # The guard compares Commit and Image with real values; the placeholders in angle brackets never match.
+        text = self.TEMPLATE.read_text(encoding="utf-8")
+        commit = next(line for line in text.splitlines() if line.startswith("Commit:"))
+        self.assertRegex(commit, r"Commit: <")
 
 
 if __name__ == "__main__":

@@ -208,12 +208,14 @@ Verify (names and types only, SecureStrings are never printed): `python infra/sc
 ## 6. First release
 
 ### 6.1 Pick the release
-1. Choose a commit on `main` whose **deploy-test** and **supabase-migrations** runs both succeeded (Actions tab). Copy its full 40-character SHA.
-2. Find the image digest Test built for it:
-```powershell
-aws ecr describe-images --repository-name air-concepts-test-backend --query "imageDetails[?imageTags!=null && starts_with(imageTags[0], '<full-sha>')].[imageDigest,imageTags[0]]" --output text --region ap-southeast-2 --profile <live-admin-profile>
-```
-It prints `sha256:...` and the tag. Use that digest.
+1. Merge the commit to `main` and let **deploy-test** run. Open that run's **Summary**: it prints the `Commit:` and `Image:` lines for the Test deploy. Check that **supabase-migrations** also succeeded on that commit.
+2. Create the release tag `v0.1` on that commit, with release notes that contain these lines (the first release is [v0.1](https://github.com/pranay-codes/air-concepts-dashboard/releases/tag/v0.1) once created):
+   ```text
+   Tag: v0.1
+   Commit: <full 40-character commit, from the Summary>
+   Image: <image tag, from the Summary>
+   ```
+   The release workflow reads these lines and refuses the release unless they match the tag's commit and the image Test pushed for it. Do not copy a digest; the workflow finds it. Start the notes from [docs/release-notes-template.md](release-notes-template.md) and add a short summary of what is deployed.
 3. Confirm a recovery point: Supabase, Database, Backups shows a recent backup or PITR is on (for the very first release the database is empty).
 
 ### 6.2 Run it
@@ -222,8 +224,7 @@ Actions, **deploy-live**, **Run workflow**, branch `main`:
 | Input | Value |
 |---|---|
 | mode | `release` |
-| release_sha | the 40-character SHA |
-| image_digest | `sha256:...` |
+| release_tag | `v0.1` (or the release URL from 6.1) |
 | confirm | `DEPLOY LIVE` |
 | backup_confirmed | ticked |
 | destructive_ack | ticked **for the first release only** (see below) |
@@ -265,14 +266,14 @@ First-run checks (these confirm assumptions that could not be tested offline, AD
 | Alerts reach people | Confirm the SNS subscription (2.9); optionally force a test notification from the console |
 | Budget alert | The budget exists and its notification email is confirmed |
 | Uptime monitor | Add a free external uptime check (for example a free-tier monitor) on `https://<api-hostname>/actuator/health` (keyword `UP`) and on the frontend URL, alerting the incident contact; record who owns it |
-| Recorded release | `aws ssm get-parameter --name /air-concepts/live/release/current --query Parameter.Value --output text --profile <live-admin-profile> --region ap-southeast-2` shows the commit and digest you released |
+| Recorded release | `aws ssm get-parameter --name /air-concepts/live/release/current --query Parameter.Value --output text --profile <live-admin-profile> --region ap-southeast-2` shows the release tag, commit and digest that were released |
 
 Save these non-secret facts where the team can find them: stack names and outputs, hostnames, the release workflow link, the incident contact, the recovery window, and the steps in sections 9 and 10.
 
 ## 9. Routine release
 
 1. Merge to `main`; Test deploys automatically. Verify Test.
-2. Pick the commit and image digest as in 6.1.
+2. Pick the release tag as in 6.1.
 3. Run `deploy-live` with `mode release`. Leave `destructive_ack` off unless you reviewed new flagged migration statements.
 4. Watch the run, then repeat the section 8 checks that matter for what changed.
 5. Keep migrations backward compatible (add first, remove in a later release) so a rollback still works.
