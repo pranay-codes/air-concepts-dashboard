@@ -100,6 +100,19 @@ class DeployTestWorkflowTests(unittest.TestCase):
         self.assertIn("github.run_id", tag_lines[0])
         self.assertIn("github.run_attempt", tag_lines[0])
 
+    def test_the_build_job_prints_the_commit_and_image_tag_for_the_release_notes(self):
+        # The release notes of a release tag must carry the commit and image tag this deploy pushed.
+        steps = self.jobs["build"]["steps"]
+        printers = [s for s in steps if "GITHUB_STEP_SUMMARY" in s.get("run", "")]
+        self.assertEqual(len(printers), 1)
+        printer = printers[0]
+        self.assertEqual(printer["env"]["IMAGE_TAG"], "${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}")
+        self.assertIn('echo "Commit: $GITHUB_SHA"', printer["run"])
+        self.assertIn('echo "Image: $IMAGE_TAG"', printer["run"])
+        self.assertIn("docs/release-notes-template.md", printer["run"])
+        self.assertIn("${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}", self.text)
+        self.assertLess(self.text.index("docker/build-push-action"), self.text.index(printer["name"]))
+
     def test_digest_prefix_is_removed_before_the_host_script(self):
         # docker/build-push-action outputs "sha256:<hex>"; the host script and Compose take bare hex.
         action = _action_text("deploy-backend")

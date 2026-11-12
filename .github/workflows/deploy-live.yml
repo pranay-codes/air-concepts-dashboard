@@ -1,9 +1,10 @@
 # INF-006: promote one tested release to the Live environment. Manual only.
 # Spec: docs/specs/INF-006-live-environment.md. Plan: docs/plans/INF-006.md. Runbook: docs/live-environment-runbook.md.
 #
-# A release is a commit already deployed to Test plus the backend image digest Test built for it. This workflow
-# never builds the backend: it copies that exact image into the Live repository, applies reviewed migrations,
-# deploys through SSM and records what it did. Rollback redeploys the last known-good release from the record.
+# A release is a GitHub release tag on main, for example https://github.com/pranay-codes/air-concepts-dashboard/releases/tag/v0.1.
+# Its release notes carry the Tag, Commit and Image lines that the Test deploy printed. The tag's commit must already
+# have been deployed to Test. This workflow checks those lines against Test, copies that exact image into the Live
+# repository, applies reviewed migrations, deploys through SSM and records what it did. Rollback redeploys the last known-good release from the record.
 # Every environment value comes from infra/environments/live.json through the shared actions in .github/actions/.
 name: deploy-live
 
@@ -15,12 +16,8 @@ on:
         type: choice
         options: [release, rollback]
         default: release
-      release_sha:
-        description: "release: the full 40-character commit that was deployed to Test."
-        type: string
-        default: ""
-      image_digest:
-        description: "release: the backend image digest Test built for that commit (sha256:...)."
+      release_tag:
+        description: "release: the version tag to promote, such as v0.1 or its releases/tag URL. Its release notes need the Tag, Commit and Image lines printed by the Test deploy. The tag must be on main and already deployed to Test."
         type: string
         default: ""
       confirm:
@@ -52,15 +49,19 @@ jobs:
     permissions:
       contents: read
       actions: read
+    outputs:
+      release_tag: ${{ steps.resolve.outputs.release_tag }}
+      release_sha: ${{ steps.resolve.outputs.release_sha }}
+      image_tag: ${{ steps.resolve.outputs.image_tag }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Refuse anything that is not a deliberate release from main
+        id: resolve
         env:
           MODE: ${{ inputs.mode }}
-          RELEASE_SHA: ${{ inputs.release_sha }}
-          IMAGE_DIGEST: ${{ inputs.image_digest }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
           CONFIRM: ${{ inputs.confirm }}
           BACKUP_CONFIRMED: ${{ inputs.backup_confirmed }}
           GH_TOKEN: ${{ github.token }}
@@ -73,17 +74,46 @@ jobs:
             echo "Rollback requested; the last known-good release is read from the release record."
             exit 0
           fi
-          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "release_sha must be a full 40-character commit hash"
-          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || fail "image_digest must look like sha256: followed by 64 hex characters"
           [ "$BACKUP_CONFIRMED" = "true" ] || fail "confirm a recent production backup first (backup_confirmed)"
-          git cat-file -e "${RELEASE_SHA}^{commit}" 2>/dev/null || fail "release_sha is not a commit in this repository"
-          git merge-base --is-ancestor "$RELEASE_SHA" origin/main || fail "release_sha is not part of the main branch"
+
+          # The tag is the only release input: a version tag such as v0.1, or the releases/tag URL of this repository.
+          url_prefix="https://github.com/${GITHUB_REPOSITORY}/releases/tag/"
+          case "$RELEASE_TAG" in
+            "$url_prefix"*) tag="${RELEASE_TAG#"$url_prefix"}" ;;
+            *://*) fail "release_tag must be a release of this repository: ${url_prefix}<tag>" ;;
+            *) tag="$RELEASE_TAG" ;;
+          esac
+          [[ "$tag" =~ ^v[0-9]+(\.[0-9]+)+$ ]] || fail "release_tag must be a version tag such as v0.1"
+          published="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>/dev/null || true)"
+          [ "$published" = "$tag" ] || fail "$tag is not a published GitHub release"
+          # The release notes name the release and the Test deploy: Tag, Commit and Image lines, copied from the Test summary.
+          notes="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json body --jq .body)"
+          notes_field() { printf '%s\n' "$notes" | tr -d '\r' | sed -n "s/^$1:[[:space:]]*//p" | head -n 1 | sed 's/[[:space:]]*$//'; }
+          notes_tag="$(notes_field Tag)"
+          notes_commit="$(notes_field Commit)"
+          notes_image="$(notes_field Image)"
+          [ "$notes_tag" = "$tag" ] || fail "the release notes of $tag need the line 'Tag: $tag' (found '${notes_tag:-none}')"
+          git rev-parse -q --verify "refs/tags/$tag" > /dev/null || fail "the repository has no tag $tag"
+          sha="$(git rev-list -n 1 "refs/tags/$tag")"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || fail "tag $tag does not name a commit"
+          [ "$notes_commit" = "$sha" ] || fail "the release notes of $tag say Commit '${notes_commit:-none}', but $tag points at $sha"
+          git merge-base --is-ancestor "$sha" origin/main || fail "tag $tag is not on the main branch"
+
           # The release must already have gone through Test: the app deploy and the Test migration run both succeeded.
+          image_tag=""
           for workflow in deploy-test.yml supabase-migrations.yml; do
-            count="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?head_sha=${RELEASE_SHA}&branch=main&status=success&per_page=1" --jq '.total_count')"
-            [ "$count" -ge 1 ] || fail "no successful $workflow run on main for $RELEASE_SHA; deploy it to Test first"
+            run="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?head_sha=${sha}&branch=main&status=success&per_page=1" --jq '.workflow_runs[0] | select(. != null) | "\(.id) \(.run_attempt)"')"
+            [ -n "$run" ] || fail "no successful $workflow run on main for tag $tag; deploy it to Test first"
+            # The app deploy tags its image <commit>-<run id>-<run attempt>, so that tag names the image to promote.
+            if [ "$workflow" != supabase-migrations.yml ]; then image_tag="${sha}-${run// /-}"; fi
           done
-          echo "Release $RELEASE_SHA passed the Test gates."
+          [ "$notes_image" = "$image_tag" ] || fail "the release notes of $tag say Image '${notes_image:-none}', but the deploy for $sha pushed '$image_tag'"
+          echo "Release $tag ($sha) passed the Test gates; the release notes match the Test image."
+          {
+            echo "release_tag=$tag"
+            echo "release_sha=$sha"
+            echo "image_tag=$image_tag"
+          } >> "$GITHUB_OUTPUT"
 
   release:
     name: release to Live
@@ -96,14 +126,15 @@ jobs:
       contents: read
       id-token: write
     env:
-      RELEASE_SHA: ${{ inputs.release_sha }}
-      IMAGE_DIGEST: ${{ inputs.image_digest }}
+      RELEASE_TAG: ${{ needs.guard.outputs.release_tag }}
+      RELEASE_SHA: ${{ needs.guard.outputs.release_sha }}
+      BUILD_IMAGE_TAG: ${{ needs.guard.outputs.image_tag }}
     steps:
       # Everything below runs from the release commit, so the Compose file, Caddyfile, deploy script,
       # migrations and frontend are exactly what Test ran.
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.release_sha }}
+          ref: ${{ needs.guard.outputs.release_sha }}
           persist-credentials: false
       - uses: ./.github/actions/setup-environment
         with:
@@ -126,18 +157,19 @@ jobs:
           current="$(aws ssm get-parameter --name "${SSM_PREFIX}release/current" --query Parameter.Value --output text 2>/dev/null || true)"
           echo "PREVIOUS_RELEASE_RECORD=${current:-none}" >> "$GITHUB_ENV"
 
-      - name: Confirm Test built this image for this commit
+      - name: Find the backend image built for this release
         run: |
           set -euo pipefail
           test_uri="$(python3 infra/scripts/environment_config.py get test ecrRepositoryUri)"
           test_repo="${test_uri#*/}"
-          tags="$(aws ecr describe-images --repository-name "$test_repo" --image-ids "imageDigest=$IMAGE_DIGEST" \
-            --query 'imageDetails[0].imageTags' --output text)"
-          for tag in $tags; do
-            case "$tag" in "${RELEASE_SHA}-"*) exit 0 ;; esac
-          done
-          echo "REFUSED: $IMAGE_DIGEST in $test_repo is not tagged for commit $RELEASE_SHA" >&2
-          exit 1
+          digest="$(aws ecr describe-images --repository-name "$test_repo" --image-ids "imageTag=$BUILD_IMAGE_TAG" \
+            --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true)"
+          if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "REFUSED: image $BUILD_IMAGE_TAG in $test_repo is not tagged; the app deploy for $RELEASE_TAG did not push it" >&2
+            exit 1
+          fi
+          echo "IMAGE_DIGEST=$digest" >> "$GITHUB_ENV"
+          echo "Found the backend image for $RELEASE_TAG (commit $RELEASE_SHA)."
 
       - name: Promote the tested image to the Live repository without rebuilding it
         run: |
@@ -155,7 +187,6 @@ jobs:
             exit 1
           fi
           echo "Promoted $IMAGE_DIGEST to $ECR_REPOSITORY_URI:$live_tag"
-
       - name: List the migrations this release would apply
         uses: ./.github/actions/supabase-migrate
         with:
@@ -186,15 +217,15 @@ jobs:
         run: |
           set -euo pipefail
           latest_migration="$(ls supabase/migrations | sort | tail -n 1)"
-          record="$(jq -cn --arg sha "$RELEASE_SHA" --arg digest "$IMAGE_DIGEST" --arg run "$GITHUB_RUN_ID" \
+          record="$(jq -cn --arg tag "$RELEASE_TAG" --arg sha "$RELEASE_SHA" --arg digest "$IMAGE_DIGEST" --arg run "$GITHUB_RUN_ID" \
             --arg migration "$latest_migration" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            '{releaseSha:$sha,imageDigest:$digest,frontendRunId:$run,frontendArtifact:"frontend-dist",latestMigration:$migration,startedAt:$at}')"
+            '{releaseTag:$tag,releaseSha:$sha,imageDigest:$digest,frontendRunId:$run,frontendArtifact:"frontend-dist",latestMigration:$migration,startedAt:$at}')"
           aws ssm put-parameter --name "${SSM_PREFIX}release/attempt" --type String --overwrite --value "$record" > /dev/null
           echo "RELEASE_RECORD=$record" >> "$GITHUB_ENV"
 
       - uses: ./.github/actions/deploy-backend
         with:
-          image-digest: ${{ inputs.image_digest }}
+          image-digest: ${{ env.IMAGE_DIGEST }}
           comment: INF-006 live release
       - uses: ./.github/actions/build-frontend
       - name: Keep the built frontend so a rollback can restore it
@@ -220,6 +251,7 @@ jobs:
           aws ssm put-parameter --name "${SSM_PREFIX}release/attempt" --type String --overwrite --value none > /dev/null
           {
             echo "### Live release succeeded"
+            echo "- Release tag: \`$RELEASE_TAG\`"
             echo "- Commit: \`$RELEASE_SHA\`"
             echo "- Backend image: \`$IMAGE_DIGEST\`"
             echo "- Frontend artifact: \`frontend-dist\` in run $GITHUB_RUN_ID"
