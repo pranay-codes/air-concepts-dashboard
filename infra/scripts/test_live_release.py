@@ -128,7 +128,7 @@ class LiveWorkflowTests(unittest.TestCase):
 
     def test_the_only_use_of_test_is_reading_the_image_it_built_and_its_run_history(self):
         # Test may appear in comments, step names, the two Test-gate workflow files, and the lines that
-        # read the Test image repository to promote it. Nothing else may mention it.
+        # read the shared repository to confirm the digest it built. Nothing else may mention it.
         allowed = (
             r"^\s*#",
             r"name: Confirm Test built this image",
@@ -150,25 +150,33 @@ class LiveWorkflowTests(unittest.TestCase):
 
     def test_the_live_instance_is_checked_by_tag_before_anything_is_changed(self):
         tag_check = _index(self.release, "Confirm the target is the Live instance")
-        for later in ("Promote the tested image", "Apply the migrations", "deploy-backend"):
+        for later in ("Confirm the image is in the shared repository", "Apply the migrations", "deploy-backend"):
             self.assertLess(tag_check, _index(self.release, later))
         self.assertIn("environment=$tag, expected live", self.release["steps"][tag_check]["run"])
 
-    # --- The backend is promoted, never rebuilt ------------------------------------------------
+    # --- The backend is never rebuilt; Live deploys the digest from the shared repository ------
 
     def test_the_backend_is_never_built_in_this_workflow(self):
         for forbidden in ("build-push-action", "mvnw", "setup-java", "docker push"):
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, self.text)
-        # `docker buildx imagetools create` copies an existing image; only an actual build is forbidden.
         self.assertIsNone(re.search(r"docker\s+(buildx\s+)?build\b", self.text))
 
-    def test_promotion_copies_the_exact_digest_and_verifies_it(self):
-        script = self.release["steps"][_index(self.release, "Promote the tested image")]["run"]
-        self.assertIn("docker buildx imagetools create", script)
-        self.assertIn('"${test_uri}@${IMAGE_DIGEST}"', script)
-        self.assertIn('"$copied" != "$IMAGE_DIGEST"', script)
+    def test_live_confirms_the_exact_digest_in_the_shared_repository_and_refuses_otherwise(self):
+        script = self.release["steps"][_index(self.release, "Confirm the image is in the shared repository")]["run"]
+        self.assertIn("aws ecr describe-images", script)
+        self.assertIn('--image-ids "imageDigest=$IMAGE_DIGEST"', script)
+        self.assertIn('"$found" != "$IMAGE_DIGEST"', script)
         self.assertIn("exit 1", script)
+
+    def test_live_never_copies_pushes_or_writes_docker_config_for_the_image(self):
+        # One repository: no copy step. imagetools re-serialises indexes (digest changed); docker login writes
+        # an unencrypted config.json (the runner warning). Neither may come back.
+        script = self.release["steps"][_index(self.release, "Confirm the image is in the shared repository")]["run"]
+        for forbidden in ("imagetools", "docker login", "docker buildx", "docker push", "skopeo", "ecr put-image"):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, script)
+        self.assertNotIn("docker login", self.text)
 
     def test_the_image_tag_is_the_one_the_app_deploy_pushed_for_the_release_commit(self):
         guard = self.jobs["guard"]["steps"][1]["run"]
@@ -185,7 +193,7 @@ class LiveWorkflowTests(unittest.TestCase):
         order = [
             "Confirm the target is the Live instance",
             "Find the backend image built for this release",
-            "Promote the tested image",
+            "Confirm the image is in the shared repository",
             "List the migrations this release would apply",
             "Stop on destructive migration statements",
             "Apply the migrations",
@@ -394,17 +402,24 @@ class LiveDeployRoleTests(unittest.TestCase):
         self.assertIn("instance/${LiveInstanceId}", resources[0]["Fn::Sub"])
         self.assertIn("document/AWS-RunShellScript", resources[1]["Fn::Sub"])
 
-    def test_test_is_read_only_and_its_parameters_are_off_limits(self):
-        read_test = self.statements["ReadTestImagesToPromoteThem"]
-        for action in read_test["Action"]:
-            self.assertRegex(action, r"ecr:(BatchCheckLayerAvailability|BatchGetImage|DescribeImages|GetDownloadUrlForLayer)")
-        self.assertIn("${TestRepositoryName}", read_test["Resource"]["Fn::Sub"])
+    def test_the_shared_repository_is_read_only_for_live_and_never_changed_by_it(self):
+        read = self.statements["ReadTheSharedBackendImage"]
+        self.assertEqual(read["Effect"], "Allow")
+        self.assertEqual(set(read["Action"]), {"ecr:DescribeImages", "ecr:BatchGetImage"})
+        self.assertIn("${SharedRepositoryName}", read["Resource"]["Fn::Sub"])
+        guard = self.statements["NeverChangeTheSharedRepository"]
+        self.assertEqual(guard["Effect"], "Deny")
+        self.assertIn("${SharedRepositoryName}", guard["Resource"]["Fn::Sub"])
+        for action in ("ecr:PutImage", "ecr:BatchDeleteImage", "ecr:DeleteRepository", "ecr:SetRepositoryPolicy",
+                       "ecr:PutLifecyclePolicy", "ecr:PutImageTagMutability", "ecr:InitiateLayerUpload"):
+            with self.subTest(action=action):
+                self.assertIn(action, guard["Action"])
+        for sid in ("PushAndPullLiveImages", "ReadTestImagesToPromoteThem", "NeverWriteTestImages"):
+            with self.subTest(removed=sid):
+                self.assertNotIn(sid, self.statements)
         parameters = self.statements["NeverTouchTestParameters"]
         self.assertEqual((parameters["Effect"], parameters["Action"]), ("Deny", "ssm:*"))
         self.assertIn("/air-concepts/test/*", parameters["Resource"]["Fn::Sub"])
-        writes = self.statements["NeverWriteTestImages"]
-        self.assertEqual(writes["Effect"], "Deny")
-        self.assertIn("ecr:PutImage", writes["Action"])
 
     def test_live_parameters_are_scoped_to_frontend_reads_and_release_records(self):
         self.assertNotIn("PutParameter", json.dumps(self.statements["ReadPublicFrontendSettings"]))
@@ -428,11 +443,14 @@ class LiveDeployRoleTests(unittest.TestCase):
         self.assertIn("${LiveDistributionId}", json.dumps(self.statements["InvalidateLiveDistribution"]["Resource"]))
         self.assertEqual(set(self.statements["PublishLiveFrontend"]["Action"]), {"s3:DeleteObject", "s3:GetObject", "s3:PutObject"})
 
-    def test_repository_parameters_cannot_be_pointed_at_the_wrong_environment(self):
-        self.assertRegex("air-concepts-live-backend", self.template["Parameters"]["LiveRepositoryName"]["AllowedPattern"])
-        self.assertNotRegex("air-concepts-test-backend", self.template["Parameters"]["LiveRepositoryName"]["AllowedPattern"])
-        self.assertRegex("air-concepts-test-backend", self.template["Parameters"]["TestRepositoryName"]["AllowedPattern"])
-        self.assertNotRegex("air-concepts-live-backend", self.template["Parameters"]["TestRepositoryName"]["AllowedPattern"])
+    def test_the_shared_repository_parameter_accepts_only_the_exact_existing_name(self):
+        pattern = self.template["Parameters"]["SharedRepositoryName"]["AllowedPattern"]
+        self.assertIsNotNone(re.fullmatch(pattern, "air-concepts-test-backend"))
+        for value in ("air-concepts-live-backend", "air-concepts-test-backend-2", "air-concepts-test-*", ""):
+            with self.subTest(value=value):
+                self.assertIsNone(re.fullmatch(pattern, value))
+        self.assertNotIn("LiveRepositoryName", self.template["Parameters"])
+        self.assertNotIn("TestRepositoryName", self.template["Parameters"])
         self.assertNotRegex("air-concepts-test-infrastructure", self.template["Parameters"]["LiveStackName"]["AllowedPattern"])
 
     def test_tags_name_the_live_environment(self):

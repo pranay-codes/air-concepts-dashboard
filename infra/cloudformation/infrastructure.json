@@ -75,7 +75,7 @@
       "Type": "String",
       "Default": "",
       "AllowedPattern": "(^$|[a-z0-9]+([._/-][a-z0-9]+)*)",
-      "Description": "Optional existing ECR repository in this account/region. Empty creates environment-specific repository."
+      "Description": "Exact name of an existing ECR repository in this account/region, reused as-is. Set it whenever the repository already exists (describe-repositories with --repository-names returns it); a stack that sets it never creates or changes that repository. Empty creates air-concepts-<environment>-backend, which must not already exist. The repository is retained on stack delete and replacement."
     },
     "SsmKmsKeyArn": {
       "Type": "String",
@@ -996,12 +996,11 @@
               "Fn::Sub": "air-concepts-${Environment}-backend"
             }
           }
-        ],
-        "EmptyOnDelete": true
+        ]
       },
       "Condition": "CreateRepository",
-      "DeletionPolicy": "Delete",
-      "UpdateReplacePolicy": "Delete"
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
     },
     "AirConceptsFrontendBucket": {
       "Type": "AWS::S3::Bucket",

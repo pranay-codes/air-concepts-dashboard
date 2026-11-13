@@ -30,6 +30,12 @@ Accepted. Date: 2026-11-12. Decisions directed by the project owner (INF-006). B
 - The first Live push applies all existing migrations, including two `drop constraint` statements, so it needs one acknowledgement.
 - Memory and disk alarms, EBS backups and uptime checks for Live stay manual or external until INF-005.
 
-## Amendment (2026-11-13): shared ECR repository, temporary
-- Owner decision: Live and Test may share the ECR repository `air-concepts-test-backend` for now. `ecrRepositoryUri` is the only value exempt from the no-shared-value rule and the naming rule (`SHARED_ALLOWED` in `infra/scripts/environment_config.py`). Every other isolating value stays unique.
-- Consequence to resolve before the first Live release: the Live deployer role denies `ecr:PutImage` on the Test repository (`NeverWriteTestImages`), so the promote step is refused. The Live stack's instance role can also pull from the Test repository. Reconcile by creating `air-concepts-live-backend` (clear `ExistingRepositoryName` in the Live parameters) and restoring the separate value, then remove the exemption and its test.
+## Amendment (2026-11-13): one shared ECR repository
+- Owner decision: Live and Test share the ECR repository `air-concepts-test-backend`. `ecrRepositoryUri` is the only value exempt from the no-shared-value rule and the naming rule (`SHARED_ALLOWED` in `infra/scripts/environment_config.py`). Every other isolating value stays unique.
+- Test pushes the image; Live confirms the same digest is in that repository and deploys it. There is no copy, so the digest cannot change. Replaces the earlier plan to promote by copying into a separate Live repository.
+- Rules that keep the repository in place:
+  - The repository resource is `DeletionPolicy: Retain` and `UpdateReplacePolicy: Retain`, and does not empty on delete. Stack deletion or replacement leaves it and its images. This is an exception to the INF-002 "every resource is deleted with its stack" policy, which the infrastructure tests name.
+  - A stack creates the repository only when `ExistingRepositoryName` is blank. Any stack that names an existing repository reuses it exactly and never recreates it. The repository is recreated only if the exact name does not exist.
+  - The Live deployer role has read-only access to the repository and an explicit Deny on every write and repository-admin action (`NeverChangeTheSharedRepository`).
+  - The Test deployer role gets the same Deny on repository-admin actions (manual, outside the repository; see the runbook).
+- Open: the untagged-image lifecycle rule (expire after 14 days) may expire the attestation and platform manifests of an index, which Live rollback relies on. Decide before the first release whether to keep it.

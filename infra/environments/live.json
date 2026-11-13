@@ -9,7 +9,7 @@
   "frontendUrl": "https://air-concepts-dashboard.insyte-tech.com",
   "frontendBucket": "air-concepts-live-infrast-airconceptsfrontendbucke-dcimmbfmvia1",
   "cloudFrontDistributionId": "E289BQTF93Q92S",
-  "ecrRepositoryUri": "923079246426.dkr.ecr.ap-southeast-2.amazonaws.com/air-concepts-live-backend",
+  "ecrRepositoryUri": "923079246426.dkr.ecr.ap-southeast-2.amazonaws.com/air-concepts-test-backend",
   "ssmPrefix": "/air-concepts/live/",
   "supabaseProjectRef": "ankwfjgllyuouakopudq",
   "apiMemoryLimit": "1024m",

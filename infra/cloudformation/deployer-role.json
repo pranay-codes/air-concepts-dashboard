@@ -49,17 +49,11 @@
       "Description": "CloudFrontDistributionId output of the Live infrastructure stack.",
       "AllowedPattern": "E[A-Z0-9]{8,20}"
     },
-    "LiveRepositoryName": {
+    "SharedRepositoryName": {
       "Type": "String",
-      "Description": "Live backend ECR repository name (the infrastructure stack names it air-concepts-live-backend).",
-      "Default": "air-concepts-live-backend",
-      "AllowedPattern": "air-concepts-live-[a-z0-9-]+"
-    },
-    "TestRepositoryName": {
-      "Type": "String",
-      "Description": "Test backend ECR repository. Live only reads from it, to promote a tested image by digest.",
+      "Description": "The backend ECR repository shared by Test and Live (owner decision, 13 Nov 2026). Live only reads it, to confirm the tested image digest. Live never writes, deletes or changes it.",
       "Default": "air-concepts-test-backend",
-      "AllowedPattern": "air-concepts-test-[a-z0-9-]+"
+      "AllowedPattern": "air-concepts-test-backend"
     },
     "LiveStackName": {
       "Type": "String",
@@ -132,34 +126,14 @@
                   "Resource": "*"
                 },
                 {
-                  "Sid": "PushAndPullLiveImages",
+                  "Sid": "ReadTheSharedBackendImage",
                   "Effect": "Allow",
                   "Action": [
-                    "ecr:BatchCheckLayerAvailability",
-                    "ecr:BatchGetImage",
-                    "ecr:CompleteLayerUpload",
                     "ecr:DescribeImages",
-                    "ecr:GetDownloadUrlForLayer",
-                    "ecr:InitiateLayerUpload",
-                    "ecr:ListImages",
-                    "ecr:PutImage",
-                    "ecr:UploadLayerPart"
+                    "ecr:BatchGetImage"
                   ],
                   "Resource": {
-                    "Fn::Sub": "arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/${LiveRepositoryName}"
-                  }
-                },
-                {
-                  "Sid": "ReadTestImagesToPromoteThem",
-                  "Effect": "Allow",
-                  "Action": [
-                    "ecr:BatchCheckLayerAvailability",
-                    "ecr:BatchGetImage",
-                    "ecr:DescribeImages",
-                    "ecr:GetDownloadUrlForLayer"
-                  ],
-                  "Resource": {
-                    "Fn::Sub": "arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/${TestRepositoryName}"
+                    "Fn::Sub": "arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/${SharedRepositoryName}"
                   }
                 },
                 {
@@ -266,16 +240,25 @@
                   }
                 },
                 {
-                  "Sid": "NeverWriteTestImages",
+                  "Sid": "NeverChangeTheSharedRepository",
                   "Effect": "Deny",
                   "Action": [
+                    "ecr:BatchDeleteImage",
                     "ecr:CompleteLayerUpload",
+                    "ecr:DeleteLifecyclePolicy",
+                    "ecr:DeleteRepository",
+                    "ecr:DeleteRepositoryPolicy",
                     "ecr:InitiateLayerUpload",
                     "ecr:PutImage",
+                    "ecr:PutImageScanningConfiguration",
+                    "ecr:PutImageTagMutability",
+                    "ecr:PutLifecyclePolicy",
+                    "ecr:PutReplicationConfiguration",
+                    "ecr:SetRepositoryPolicy",
                     "ecr:UploadLayerPart"
                   ],
                   "Resource": {
-                    "Fn::Sub": "arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/${TestRepositoryName}"
+                    "Fn::Sub": "arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/${SharedRepositoryName}"
                   }
                 }
               ]
