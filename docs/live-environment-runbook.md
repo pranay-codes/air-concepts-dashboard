@@ -103,7 +103,7 @@ Edit `infra/params/live.local.json` (ignored by Git) and replace every `REPLACE_
 | `FrontendHostname`, `FrontendCertificateArn` | from 2.2 |
 | `AlarmEmail` | the incident contact's address |
 | `InstanceType`, `RootVolumeSize` | leave `environment-default` and `0` (Live: `t4g.small`, 20 GiB) unless measured otherwise |
-| `ExistingRepositoryName` | **leave blank** so Live gets its own repository `air-concepts-live-backend` |
+| `ExistingRepositoryName` | `air-concepts-test-backend` (the shared repository, ADR-004 amendment). Check it exists first: `aws ecr describe-repositories --repository-names air-concepts-test-backend --region ap-southeast-2 --profile <profile>`. Leave it blank only if that returns `RepositoryNotFoundException`, and then the stack creates the repository. |
 
 ### 2.4 Create the stack (review before execute)
 ```powershell
@@ -152,6 +152,28 @@ aws cloudformation wait stack-create-complete --stack-name air-concepts-live-dep
 aws cloudformation describe-stacks --stack-name air-concepts-live-deployer --query "Stacks[0].Outputs" --region ap-southeast-2 --profile <live-admin-profile>
 ```
 Verify: the `DeployRoleArn` output equals `deployRoleArn` in `live.json` (`arn:aws:iam::923079246426:role/airconcepts-live-deployer`).
+
+### 2.8a Shared image repository (rules)
+Test and Live use `air-concepts-test-backend` (ADR-004 amendment, 13 Nov 2026). Nothing may remove or recreate it.
+1. **Exact name first.** `aws ecr describe-repositories --repository-names air-concepts-test-backend --region ap-southeast-2 --profile <profile>`. If it exists, set `ExistingRepositoryName=air-concepts-test-backend` in the Live stack. Create a repository only if this returns `RepositoryNotFoundException`.
+2. **Live stack that already created `air-concepts-live-backend`:** update it in two steps, never in one. (a) Update with the new `infrastructure.json` and `ExistingRepositoryName` still blank, so the repository is retained. (b) Update with `ExistingRepositoryName=air-concepts-test-backend`. The old Live repository is then orphaned, not deleted. Delete it by hand only after review (`aws ecr delete-repository` without `--force` refuses a non-empty repository).
+3. **Test deployer role (not in this repository).** Add an inline Deny so the Test role can push but not change or delete the shared repository:
+   ```
+   aws iam put-role-policy --role-name airconcepts-test-deployer --policy-name DenySharedRepositoryAdmin --policy-document file://<path-to-json> --profile <test-profile>
+   ```
+   Policy document:
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [{
+       "Sid": "NeverChangeTheSharedRepository",
+       "Effect": "Deny",
+       "Action": ["ecr:BatchDeleteImage", "ecr:DeleteLifecyclePolicy", "ecr:DeleteRepository", "ecr:DeleteRepositoryPolicy", "ecr:PutImageScanningConfiguration", "ecr:PutImageTagMutability", "ecr:PutLifecyclePolicy", "ecr:PutReplicationConfiguration", "ecr:SetRepositoryPolicy"],
+       "Resource": "arn:aws:ecr:ap-southeast-2:923079246426:repository/air-concepts-test-backend"
+     }]
+   }
+   ```
+4. **Account-level guard (human, optional):** an organisation SCP denying `ecr:DeleteRepository` for everyone except a break-glass role. This repository's stack policy does not cover account administrators.
 
 ### 2.9 Alarm email
 Open the confirmation email AWS SNS sent to `AlarmEmail` and confirm the subscription. Until you do, alarms do not reach anyone. Verify: SNS console shows the subscription as **Confirmed**.

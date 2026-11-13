@@ -171,22 +171,19 @@ jobs:
           echo "IMAGE_DIGEST=$digest" >> "$GITHUB_ENV"
           echo "Found the backend image for $RELEASE_TAG (commit $RELEASE_SHA)."
 
-      - name: Promote the tested image to the Live repository without rebuilding it
+      - name: Confirm the image is in the shared repository
         run: |
           set -euo pipefail
-          test_uri="$(python3 infra/scripts/environment_config.py get test ecrRepositoryUri)"
-          registry="${ECR_REPOSITORY_URI%%/*}"
-          aws ecr get-login-password | docker login --username AWS --password-stdin "$registry" > /dev/null
-          live_tag="${RELEASE_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          docker buildx imagetools create --tag "${ECR_REPOSITORY_URI}:${live_tag}" "${test_uri}@${IMAGE_DIGEST}"
-          live_repo="${ECR_REPOSITORY_URI#*/}"
-          copied="$(aws ecr describe-images --repository-name "$live_repo" --image-ids "imageTag=$live_tag" \
-            --query 'imageDetails[0].imageDigest' --output text)"
-          if [ "$copied" != "$IMAGE_DIGEST" ]; then
-            echo "REFUSED: the Live copy has digest $copied, not $IMAGE_DIGEST. Nothing was deployed." >&2
+          # One repository serves both environments, so nothing is copied and the digest cannot change.
+          # Live deploys the exact digest the build pushed.
+          repo="${ECR_REPOSITORY_URI#*/}"
+          found="$(aws ecr describe-images --repository-name "$repo" --image-ids "imageDigest=$IMAGE_DIGEST" \
+            --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true)"
+          if [ "$found" != "$IMAGE_DIGEST" ]; then
+            echo "REFUSED: $IMAGE_DIGEST is not in $ECR_REPOSITORY_URI. Nothing was deployed." >&2
             exit 1
           fi
-          echo "Promoted $IMAGE_DIGEST to $ECR_REPOSITORY_URI:$live_tag"
+          echo "Confirmed $IMAGE_DIGEST in $ECR_REPOSITORY_URI, the digest from the build."
       - name: List the migrations this release would apply
         uses: ./.github/actions/supabase-migrate
         with:

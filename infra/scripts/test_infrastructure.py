@@ -144,7 +144,8 @@ class InfrastructureTests(unittest.TestCase):
         self.assertEqual(self.resources['AirConceptsBackendRepository']['Properties']['ImageTagMutability'], 'IMMUTABLE')
         lifecycle = json.loads(self.resources['AirConceptsBackendRepository']['Properties']['LifecyclePolicy']['LifecyclePolicyText'])
         self.assertEqual(lifecycle['rules'][0]['selection']['tagStatus'], 'untagged')
-        self.assertEqual(self.resources['AirConceptsBackendRepository']['Properties']['EmptyOnDelete'], True)
+        # Images are never emptied by stack deletion; the repository is retained (see the exception below).
+        self.assertNotIn('EmptyOnDelete', self.resources['AirConceptsBackendRepository']['Properties'])
 
     def test_INF002_bootstrap_logs_each_step(self):
         script = self.resources['AirConceptsBackend']['Properties']['UserData']['Fn::Base64']['Fn::Sub']
@@ -166,11 +167,26 @@ class InfrastructureTests(unittest.TestCase):
         compose = (ROOT / 'infra' / 'deploy' / 'compose.yaml').read_text(encoding='utf-8')
         self.assertIn('-Duser.timezone=Pacific/Auckland', compose)
 
-    def test_INF002_every_resource_is_deleted_with_the_stack(self):
-        # Policy: stack deletion removes every resource. No resource may be retained.
+    def test_INF002_every_resource_is_deleted_with_the_stack_except_the_backend_repository(self):
+        # Policy: stack deletion removes every resource. Exception (owner decision, 13 Nov 2026): the backend
+        # ECR repository is shared by Test and Live, so it is retained and its images are never emptied.
         for name, resource in self.resources.items():
+            if name == 'AirConceptsBackendRepository':
+                continue
             self.assertEqual(resource.get('DeletionPolicy'), 'Delete', f'{name} must have DeletionPolicy Delete')
             self.assertNotEqual(resource.get('UpdateReplacePolicy'), 'Retain', f'{name} must not retain on replacement')
+
+    def test_the_shared_backend_repository_is_retained_and_never_emptied(self):
+        repository = self.resources['AirConceptsBackendRepository']
+        self.assertEqual(repository['DeletionPolicy'], 'Retain')
+        self.assertEqual(repository['UpdateReplacePolicy'], 'Retain')
+        self.assertNotIn('EmptyOnDelete', repository['Properties'])
+        self.assertEqual(repository['Properties']['RepositoryName'], {'Fn::Sub': 'air-concepts-${Environment}-backend'})
+
+    def test_the_repository_is_created_only_when_no_existing_name_is_given(self):
+        # Create only when ExistingRepositoryName is empty; an existing exact name is reused, never recreated.
+        self.assertEqual(self.resources['AirConceptsBackendRepository']['Condition'], 'CreateRepository')
+        self.assertIn('Exact name', self.template['Parameters']['ExistingRepositoryName']['Description'])
 
     def test_INF002_configuration_guards(self):
         rules = self.template['Rules']

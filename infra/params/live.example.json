@@ -41,7 +41,7 @@
   },
   {
     "ParameterKey": "ExistingRepositoryName",
-    "ParameterValue": ""
+    "ParameterValue": "air-concepts-test-backend"
   },
   {
     "ParameterKey": "SsmKmsKeyArn",
