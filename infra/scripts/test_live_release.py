@@ -320,7 +320,7 @@ class LiveDeployRoleTests(unittest.TestCase):
         self.assertEqual(condition["token.actions.githubusercontent.com:aud"], "sts.amazonaws.com")
         self.assertEqual(
             condition["token.actions.githubusercontent.com:sub"],
-            {"Fn::Sub": "repo:${GitHubRepository}:environment:${GitHubEnvironment}"},
+            {"Fn::Sub": "${GitHubSubjectPrefix}:environment:${GitHubEnvironment}"},
         )
         self.assertEqual(
             condition["token.actions.githubusercontent.com:job_workflow_ref"],
@@ -328,6 +328,32 @@ class LiveDeployRoleTests(unittest.TestCase):
         )
         self.assertNotIn("StringLike", trust["Condition"])
         self.assertNotIn("*", json.dumps(trust["Condition"]))
+
+    def test_subject_prefix_parameter_accepts_immutable_and_named_forms_only(self):
+        pattern = re.compile(self.template["Parameters"]["GitHubSubjectPrefix"]["AllowedPattern"])
+        accepted = [
+            "repo:pranay-codes@168536497/air-concepts-dashboard@1443570279",
+            "repo:pranay-codes/air-concepts-dashboard",
+        ]
+        for value in accepted:
+            self.assertIsNotNone(pattern.fullmatch(value), value)
+        refused = [
+            "repo:pranay-codes/*",
+            "repo:*",
+            "repo:pranay-codes@168536497/air-concepts-dashboard@1443570279:environment:live",
+            "repo:pranay-codes@168536497/air-concepts-dashboard@1443570279 ",
+            "repo:pranay-codes/air-concepts-dashboard:ref:refs/heads/main",
+            "*",
+        ]
+        for value in refused:
+            self.assertIsNone(pattern.fullmatch(value), value)
+
+    def test_subject_prefix_is_not_built_from_the_repository_name(self):
+        sub = self.role["AssumeRolePolicyDocument"]["Statement"][0]["Condition"]["StringEquals"][
+            "token.actions.githubusercontent.com:sub"
+        ]
+        self.assertNotIn("GitHubRepository", json.dumps(sub))
+        self.assertIn("GitHubSubjectPrefix", json.dumps(sub))
 
     def test_the_workflow_file_default_is_the_live_release_workflow(self):
         self.assertEqual(self.template["Parameters"]["AllowedWorkflowFile"]["Default"], ".github/workflows/deploy-live.yml")

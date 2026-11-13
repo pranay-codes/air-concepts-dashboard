@@ -14,8 +14,13 @@
     },
     "GitHubRepository": {
       "Type": "String",
-      "Description": "owner/name of the repository whose deploy-live workflow may assume the role.",
+      "Description": "owner/name of the repository whose deploy-live workflow may assume the role. Used in job_workflow_ref.",
       "AllowedPattern": "[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+"
+    },
+    "GitHubSubjectPrefix": {
+      "Type": "String",
+      "Description": "Subject prefix GitHub puts in the OIDC sub claim for this repository. When the repository uses immutable subjects (check: gh api repos/<owner>/<repo>/actions/oidc/customization/sub), it is repo:<owner>@<owner-id>/<repo>@<repo-id>, not repo:<owner>/<repo>. Use the exact value from that API's sub_claim_prefix, without the environment suffix.",
+      "AllowedPattern": "repo:[A-Za-z0-9_.-]+(@[0-9]+)?/[A-Za-z0-9_.-]+(@[0-9]+)?"
     },
     "GitHubEnvironment": {
       "Type": "String",
@@ -104,7 +109,7 @@
                 "StringEquals": {
                   "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
                   "token.actions.githubusercontent.com:sub": {
-                    "Fn::Sub": "repo:${GitHubRepository}:environment:${GitHubEnvironment}"
+                    "Fn::Sub": "${GitHubSubjectPrefix}:environment:${GitHubEnvironment}"
                   },
                   "token.actions.githubusercontent.com:job_workflow_ref": {
                     "Fn::Sub": "${GitHubRepository}/${AllowedWorkflowFile}@refs/heads/main"
