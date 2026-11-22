@@ -49,7 +49,7 @@ public final class StageMachine {
     State initial = new State(WorkItemStage.QUOTED, null, null, null, false, false, Set.of());
     State created;
     switch (status) {
-      case SENT -> created = handOff(initial, WorkItemStage.QUOTED, settings.defaultOwnerId(),
+      case DRAFT, SENT -> created = handOff(initial, WorkItemStage.QUOTED, settings.defaultOwnerId(),
           settings.defaultOwnerActive(), "NO_DEFAULT_OWNER").state();
       case ACCEPTED -> {
         if (context.firstSync() && (!context.withinBackfillWindow() || context.matchingInvoice())) return Optional.empty();
@@ -65,7 +65,7 @@ public final class StageMachine {
         created = withAttention(handOff(initial, WorkItemStage.TO_INVOICE, settings.defaultOwnerId(),
             settings.defaultOwnerActive(), "NO_DEFAULT_OWNER").state(), "QUOTE_INVOICED_IN_XERO");
       }
-      case DRAFT, DELETED -> { return Optional.empty(); }
+      case DELETED -> { return Optional.empty(); }
       default -> throw new IllegalStateException("Unknown quote status");
     }
     return Optional.of(new Result(created, "ITEM_CREATED"));

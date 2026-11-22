@@ -208,7 +208,7 @@ class StageMachineTest {
     var invoiced = StageMachine.create(StageMachine.QuoteStatus.INVOICED, later, SETTINGS).orElseThrow();
     assertThat(invoiced.state().stage()).isEqualTo(WorkItemStage.TO_INVOICE);
     assertThat(invoiced.state().attention()).contains("QUOTE_INVOICED_IN_XERO");
-    assertThat(StageMachine.create(StageMachine.QuoteStatus.DRAFT, later, SETTINGS)).isEmpty();
+    assertThat(StageMachine.create(StageMachine.QuoteStatus.DRAFT, later, SETTINGS).orElseThrow().state().stage()).isEqualTo(WorkItemStage.QUOTED);
     assertThat(StageMachine.create(StageMachine.QuoteStatus.DELETED, later, SETTINGS)).isEmpty();
     assertThat(StageMachine.create(StageMachine.QuoteStatus.SENT,
         new StageMachine.InitialContext(false, false, true, false), SETTINGS)).isEmpty();

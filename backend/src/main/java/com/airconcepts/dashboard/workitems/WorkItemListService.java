@@ -27,7 +27,7 @@ public class WorkItemListService {
     user.requireRole(Role.DIRECTOR, Role.FINANCIAL_ADMIN, Role.STANDARD_USER);
     TenantProvenance.requireValid(jdbc, query.entityId());
     var args = new ArrayList<Object>();
-    var where = new StringBuilder(" where e.archived_at is null and s.enabled and w.xero_quote_status<>'DRAFT'");
+    var where = new StringBuilder(" where e.archived_at is null and s.enabled");
     if (query.entityId() != null) { where.append(" and w.entity_id=?"); args.add(query.entityId()); }
     if (query.stage() != null) { where.append(" and w.stage=?"); args.add(query.stage().name()); }
     if (query.xeroStatus() != null) { where.append(" and w.xero_quote_status=?"); args.add(query.xeroStatus().name()); }

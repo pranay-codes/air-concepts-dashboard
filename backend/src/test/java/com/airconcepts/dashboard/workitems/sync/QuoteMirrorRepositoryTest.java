@@ -406,9 +406,12 @@ class QuoteMirrorRepositoryTest {
           WorkItemListQuery.Sort.quoteNumber, WorkItemListQuery.Direction.ASC, 1, 1);
       var page2 = new WorkItemListQuery(entity, null, null, null, null, null, "",
           WorkItemListQuery.Sort.quoteNumber, WorkItemListQuery.Direction.ASC, 2, 1);
-      assertThat(list.list(user, page1).total()).isEqualTo(2);
+      assertThat(list.list(user, page1).total()).isEqualTo(3);
       assertThat(list.list(user, page1).items()).extracting(WorkItemReadService.Summary::quoteNumber).containsExactly("Q-100%");
       assertThat(list.list(user, page2).items()).extracting(WorkItemReadService.Summary::quoteNumber).containsExactly("Q-100X");
+      var page3 = new WorkItemListQuery(entity, null, null, null, null, null, "",
+          WorkItemListQuery.Sort.quoteNumber, WorkItemListQuery.Direction.ASC, 3, 1);
+      assertThat(list.list(user, page3).items()).extracting(WorkItemReadService.Summary::quoteNumber).containsExactly("Q-draft");
       tx.setRollbackOnly();
     });
   }

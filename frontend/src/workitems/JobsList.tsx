@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { isAccessFailure } from "../api/client";
+import { apiMessage, isAccessFailure } from "../api/client";
 import type { Entity, Profile } from "../api/contracts";
 import type { DashboardApi } from "../api/dashboard";
 import { useResource } from "../api/useResource";
+import { useAction } from "../api/useAction";
 import { Failure, Loading, Notice } from "../ui/Feedback";
 import { formatDate, formatFetchTime, formatMoney } from "../ui/format";
 import type { WorkItem, WorkItemQuery } from "./contracts";
 import { JobDetail } from "./JobDetail";
+import { SyncFreshness } from "./SyncFreshness";
 import { flagLabel, stageLabels } from "./stageText";
 
 const initial = (): WorkItemQuery => ({
@@ -16,6 +18,87 @@ const initial = (): WorkItemQuery => ({
   direction: "ASC",
 });
 const ignoreDirty = () => {};
+
+function FollowUp({
+  item,
+  api,
+  profile,
+  onChanged,
+  onAccessDenied,
+}: {
+  item: WorkItem;
+  api: DashboardApi;
+  profile: Profile;
+  onChanged(): void;
+  onAccessDenied(): void;
+}) {
+  const [value, setValue] = useState(item.followUpDate ?? "");
+  const action = useAction(`${profile.subject}:${item.entityId}:${item.id}`);
+  const canEdit =
+    item.stage !== "CLOSED" &&
+    (profile.role === "DIRECTOR" ||
+      profile.role === "FINANCIAL_ADMIN" ||
+      item.owner?.id === profile.subject);
+  const todayParts = new Intl.DateTimeFormat("en-NZ", {
+    timeZone: "Pacific/Auckland",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const today = ["year", "month", "day"]
+    .map((part) => todayParts.find((entry) => entry.type === part)?.value)
+    .join("-");
+  const urgency =
+    item.followUpDate && item.followUpDate <= today
+      ? item.followUpDate === today
+        ? "Due today"
+        : "Overdue"
+      : null;
+  async function save() {
+    const result = await action.run(
+      (signal) =>
+        api.updateWorkItem(
+          item.entityId,
+          item.id,
+          value
+            ? { version: item.version, followUpDate: value }
+            : { version: item.version, clearFollowUp: true },
+          signal,
+        ),
+      (error) => {
+        if (isAccessFailure(error)) onAccessDenied();
+      },
+    );
+    if (result) onChanged();
+  }
+  return (
+    <div>
+      {canEdit ? (
+        <>
+          <input
+            aria-label={`Follow-up date for ${item.quoteNumber}`}
+            type="date"
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+          />
+          <button
+            type="button"
+            disabled={action.busy || value === (item.followUpDate ?? "")}
+            onClick={save}
+          >
+            Save
+          </button>
+        </>
+      ) : (
+        formatDate(item.followUpDate)
+      )}
+      {urgency ? (
+        <span className={`badge ${urgency === "Overdue" ? "error" : "warning"}`}>{urgency}</span>
+      ) : null}
+      {action.error ? <p role="alert">{apiMessage(action.error)}</p> : null}
+    </div>
+  );
+}
 export function JobsList({
   api,
   entity,
@@ -59,7 +142,13 @@ export function JobsList({
   );
   const resource = useResource(JSON.stringify([scope, state.query]), load, state.scope === scope);
   const page = state.query.page ?? 1;
-  const filtered = Boolean(state.query.search || state.query.stage || state.query.late);
+  const filtered = Boolean(
+    state.query.search ||
+    state.query.stage ||
+    state.query.late ||
+    state.query.xeroStatus ||
+    state.query.followUpDueBy,
+  );
   const change = (patch: Partial<WorkItemQuery>) =>
     setState((current) => ({ ...current, query: { ...current.query, ...patch, page: 1 } }));
   const sort = (field: NonNullable<WorkItemQuery["sort"]>) =>
@@ -124,6 +213,13 @@ export function JobsList({
     <section aria-labelledby="jobs-heading">
       <h1 id="jobs-heading">Service jobs</h1>
       <p>Quotes and jobs for {entity.displayName}</p>
+      <SyncFreshness
+        api={api}
+        entity={entity}
+        profile={profile}
+        onChanged={resource.refresh}
+        onAccessDenied={onAccessDenied}
+      />
       <p className="supporting">
         Last dashboard fetch: {formatFetchTime(resource.loadedAt)}. Xero sync time is not available.
       </p>
@@ -135,6 +231,32 @@ export function JobsList({
             value={state.search}
             maxLength={200}
             onChange={(event) => setState((s) => ({ ...s, search: event.target.value }))}
+          />
+        </label>
+        <label>
+          Xero status
+          <select
+            value={state.query.xeroStatus ?? ""}
+            onChange={(event) =>
+              change({
+                xeroStatus: (event.target.value || undefined) as WorkItemQuery["xeroStatus"],
+              })
+            }
+          >
+            <option value="">All statuses</option>
+            {["DRAFT", "SENT", "ACCEPTED", "DECLINED", "INVOICED", "DELETED"].map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Follow-up due by
+          <input
+            type="date"
+            value={state.query.followUpDueBy ?? ""}
+            onChange={(event) => change({ followUpDueBy: event.target.value || undefined })}
           />
         </label>
         <label>
@@ -232,7 +354,16 @@ export function JobsList({
                           ) : null}
                         </td>
                         <td>{item.owner?.displayName ?? "Unassigned"}</td>
-                        <td>{formatDate(item.followUpDate)}</td>
+                        <td>
+                          <FollowUp
+                            key={`${item.id}:${item.version}`}
+                            item={item}
+                            api={api}
+                            profile={profile}
+                            onChanged={resource.refresh}
+                            onAccessDenied={onAccessDenied}
+                          />
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -256,7 +387,17 @@ export function JobsList({
                     </p>
                     <p>Total: {formatMoney(item.quoteTotal, item.currency)}</p>
                     <p>Owner: {item.owner?.displayName ?? "Unassigned"}</p>
-                    <p>Follow-up: {formatDate(item.followUpDate)}</p>
+                    <div>
+                      Follow-up:{" "}
+                      <FollowUp
+                        key={`${item.id}:${item.version}`}
+                        item={item}
+                        api={api}
+                        profile={profile}
+                        onChanged={resource.refresh}
+                        onAccessDenied={onAccessDenied}
+                      />
+                    </div>
                   </article>
                 ))}
               </div>
