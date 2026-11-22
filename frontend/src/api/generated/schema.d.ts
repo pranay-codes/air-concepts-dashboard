@@ -16,6 +16,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/vwork-connection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read vWork connection status */
+        get: operations["getVworkConnection"];
+        /** Connect or replace the vWork key (Director only) */
+        put: operations["connectVwork"];
+        post?: never;
+        /** Disconnect vWork (Director only) */
+        delete: operations["disconnectVwork"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/entities/{entityId}/vwork-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read an entity's vWork template assignments */
+        get: operations["listEntityVworkTemplates"];
+        /** Replace an entity's vWork templates (Director only) */
+        put: operations["updateEntityVworkTemplates"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/entities/{entityId}/invoices/{invoiceId}/assignment": {
         parameters: {
             query?: never;
@@ -26,6 +63,24 @@ export interface paths {
         get?: never;
         /** Assign or unassign a verified sales invoice; Director or Financial Admin only */
         put: operations["assignSalesInvoice"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/entities/{entityId}/green-line/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read workflow status and Director settings for an entity */
+        get: operations["getGreenLineSettings"];
+        /** Update an entity's workflow settings (Director only) */
+        put: operations["updateGreenLineSettings"];
         post?: never;
         delete?: never;
         options?: never;
@@ -144,6 +199,143 @@ export interface paths {
         put?: never;
         /** Start a Director-owned Xero authorisation attempt */
         post: operations["startXeroAuthorization"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/entities/{entityId}/work-items/{itemId}/vwork-job": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create or link a vWork job */
+        post: operations["createVworkJob"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/entities/{entityId}/work-items/{itemId}/operations/{operationId}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry a failed vWork job creation */
+        post: operations["retryVworkOperation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/entities/{entityId}/work-items/{itemId}/operations/{operationId}/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Look up an unconfirmed vWork job */
+        post: operations["lookupVworkOperation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/entities/{entityId}/work-items/{itemId}/no-invoice-needed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close a work item that needs no invoice */
+        post: operations["closeWorkItemNoInvoice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/entities/{entityId}/work-items/{itemId}/mark-sent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm that an authorised invoice was sent */
+        post: operations["markInvoiceSent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/entities/{entityId}/work-items/{itemId}/invoice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Prepare a draft invoice for the job */
+        post: operations["prepareInvoice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/entities/{entityId}/work-items/{itemId}/close-lost": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close a quoted work item as lost */
+        post: operations["closeWorkItemLost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/entities/{entityId}/green-line/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read workflow sync status */
+        get: operations["getGreenLineSync"];
+        put?: never;
+        /** Refresh workflow quotes */
+        post: operations["refreshGreenLine"];
         delete?: never;
         options?: never;
         head?: never;
@@ -333,6 +525,24 @@ export interface paths {
         patch: operations["renameEntity"];
         trace?: never;
     };
+    "/api/v1/entities/{entityId}/work-items/{itemId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read an entity's work item and timeline */
+        get: operations["getWorkItem"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update the work item's follow-up date and notes */
+        patch: operations["updateWorkItem"];
+        trace?: never;
+    };
     "/api/v1/entities/{entityId}/forecast/staffing/{id}": {
         parameters: {
             query?: never;
@@ -391,6 +601,40 @@ export interface paths {
         };
         /** Read the current Director's result and authorised organisation choices */
         get: operations["getXeroAuthorizationAttempt"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/work-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List work items with entity-scoped filters and pagination */
+        get: operations["listWorkItems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/work-items/my-work": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the current user's work and attention queues */
+        get: operations["getMyWork"];
         put?: never;
         post?: never;
         delete?: never;
@@ -458,6 +702,40 @@ export interface paths {
         };
         /** Read safe connection metadata for the selected entity */
         get: operations["getXeroConnection"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/entities/{entityId}/work-items/{itemId}/job-draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Prepare a price-free vWork job draft */
+        get: operations["getCreateJobDraft"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/entities/{entityId}/work-items/{itemId}/invoice-draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Review invoice details from the Xero quote */
+        get: operations["reviewInvoiceDraft"];
         put?: never;
         post?: never;
         delete?: never;
@@ -651,6 +929,34 @@ export interface components {
             /** Format: date-time */
             lastCheckedAt?: string;
             errorCode?: string;
+            /** @enum {string} */
+            quoteAccess?: "NOT_ENABLED" | "UNKNOWN" | "READY" | "RECONNECT_REQUIRED";
+        };
+        VworkConnectionRequest: {
+            /** @description vWork API key; write only */
+            apiKey: string;
+        };
+        /** @description All active staff see status; only Directors receive connection metadata. Credentials are never returned. */
+        VworkConnection: {
+            status: string;
+            /** Format: uuid */
+            configuredBy?: string;
+            /** Format: date-time */
+            configuredAt?: string;
+            /** Format: date-time */
+            verifiedAt?: string;
+            errorCode?: string;
+        };
+        EntityVworkTemplateInput: {
+            templateRef: string;
+            isDefault: boolean;
+        };
+        EntityVworkTemplatesRequest: {
+            templates: components["schemas"]["EntityVworkTemplateInput"][];
+        };
+        EntityVworkTemplate: {
+            templateRef: string;
+            isDefault: boolean;
         };
         AssignInvoice: {
             /**
@@ -669,6 +975,31 @@ export interface components {
             /** Format: uuid */
             invoiceId: string;
             owner?: components["schemas"]["InvoiceOwner"];
+        };
+        SettingsRequest: {
+            enabled: boolean;
+            /** Format: uuid */
+            defaultOwnerId?: string;
+            /** Format: uuid */
+            serviceManagerId?: string;
+            /** Format: int32 */
+            lateThresholdWorkingDays: number;
+            /** Format: int32 */
+            backfillDays: number;
+        };
+        /** @description All active staff see entity and enabled status; only Directors receive the other settings. */
+        GreenLineSettings: {
+            /** Format: uuid */
+            entityId: string;
+            enabled: boolean;
+            /** Format: uuid */
+            defaultOwnerId?: string;
+            /** Format: uuid */
+            serviceManagerId?: string;
+            /** Format: int32 */
+            lateThresholdWorkingDays?: number;
+            /** Format: int32 */
+            backfillDays?: number;
         };
         NoteRequest: {
             note?: string;
@@ -753,6 +1084,181 @@ export interface components {
             authorizationUrl: string;
             /** Format: date-time */
             expiresAt: string;
+        };
+        CreateJobRequest: {
+            /** Format: int32 */
+            version: number;
+            reference: string;
+            templateId: string;
+            description: string;
+            customer: string;
+            contactPerson: string;
+            phone: string;
+            siteAddress: string;
+            notes?: string;
+            scope: components["schemas"]["CreateJobScopeLine"][];
+        };
+        CreateJobScopeLine: {
+            description: string;
+            quantity: string;
+        };
+        CreateJobResult: {
+            /** Format: uuid */
+            operationId: string;
+            /** @enum {string} */
+            outcome: "CREATED" | "LINKED_EXISTING" | "NOT_FOUND";
+        };
+        LookupResult: {
+            /** @enum {string} */
+            outcome?: "CREATED" | "LINKED_EXISTING" | "NOT_FOUND";
+        };
+        ReasonRequest: {
+            /** Format: int32 */
+            version: number;
+            reason: string;
+        };
+        Detail: {
+            summary?: components["schemas"]["Summary"];
+            notes?: string;
+            closingNote?: string;
+            vwork?: components["schemas"]["VworkPanel"];
+            invoice?: components["schemas"]["InvoicePanel"];
+            links?: components["schemas"]["Links"];
+            events?: components["schemas"]["EventView"][];
+            operations?: components["schemas"]["OperationView"][];
+            allowedActions?: ("EDIT_NOTES" | "CLOSE_LOST" | "CREATE_JOB" | "PREPARE_INVOICE" | "NO_INVOICE_NEEDED" | "MARK_SENT")[];
+        };
+        EventView: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: date-time */
+            at?: string;
+            actor?: components["schemas"]["StaffRef"];
+            source?: string;
+            eventType?: string;
+            fromStage?: string;
+            toStage?: string;
+            /** Format: uuid */
+            fromOwnerId?: string;
+            /** Format: uuid */
+            toOwnerId?: string;
+            before?: string;
+            after?: string;
+        };
+        InvoicePanel: {
+            /** Format: uuid */
+            invoiceId?: string;
+            invoiceNumber?: string;
+            status?: string;
+            sent?: boolean;
+            total?: string;
+            amountDue?: string;
+            /** Format: date */
+            dueDate?: string;
+        };
+        Links: {
+            xeroQuoteUrl?: string;
+            xeroInvoiceUrl?: string;
+            vworkJobUrl?: string;
+        };
+        OperationView: {
+            /** Format: uuid */
+            id?: string;
+            /** @enum {string} */
+            kind?: "VWORK_CREATE_JOB" | "XERO_CREATE_INVOICE" | "XERO_ATTACH_REPORT";
+            /** @enum {string} */
+            status?: "PENDING" | "UNKNOWN" | "FAILED" | "SUCCEEDED";
+            /** @enum {string} */
+            outcome?: "CREATED" | "LINKED_EXISTING" | "NOT_FOUND";
+            /** Format: date-time */
+            requestedAt?: string;
+            allowLookup?: boolean;
+            allowRetry?: boolean;
+        };
+        StaffRef: {
+            /** Format: uuid */
+            id?: string;
+            displayName?: string;
+        };
+        Summary: {
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            entityId?: string;
+            entityName?: string;
+            /** Format: uuid */
+            xeroQuoteId?: string;
+            quoteNumber?: string;
+            jobId?: string;
+            customerName?: string;
+            xeroQuoteStatus?: string;
+            quoteTotal?: string;
+            currency?: string;
+            /** @enum {string} */
+            stage?: "QUOTED" | "TO_SCHEDULE" | "SCHEDULED" | "TO_INVOICE" | "INVOICE_DRAFTED" | "INVOICED" | "CLOSED";
+            closeReason?: string;
+            owner?: components["schemas"]["StaffRef"];
+            /** Format: date */
+            followUpDate?: string;
+            /** Format: date-time */
+            stageEnteredAt?: string;
+            /** Format: int64 */
+            daysInStage?: number;
+            late?: boolean;
+            nextAction?: string;
+            flags?: string[];
+            attention?: string[];
+            /** Format: int32 */
+            version?: number;
+        };
+        VworkPanel: {
+            jobId?: string;
+            jobNumber?: string;
+            status?: string;
+            technician?: string;
+            /** Format: date-time */
+            scheduledStart?: string;
+            /** Format: date-time */
+            completedAt?: string;
+            technicianNotes?: string;
+            reportStatus?: string;
+            searchState?: string;
+        };
+        VersionRequest: {
+            /** Format: int32 */
+            version: number;
+        };
+        PrepareInvoiceRequest: {
+            /** Format: int32 */
+            version: number;
+            fingerprint: string;
+        };
+        PrepareInvoiceResult: {
+            /** Format: uuid */
+            operationId: string;
+            /** @enum {string} */
+            outcome: "CREATED" | "LINKED_EXISTING" | "NOT_FOUND";
+        };
+        GreenLineSyncRun: {
+            /** Format: uuid */
+            id: string;
+            status: string;
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            finishedAt?: string;
+            errorCode?: string;
+        };
+        GreenLineSyncStatus: {
+            /** Format: uuid */
+            entityId: string;
+            xero: components["schemas"]["GreenLineSystemSyncStatus"];
+            vwork: components["schemas"]["GreenLineSystemSyncStatus"];
+        };
+        GreenLineSystemSyncStatus: {
+            latest?: components["schemas"]["GreenLineSyncRun"];
+            lastSuccess?: components["schemas"]["GreenLineSyncRun"];
+            lastFailure?: components["schemas"]["GreenLineSyncRun"];
         };
         SyncRun: {
             /** Format: uuid */
@@ -856,6 +1362,14 @@ export interface components {
         RenameEntity: {
             displayName: string;
         };
+        UpdateRequest: {
+            /** Format: int32 */
+            version: number;
+            /** Format: date */
+            followUpDate?: string;
+            notes?: string;
+            clearFollowUp?: boolean;
+        };
         XeroAuthorizationAttempt: {
             /** Format: uuid */
             id: string;
@@ -872,6 +1386,25 @@ export interface components {
             /** Format: uuid */
             connectionId: string;
             name: string;
+        };
+        WorkItemPage: {
+            items?: components["schemas"]["Summary"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            pageSize?: number;
+            /** Format: int64 */
+            total?: number;
+            /** Format: int64 */
+            totalPages?: number;
+        };
+        MyWork: {
+            needsAction?: components["schemas"]["Summary"][];
+            waiting?: components["schemas"]["Summary"][];
+            needsAttention?: components["schemas"]["Summary"][];
+            /** Format: date-time */
+            generatedAt?: string;
+            truncated?: boolean;
         };
         StaffOption: {
             /** Format: uuid */
@@ -925,6 +1458,49 @@ export interface components {
             pendingNewItems: number;
             /** @enum {string|null} */
             openingSource?: "MANUAL" | "OVERRIDE" | "CARRIED_FORWARD" | null;
+        };
+        CreateJobDraft: {
+            /** Format: uuid */
+            entityId: string;
+            /** Format: uuid */
+            itemId: string;
+            /** Format: int32 */
+            version: number;
+            reference?: string;
+            quoteNumber: string;
+            customer?: string;
+            contactPerson?: string;
+            phone?: string;
+            siteAddress?: string;
+            scope: components["schemas"]["ScopeLine"][];
+            templates: components["schemas"]["Template"][];
+            defaultTemplate?: string;
+            missingFields: string[];
+        };
+        ScopeLine: {
+            description?: string;
+            quantity?: string;
+        };
+        Template: {
+            templateRef?: string;
+            isDefault?: boolean;
+        };
+        InvoiceDraftReview: {
+            /** Format: uuid */
+            entityId: string;
+            /** Format: uuid */
+            itemId: string;
+            /** Format: int32 */
+            version: number;
+            quoteNumber: string;
+            organisationName: string;
+            customer: string;
+            reference: string;
+            /** Format: int32 */
+            lineCount: number;
+            total: string;
+            currency: string;
+            fingerprint: string;
         };
         InvoicePage: {
             items: components["schemas"]["InvoiceSummary"][];
@@ -1173,6 +1749,118 @@ export interface operations {
             };
         };
     };
+    getVworkConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VworkConnection"];
+                };
+            };
+        };
+    };
+    connectVwork: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VworkConnectionRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VworkConnection"];
+                };
+            };
+        };
+    };
+    disconnectVwork: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VworkConnection"];
+                };
+            };
+        };
+    };
+    listEntityVworkTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entityId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityVworkTemplate"][];
+                };
+            };
+        };
+    };
+    updateEntityVworkTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entityId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntityVworkTemplatesRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityVworkTemplate"][];
+                };
+            };
+        };
+    };
     assignSalesInvoice: {
         parameters: {
             query?: {
@@ -1198,6 +1886,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SalesAssignment"];
+                };
+            };
+        };
+    };
+    getGreenLineSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entityId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GreenLineSettings"];
+                };
+            };
+        };
+    };
+    updateGreenLineSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entityId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GreenLineSettings"];
                 };
             };
         };
@@ -1440,6 +2176,237 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["XeroAuthorizationStart"];
+                };
+            };
+        };
+    };
+    createVworkJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entityId: string;
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateJobRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateJobResult"];
+                };
+            };
+        };
+    };
+    retryVworkOperation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entityId: string;
+                itemId: string;
+                operationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateJobRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateJobResult"];
+                };
+            };
+        };
+    };
+    lookupVworkOperation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entityId: string;
+                itemId: string;
+                operationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LookupResult"];
+                };
+            };
+        };
+    };
+    closeWorkItemNoInvoice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entityId: string;
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Detail"];
+                };
+            };
+        };
+    };
+    markInvoiceSent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entityId: string;
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Detail"];
+                };
+            };
+        };
+    };
+    prepareInvoice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entityId: string;
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrepareInvoiceRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepareInvoiceResult"];
+                };
+            };
+        };
+    };
+    closeWorkItemLost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entityId: string;
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Detail"];
+                };
+            };
+        };
+    };
+    getGreenLineSync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entityId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["GreenLineSyncStatus"];
+                };
+            };
+        };
+    };
+    refreshGreenLine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entityId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["GreenLineSyncStatus"];
                 };
             };
         };
@@ -1831,6 +2798,56 @@ export interface operations {
             };
         };
     };
+    getWorkItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entityId: string;
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Detail"];
+                };
+            };
+        };
+    };
+    updateWorkItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entityId: string;
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Detail"];
+                };
+            };
+        };
+    };
     updateForecastStaffing: {
         parameters: {
             query?: never;
@@ -1929,6 +2946,60 @@ export interface operations {
             };
         };
     };
+    listWorkItems: {
+        parameters: {
+            query?: {
+                entityId?: string;
+                stage?: "QUOTED" | "TO_SCHEDULE" | "SCHEDULED" | "TO_INVOICE" | "INVOICE_DRAFTED" | "INVOICED" | "CLOSED";
+                xeroStatus?: "DRAFT" | "SENT" | "ACCEPTED" | "DECLINED" | "DELETED" | "INVOICED";
+                ownerId?: string;
+                followUpDueBy?: string;
+                late?: boolean;
+                search?: string;
+                sort?: "stageEnteredAt" | "quoteNumber" | "customer" | "followUpDate" | "total";
+                direction?: "ASC" | "DESC";
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkItemPage"];
+                };
+            };
+        };
+    };
+    getMyWork: {
+        parameters: {
+            query?: {
+                entityId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyWork"];
+                };
+            };
+        };
+    };
     listAssignableStaff: {
         parameters: {
             query?: never;
@@ -2010,6 +3081,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["XeroConnection"];
+                };
+            };
+        };
+    };
+    getCreateJobDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entityId: string;
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateJobDraft"];
+                };
+            };
+        };
+    };
+    reviewInvoiceDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entityId: string;
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvoiceDraftReview"];
                 };
             };
         };

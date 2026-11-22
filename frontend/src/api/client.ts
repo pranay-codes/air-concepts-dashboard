@@ -1,6 +1,18 @@
 import type { AuthService } from "../auth/authService";
 
 const messages = {
+  CREATE_JOB_INVALID: "Complete the required job fields and choose a template for this entity.",
+  VWORK_CAPABILITY_UNVERIFIED: "Job creation is unavailable until vWork templates are verified.",
+  VWORK_SEARCH_UNAVAILABLE: "The vWork job could not be checked. Review it before trying again.",
+  EXTERNAL_OUTCOME_UNKNOWN: "The outcome needs review before trying again.",
+  OPERATION_ALREADY_EXISTS: "Review the existing job operation before trying again.",
+  SYNC_IN_PROGRESS: "A refresh is already running for this entity.",
+  SYNC_RATE_LIMITED: "Wait one minute before refreshing this entity again.",
+  QUOTE_SYNC_COMPLETENESS_UNVERIFIED:
+    "Xero refresh could not confirm that all quotes were returned.",
+  QUOTE_SYNC_INVOICE_CHECK_REQUIRED:
+    "Xero refresh needs a confirmed invoice check before it can finish.",
+  XERO_SCOPE_REQUIRED: "Xero permissions need attention from a Director in Settings.",
   FORECAST_PERIOD_INVALID: "Choose the current month or one of the previous 12 months.",
   FORECAST_INPUT_INVALID: "Check the highlighted forecast fields.",
   FORECAST_RECORD_UNAVAILABLE: "This forecast record is unavailable for the selected entity.",
@@ -28,6 +40,11 @@ const messages = {
   INVALID_RESPONSE: "This section returned an incomplete response. Try again.",
   RECORD_UNAVAILABLE: "This record is no longer available. Refresh the list.",
   RECORD_CHANGED: "This record changed. Refresh its details before trying again.",
+  WORK_ITEM_CHANGED: "This job changed. Refresh its details before trying again.",
+  OPERATION_IN_PROGRESS: "Resolve the existing operation before closing this job.",
+  WORK_ITEM_NOT_FOUND: "This job is no longer available. Refresh the list.",
+  STAGE_ACTION_NOT_ALLOWED: "This action is no longer available. Refresh the job.",
+  REASON_REQUIRED: "Enter a reason of 1–500 characters.",
   RECORD_CONFLICT: "These details conflict with an existing record. Refresh and check them.",
   REQUEST_FAILED: "The request could not be completed. Try again.",
   REQUEST_TIMEOUT: "The request timed out. Try again.",
@@ -35,6 +52,14 @@ const messages = {
   REQUEST_RATE_LIMITED: "Requests are limited. Wait before retrying.",
   XERO_NOT_CONNECTED:
     "This entity is not connected to Xero. Ask a Director to connect it in Settings.",
+  VWORK_KEY_REJECTED: "vWork rejected this key. Check it and try again.",
+  VWORK_KEY_INVALID: "Enter a valid vWork API key.",
+  VWORK_KEY_NOT_CONFIGURED: "The vWork encryption setup needs attention from the setup owner.",
+  VWORK_NOT_CONFIGURED: "The vWork integration is not configured.",
+  VWORK_CONNECTION_CHANGED: "The vWork connection changed. Refresh and try again.",
+  VWORK_VERIFICATION_FAILED: "The vWork connection could not be verified. Try again.",
+  VWORK_TEMPLATE_IN_USE: "A template is already assigned to another entity. Check the references.",
+  VWORK_TEMPLATES_INVALID: "Enter unique template references and choose one default.",
   XERO_RECONNECT_REQUIRED: "Xero access needs to be reconnected by a Director in Settings.",
   XERO_ORGANISATION_ACCESS_DENIED:
     "Xero refused access to this entity. Ask a Director to check its connection.",
@@ -44,6 +69,8 @@ const messages = {
   XERO_INVALID_RESPONSE: "Xero returned incomplete data. Retry this request.",
   XERO_CONFIGURATION_ERROR: "The Xero setup needs attention from the setup owner.",
   XERO_CONNECTION_CHANGED: "This entity's connection changed. Refresh before trying again.",
+  XERO_TENANT_CHANGED:
+    "This entity's Xero connection changed. Ask a Director to review its jobs before continuing.",
   XERO_CONNECTION_CONFLICT:
     "This Xero organisation is already connected or the request changed. Refresh Settings.",
   XERO_AUTH_EXPIRED: "This authorisation attempt expired. Connect Xero again.",
@@ -99,7 +126,7 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 type JsonOptions = {
-  method?: "GET" | "POST" | "PUT" | "PATCH";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   timeoutMs?: number;
 };

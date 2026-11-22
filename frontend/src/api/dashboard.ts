@@ -1,6 +1,7 @@
 import { ApiClient, ApiError, isRecord } from "./client";
 import * as c from "./contracts";
 import * as f from "../forecast/contracts";
+import * as w from "../workitems/contracts";
 
 function id(value: string): string {
   if (!c.isUuid(value)) throw new ApiError(400, "INVALID_REQUEST");
@@ -31,6 +32,198 @@ function matchesPeriod(rows: f.ForecastMonth[], start: string): boolean {
 /** Typed feature interface. All tenant selection and financial calculations remain on the backend. */
 export class DashboardApi {
   constructor(private readonly client: ApiClient) {}
+  async greenLineSyncStatus(entity: string, signal?: AbortSignal): Promise<c.GreenLineSyncStatus> {
+    const result = await this.client.json(
+      `${root(entity)}/green-line/sync`,
+      c.isGreenLineSyncStatus,
+      signal,
+    );
+    if (result.entityId !== entity) throw new ApiError(502, "INVALID_RESPONSE");
+    return result;
+  }
+  async refreshGreenLine(entity: string, signal?: AbortSignal): Promise<c.GreenLineSyncStatus> {
+    const result = await this.client.json(
+      `${root(entity)}/green-line/sync`,
+      c.isGreenLineSyncStatus,
+      signal,
+      { method: "POST" },
+    );
+    if (result.entityId !== entity) throw new ApiError(502, "INVALID_RESPONSE");
+    return result;
+  }
+  async myWork(
+    entity: string | null,
+    authorised: string[],
+    signal?: AbortSignal,
+  ): Promise<w.MyWork> {
+    for (const value of authorised) id(value);
+    if (entity !== null && !authorised.includes(entity)) throw new ApiError(400, "INVALID_REQUEST");
+    const query = entity === null ? "" : `?entityId=${id(entity)}`;
+    const result = await this.client.json(`/api/v1/work-items/my-work${query}`, w.isMyWork, signal);
+    const ids = new Set(authorised);
+    if (
+      [...result.needsAction, ...result.waiting, ...result.needsAttention].some(
+        (row) => !ids.has(row.entityId) || (entity !== null && row.entityId !== entity),
+      )
+    )
+      throw new ApiError(502, "INVALID_RESPONSE");
+    return result;
+  }
+  async workItems(
+    entity: string,
+    query: w.WorkItemQuery,
+    signal?: AbortSignal,
+  ): Promise<w.WorkItemPage> {
+    id(entity);
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query))
+      if (key !== "entityId" && value !== undefined && value !== "") params.set(key, String(value));
+    params.set("entityId", entity);
+    const page = await this.client.json(`/api/v1/work-items?${params}`, w.isWorkItemPage, signal);
+    if (
+      page.page !== (query.page ?? 1) ||
+      page.pageSize !== (query.pageSize ?? 25) ||
+      page.items.some((item) => item.entityId !== entity)
+    )
+      throw new ApiError(502, "INVALID_RESPONSE");
+    return page;
+  }
+  async workItem(entity: string, item: string, signal?: AbortSignal): Promise<w.WorkItemDetail> {
+    const result = await this.client.json(
+      `${root(entity)}/work-items/${id(item)}`,
+      w.isWorkItemDetail,
+      signal,
+    );
+    if (result.summary.entityId !== entity || result.summary.id !== item)
+      throw new ApiError(502, "INVALID_RESPONSE");
+    return result;
+  }
+  async invoiceDraftReview(
+    entity: string,
+    item: string,
+    signal?: AbortSignal,
+  ): Promise<w.InvoiceDraftReview> {
+    const result = await this.client.json(
+      `${root(entity)}/work-items/${id(item)}/invoice-draft`,
+      w.isInvoiceDraftReview,
+      signal,
+    );
+    if (result.entityId !== entity || result.itemId !== item)
+      throw new ApiError(502, "INVALID_RESPONSE");
+    return result;
+  }
+  async prepareInvoice(
+    entity: string,
+    item: string,
+    version: number,
+    fingerprint: string,
+    signal?: AbortSignal,
+  ) {
+    return this.client.json(
+      `${root(entity)}/work-items/${id(item)}/invoice`,
+      w.isCreateJobResult,
+      signal,
+      { method: "POST", body: { version, fingerprint } },
+    );
+  }
+  async createJobDraft(
+    entity: string,
+    item: string,
+    signal?: AbortSignal,
+  ): Promise<w.CreateJobDraft> {
+    const result = await this.client.json(
+      `${root(entity)}/work-items/${id(item)}/job-draft`,
+      w.isCreateJobDraft,
+      signal,
+    );
+    if (result.entityId !== entity || result.itemId !== item)
+      throw new ApiError(502, "INVALID_RESPONSE");
+    return result;
+  }
+  async createVworkJob(
+    entity: string,
+    item: string,
+    body: w.CreateJobRequest,
+    signal?: AbortSignal,
+  ): Promise<w.CreateJobResult> {
+    return this.client.json(
+      `${root(entity)}/work-items/${id(item)}/vwork-job`,
+      w.isCreateJobResult,
+      signal,
+      { method: "POST", body },
+    );
+  }
+  async lookupVworkOperation(
+    entity: string,
+    item: string,
+    operation: string,
+    signal?: AbortSignal,
+  ) {
+    return this.client.json(
+      `${root(entity)}/work-items/${id(item)}/operations/${id(operation)}/lookup`,
+      w.isLookupResult,
+      signal,
+      { method: "POST" },
+    );
+  }
+  async retryVworkOperation(
+    entity: string,
+    item: string,
+    operation: string,
+    body: w.CreateJobRequest,
+    signal?: AbortSignal,
+  ) {
+    return this.client.json(
+      `${root(entity)}/work-items/${id(item)}/operations/${id(operation)}/retry`,
+      w.isCreateJobResult,
+      signal,
+      { method: "POST", body },
+    );
+  }
+  async updateWorkItem(
+    entity: string,
+    item: string,
+    body: { version: number; notes?: string; followUpDate?: string; clearFollowUp?: boolean },
+    signal?: AbortSignal,
+  ) {
+    const result = await this.client.json(
+      `${root(entity)}/work-items/${id(item)}`,
+      w.isWorkItemDetail,
+      signal,
+      { method: "PATCH", body },
+    );
+    if (result.summary.entityId !== entity || result.summary.id !== item)
+      throw new ApiError(502, "INVALID_RESPONSE");
+    return result;
+  }
+  async markInvoiceSent(entity: string, item: string, version: number, signal?: AbortSignal) {
+    const result = await this.client.json(
+      `${root(entity)}/work-items/${id(item)}/mark-sent`,
+      w.isWorkItemDetail,
+      signal,
+      { method: "POST", body: { version } },
+    );
+    if (result.summary.entityId !== entity || result.summary.id !== item)
+      throw new ApiError(502, "INVALID_RESPONSE");
+    return result;
+  }
+  async closeWorkItem(
+    entity: string,
+    item: string,
+    kind: "close-lost" | "no-invoice-needed",
+    body: { version: number; reason: string },
+    signal?: AbortSignal,
+  ) {
+    const result = await this.client.json(
+      `${root(entity)}/work-items/${id(item)}/${kind}`,
+      w.isWorkItemDetail,
+      signal,
+      { method: "POST", body },
+    );
+    if (result.summary.entityId !== entity || result.summary.id !== item)
+      throw new ApiError(502, "INVALID_RESPONSE");
+    return result;
+  }
   /** `financialYear` is the calendar year the financial year starts in; null asks for the server's current year. */
   async forecast(entity: string, financialYear: number | null, signal?: AbortSignal) {
     const query = financialYear === null ? "" : `?financialYearStart=${financialYear}`;
@@ -374,6 +567,59 @@ export class DashboardApi {
   }
   staff(signal?: AbortSignal) {
     return this.client.json("/api/v1/staff", c.arrayOf(c.isStaffOption), signal);
+  }
+  vworkConnection(signal?: AbortSignal) {
+    return this.client.json("/api/v1/vwork-connection", c.isVworkConnection, signal);
+  }
+  entityVworkTemplates(entity: string, signal?: AbortSignal) {
+    return this.client.json(`${root(entity)}/vwork-templates`, c.isEntityVworkTemplates, signal);
+  }
+  saveEntityVworkTemplates(
+    entity: string,
+    body: c.EntityVworkTemplatesRequest,
+    signal?: AbortSignal,
+  ) {
+    return this.client.json(`${root(entity)}/vwork-templates`, c.isEntityVworkTemplates, signal, {
+      method: "PUT",
+      body,
+    });
+  }
+  connectVwork(apiKey: string, signal?: AbortSignal) {
+    return this.client.json("/api/v1/vwork-connection", c.isVworkConnection, signal, {
+      method: "PUT",
+      body: { apiKey },
+    });
+  }
+  disconnectVwork(signal?: AbortSignal) {
+    return this.client.json("/api/v1/vwork-connection", c.isVworkConnection, signal, {
+      method: "DELETE",
+    });
+  }
+  async greenLineSettings(entity: string, signal?: AbortSignal): Promise<c.GreenLineSettings> {
+    const result = await this.client.json(
+      `${root(entity)}/green-line/settings`,
+      c.isDirectorGreenLineSettings,
+      signal,
+    );
+    if (result.entityId !== entity) throw new ApiError(502, "INVALID_RESPONSE");
+    return result;
+  }
+  async saveGreenLineSettings(
+    entity: string,
+    body: c.GreenLineSettingsRequest,
+    signal?: AbortSignal,
+  ): Promise<c.GreenLineSettings> {
+    const result = await this.client.json(
+      `${root(entity)}/green-line/settings`,
+      c.isDirectorGreenLineSettings,
+      signal,
+      {
+        method: "PUT",
+        body,
+      },
+    );
+    if (result.entityId !== entity) throw new ApiError(502, "INVALID_RESPONSE");
+    return result;
   }
   users(signal?: AbortSignal) {
     return this.client.json("/api/v1/users", c.arrayOf(c.isStaff), signal);

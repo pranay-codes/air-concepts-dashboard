@@ -189,7 +189,8 @@ function EntityCard({
   const resource = useResource(`entity-settings:${entity.id}`, load);
   const connection = resource.data;
   const connected = connection?.status === "CONNECTED";
-  const reconnect = connection?.status === "NEEDS_RECONNECTION";
+  const reconnect =
+    connection?.status === "NEEDS_RECONNECTION" || connection?.quoteAccess === "RECONNECT_REQUIRED";
   const verifiedOn = connectedDate(connection?.lastConfirmedAt);
   return (
     <article className="card entity-card">
@@ -243,10 +244,19 @@ function EntityCard({
               <dd>{lastChecked(connection.lastCheckedAt)}</dd>
             </div>
           </dl>
+          {connected && connection.quoteAccess === "UNKNOWN" ? (
+            <Notice tone="warning">
+              Xero permissions for the quote workflow could not be verified. Ask the setup owner to
+              check.
+            </Notice>
+          ) : null}
+          {connected && connection.quoteAccess === "RECONNECT_REQUIRED" ? (
+            <Notice tone="warning">Reconnect to allow quote and contact access.</Notice>
+          ) : null}
         </>
       ) : null}
       <div className="action-row">
-        {connection && !connected ? (
+        {connection && (!connected || reconnect) ? (
           <button type="button" className="primary" onClick={onConnect}>
             {reconnect ? `Reconnect ${entity.displayName}` : `Connect ${entity.displayName}`}
           </button>

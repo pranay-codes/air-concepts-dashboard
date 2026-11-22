@@ -33,6 +33,8 @@ test("FR-UC15-05_07_11_30 sales details, confirmed assignment and entity isolati
   await page.getByLabel("Entity", { exact: true }).selectOption(ENTITY_A);
   await expect(owner).toHaveValue(STAFF_A);
   await page.reload();
+  await expect(page.getByRole("heading", { name: "My Work", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Invoices", exact: true }).click();
   await expect(owner).toHaveValue(STAFF_A);
   await owner.selectOption("");
   await expect(owner).toHaveValue("");
@@ -185,6 +187,8 @@ test("FR-UC15-18_21 a denied bill read clears revoked controls and revalidates t
   await expect(page.getByRole("tab", { name: "Supplier bills", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Settings", exact: true })).toHaveCount(0);
   await expect(page.getByLabel("Owner for INV-001", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "My Work", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Invoices", exact: true }).click();
   await expect(page.getByRole("table", { name: "Sales invoices", exact: true })).toBeVisible();
 });
 

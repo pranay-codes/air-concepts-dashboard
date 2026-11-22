@@ -16,9 +16,13 @@ import org.springframework.web.client.*;
 public class XeroInvoiceClient {
   private final RestClient api;
   private final Clock clock;
+  private final XeroForecastClient.Pacer pacer;
   private static final Pattern XERO_DATE = Pattern.compile("/Date\\((-?\\d+)(?:[+-]\\d{4})?\\)/");
 
-  public XeroInvoiceClient(RestClient api, Clock clock) { this.api = api; this.clock = clock; }
+  public XeroInvoiceClient(RestClient api, Clock clock) { this(api, clock, tenant -> {}); }
+  public XeroInvoiceClient(RestClient api, Clock clock, XeroForecastClient.Pacer pacer) {
+    this.api = api; this.clock = clock; this.pacer = Objects.requireNonNull(pacer);
+  }
 
   @JsonIgnoreProperties(ignoreUnknown = true)
   private record Envelope(@JsonProperty("Invoices") List<InvoiceBody> invoices, Pagination pagination) {}
@@ -36,7 +40,8 @@ public class XeroInvoiceClient {
       @JsonProperty("Status") InvoiceStatus status, @JsonProperty("SubTotal") BigDecimal subtotal,
       @JsonProperty("TotalTax") BigDecimal tax, @JsonProperty("AmountPaid") BigDecimal paid,
       @JsonProperty("AmountCredited") BigDecimal credited, @JsonProperty("LineItems") List<LineBody> lines,
-      @JsonProperty("Payments") List<PaymentBody> payments, @JsonProperty("LineAmountTypes") String taxBasis) {}
+      @JsonProperty("Payments") List<PaymentBody> payments, @JsonProperty("LineAmountTypes") String taxBasis,
+      @JsonProperty("SentToContact") Boolean sentToContact) {}
   @JsonIgnoreProperties(ignoreUnknown = true)
   private record LineBody(@JsonProperty("Description") String description, @JsonProperty("Quantity") BigDecimal quantity,
       @JsonProperty("UnitAmount") BigDecimal unit, @JsonProperty("LineAmount") BigDecimal amount,
@@ -51,16 +56,33 @@ public class XeroInvoiceClient {
         .queryParam("where", "{where}").queryParam("order", "{order}")
         .queryParam("page", filter.page()).queryParam("pageSize", filter.pageSize())
         .build(Map.of("where", filter.where(), "order", filter.order()))), access);
+    return checkedPage(body, query.type(), query.page(), query.pageSize());
+  }
+
+  /** SearchTerm is documented to search invoice number and reference; callers filter references locally. */
+  public InvoiceViews.Page searchReference(TenantAccess access, String term, int page) {
+    if (term == null || term.isBlank() || term.length() > 200 || term.chars().anyMatch(Character::isISOControl) || page < 1)
+      throw new IllegalArgumentException("A printable search term and positive page are required");
+    XeroScopes.require(access.grantedScopes(), XeroScopes.QUOTES_READ);
+    pacer.await(access.tenantId());
+    var body = call(api.get().uri(b -> b.path("/api.xro/2.0/Invoices")
+        .queryParam("where", "{where}").queryParam("SearchTerm", "{term}")
+        .queryParam("page", page).queryParam("pageSize", 100)
+        .build(Map.of("where", "Type==\"ACCREC\"", "term", term))), access);
+    return checkedPage(body, InvoiceType.ACCREC, page, 100);
+  }
+
+  private InvoiceViews.Page checkedPage(Envelope body, InvoiceType type, int page, int pageSize) {
     var p = body.pagination();
     if (p == null || p.page() == null || p.pageSize() == null || p.pageCount() == null || p.itemCount() == null
-        || p.page() != query.page() || p.pageSize() != query.pageSize() || p.itemCount() < 0 || p.pageCount() < 0) throw malformed();
+        || p.page() != page || p.pageSize() != pageSize || p.itemCount() < 0 || p.pageCount() < 0) throw malformed();
     long pages = p.itemCount() / p.pageSize() + (p.itemCount() % p.pageSize() == 0 ? 0 : 1);
     if (p.pageCount() != pages && !(pages == 0 && p.pageCount() == 1)) throw malformed();
     long expected = Math.max(0L, Math.min(p.pageSize(), p.itemCount() - ((long) p.page() - 1) * p.pageSize()));
     if (body.invoices().size() != expected) throw malformed();
     var ids = new HashSet<UUID>();
     var rows = body.invoices().stream().map(i -> {
-      var row = summary(i, query.type());
+      var row = summary(i, type);
       if (!ids.add(row.id())) throw malformed();
       return row;
     }).toList();
@@ -88,6 +110,27 @@ public class XeroInvoiceClient {
       default -> throw malformed();
     };
     return new InvoiceViews.Detail(summary, i.subtotal(), i.tax(), i.paid(), i.credited(), lines, payments, taxBasis);
+  }
+
+  /** Minimal linked-invoice observation; a sent flag is not proof of every Xero send path. */
+  public record WorkflowInvoice(UUID id, String number, InvoiceStatus status, BigDecimal total,
+      BigDecimal amountDue, LocalDate dueDate, Boolean sentToContact, String reference) {
+    public WorkflowInvoice(UUID id, String number, InvoiceStatus status, BigDecimal total,
+        BigDecimal amountDue, LocalDate dueDate, Boolean sentToContact) {
+      this(id,number,status,total,amountDue,dueDate,sentToContact,null);
+    }
+  }
+
+  public WorkflowInvoice workflowInvoice(TenantAccess access, UUID id) {
+    Objects.requireNonNull(id);
+    XeroScopes.require(access.grantedScopes(), XeroScopes.QUOTES_READ);
+    pacer.await(access.tenantId());
+    var body = call(api.get().uri("/api.xro/2.0/Invoices/{id}", id), access);
+    if (body.invoices().size() != 1) throw malformed();
+    var invoice = body.invoices().getFirst();
+    if (invoice == null || !id.equals(invoice.id()) || invoice.type() != InvoiceType.ACCREC || invoice.status() == null) throw malformed();
+    return new WorkflowInvoice(invoice.id(),invoice.number(),invoice.status(),invoice.total(),invoice.amountDue(),
+        date(invoice.dueString() != null ? invoice.dueString() : invoice.due(), true),invoice.sentToContact(),invoice.reference());
   }
 
   private InvoiceViews.Summary summary(InvoiceBody i, InvoiceType type) {

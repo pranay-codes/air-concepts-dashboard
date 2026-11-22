@@ -37,6 +37,8 @@ declare -A key_for=(
   [xero/redirect-uri]=XERO_REDIRECT_URI
   [xero/frontend-callback-uri]=XERO_FRONTEND_CALLBACK_URI
   [xero/token-encryption-key]=XERO_TOKEN_ENCRYPTION_KEY
+  [vwork/mode]=DASHBOARD_VWORK_MODE
+  [vwork/credential-encryption-key]=VWORK_CREDENTIAL_ENCRYPTION_KEY
   [cors/allowed-origins]=CORS_ALLOWED_ORIGINS
 )
 # Optional Xero request diagnostics (default off when absent). Read only when the environment allows

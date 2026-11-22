@@ -375,6 +375,12 @@ label {
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
   gap: var(--space-4);
 }
+.mywork-list {
+  display: grid;
+  gap: var(--space-4);
+  padding: 0;
+  list-style: none;
+}
 .search-field {
   grid-column: span 2;
 }

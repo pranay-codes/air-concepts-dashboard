@@ -15,6 +15,34 @@ class RequiredSettingsPostProcessorTest {
   private final RequiredSettingsPostProcessor processor = new RequiredSettingsPostProcessor();
 
   @Test
+  void gl26_vworkModeRequiresSeparateValidEncryptionKey() {
+    var environment = allRequiredSettings();
+    environment.setProperty("dashboard.vwork.mode", "mock");
+    assertThatThrownBy(() -> processor.postProcessEnvironment(environment, new SpringApplication()))
+        .isInstanceOf(IllegalStateException.class).hasMessageContaining("VWORK_CREDENTIAL_ENCRYPTION_KEY");
+    String key = java.util.Base64.getEncoder().encodeToString(new byte[32]);
+    environment.setProperty("VWORK_CREDENTIAL_ENCRYPTION_KEY", key);
+    environment.setProperty("XERO_TOKEN_ENCRYPTION_KEY", key);
+    assertThatThrownBy(() -> processor.postProcessEnvironment(environment, new SpringApplication()))
+        .isInstanceOf(IllegalStateException.class).hasMessageNotContaining(key);
+    byte[] other = new byte[32]; other[0] = 1;
+    environment.setProperty("XERO_TOKEN_ENCRYPTION_KEY", java.util.Base64.getEncoder().encodeToString(other));
+    assertThatCode(() -> processor.postProcessEnvironment(environment, new SpringApplication())).doesNotThrowAnyException();
+    environment.setProperty("VWORK_CREDENTIAL_ENCRYPTION_KEY", "invalid-synthetic-key");
+    assertThatThrownBy(() -> processor.postProcessEnvironment(environment, new SpringApplication()))
+        .isInstanceOf(IllegalStateException.class).hasMessageNotContaining("invalid-synthetic-key");
+  }
+
+  @Test
+  void gl26_rejectsUnknownVworkModeWithoutRequiringKeyWhenDisabled() {
+    var environment = allRequiredSettings();
+    assertThatCode(() -> processor.postProcessEnvironment(environment, new SpringApplication())).doesNotThrowAnyException();
+    environment.setProperty("dashboard.vwork.mode", "typo");
+    assertThatThrownBy(() -> processor.postProcessEnvironment(environment, new SpringApplication()))
+        .isInstanceOf(IllegalStateException.class).hasMessageContaining("dashboard.vwork.mode");
+  }
+
+  @Test
   void failsNamingEveryMissingSetting() {
     MockEnvironment environment = new MockEnvironment();
 

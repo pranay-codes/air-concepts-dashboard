@@ -8,7 +8,9 @@
 ## Open spikes
 | Question | Status | Note |
 |---|---|---|
-| vWork API for hours per worker, completion photos and webhooks | not started | |
+| Green-line vWork API and template identity | partial (documentation only) | [gl-vwork-api.md](gl-vwork-api.md) |
+| Green-line Xero quote and contact reads | partial (documentation only) | [gl-xero-quotes-contacts.md](gl-xero-quotes-contacts.md) |
+| Green-line Xero invoice writes and attachments | partial (documentation only) | [gl-xero-invoice-write.md](gl-xero-invoice-write.md) |
 | Xero quote send, invoice recipient override and invoice attachments | not started | |
 | Xero API tier and limits for three organisations | not started | |
 | Supabase email passcode login with a 6-digit code, single use and 10-minute expiry | not started | |

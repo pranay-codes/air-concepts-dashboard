@@ -29,7 +29,7 @@ public class XeroGrantService {
       throw new XeroProviderFailure("XERO_RATE_LIMITED", "Wait before retrying Xero.", 429, false, false, wait);
     }
     if (grant.state() == GrantState.ACTIVE && grant.expiresAt().isAfter(now.plusSeconds(60))) {
-      return new XeroAccess(id, cipher.decrypt(id, "access", grant.accessCiphertext()));
+      return new XeroAccess(id, cipher.decrypt(id, "access", grant.accessCiphertext()), grant.grantedScopes());
     }
     if (grant.pendingSince() != null && !grant.pendingSince().plusSeconds(1800).isAfter(now)) {
       repository.recordGrantFailure(id, GrantState.NEEDS_RECONNECTION, "XERO_RECONNECT_REQUIRED", null, null);
@@ -38,8 +38,9 @@ public class XeroGrantService {
     try {
       var rotated = provider.refresh(cipher.decrypt(id, "refresh", grant.refreshCiphertext()));
       repository.saveRotated(new StoredGrant(id, cipher.encrypt(id, "access", rotated.accessToken()),
-          cipher.encrypt(id, "refresh", rotated.refreshToken()), rotated.expiresAt(), GrantState.ACTIVE, null, null, null));
-      return new XeroAccess(id, rotated.accessToken());
+          cipher.encrypt(id, "refresh", rotated.refreshToken()), rotated.expiresAt(), GrantState.ACTIVE, null, null, null,
+          rotated.grantedScopes()));
+      return new XeroAccess(id, rotated.accessToken(), rotated.grantedScopes());
     } catch (XeroProviderFailure failure) {
       GrantState state = failure.requiresReconnect() ? GrantState.NEEDS_RECONNECTION
           : failure.uncertain() ? GrantState.REFRESH_PENDING : grant.state();

@@ -4,6 +4,7 @@ import type { DashboardApi } from "../api/dashboard";
 import { Notice } from "../ui/Feedback";
 import { EntitySettings } from "./EntitySettings";
 import { UserSettings } from "./UserSettings";
+import { WorkflowSettings } from "./WorkflowSettings";
 
 export interface SettingsProps {
   api: DashboardApi;
@@ -20,7 +21,7 @@ export default function Settings(props: SettingsProps) {
   return <DirectorSettings {...props} />;
 }
 function DirectorSettings(props: SettingsProps) {
-  const [tab, setTab] = useState<"entities" | "users">("entities");
+  const [tab, setTab] = useState<"entities" | "users" | "workflow">("entities");
   const [dirty, setDirty] = useState(false);
   function changeDirty(value: boolean) {
     setDirty(value);
@@ -30,7 +31,7 @@ function DirectorSettings(props: SettingsProps) {
     <section aria-labelledby="settings-title">
       <h1 id="settings-title">Settings</h1>
       <div className="action-row settings-tabs" aria-label="Settings sections">
-        {(["entities", "users"] as const).map((value) => (
+        {(["entities", "users", "workflow"] as const).map((value) => (
           <button
             key={value}
             type="button"
@@ -45,19 +46,21 @@ function DirectorSettings(props: SettingsProps) {
               setTab(value);
             }}
           >
-            {value === "entities" ? "Entities" : "Users"}
+            {value === "entities" ? "Entities" : value === "users" ? "Users" : "Workflow"}
           </button>
         ))}
       </div>
       {tab === "entities" ? (
         <EntitySettings {...props} onDirty={changeDirty} />
-      ) : (
+      ) : tab === "users" ? (
         <UserSettings
           api={props.api}
           profile={props.profile}
           onDirty={changeDirty}
           onAccessDenied={props.onAccessDenied}
         />
+      ) : (
+        <WorkflowSettings {...props} onDirty={changeDirty} />
       )}
     </section>
   );

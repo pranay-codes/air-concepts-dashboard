@@ -10,6 +10,12 @@ import { EntitySelector } from "./EntitySelector";
 
 const Settings = lazy(() => import("../settings/Settings"));
 const Forecast = lazy(() => import("../forecast/Forecast"));
+const JobsList = lazy(() =>
+  import("../workitems/JobsList").then((module) => ({ default: module.JobsList })),
+);
+const MyWork = lazy(() =>
+  import("../workitems/MyWork").then((module) => ({ default: module.MyWork })),
+);
 interface Props {
   api: DashboardApi;
   profile: Profile;
@@ -54,16 +60,18 @@ export function Workspace({
       id: remembered(profile, entities),
       generation: choice.generation + 1,
     });
-  const [route, setRoute] = useState<"invoices" | "forecast" | "settings">(() =>
-    profile.role === "DIRECTOR" && new URLSearchParams(window.location.search).has("xeroAttempt")
-      ? "settings"
-      : "invoices",
+  const [route, setRoute] = useState<"mywork" | "invoices" | "jobs" | "forecast" | "settings">(
+    () =>
+      profile.role === "DIRECTOR" && new URLSearchParams(window.location.search).has("xeroAttempt")
+        ? "settings"
+        : "mywork",
   );
   const [collapsed, setCollapsed] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [accessError, setAccessError] = useState<unknown>(null);
   const aggregate =
-    route === "forecast" && profile.role !== "STANDARD_USER" && choice.id === "__all__";
+    choice.id === "__all__" &&
+    (route === "mywork" || (route === "forecast" && profile.role !== "STANDARD_USER"));
   const selected = aggregate
     ? undefined
     : (entities.find((entity) => entity.id === choice.id) ?? entities[0]);
@@ -110,7 +118,7 @@ export function Workspace({
       current?.abort();
     };
   }, [api, profile.subject, profile.role, onAccessDenied]);
-  function navigate(next: "invoices" | "forecast" | "settings") {
+  function navigate(next: "mywork" | "invoices" | "jobs" | "forecast" | "settings") {
     if (dirty && !window.confirm("Discard unsaved changes before leaving this page?")) return;
     setDirty(false);
     setRoute(next);
@@ -119,8 +127,20 @@ export function Workspace({
   const currentRoute =
     (route === "settings" && profile.role !== "DIRECTOR") ||
     (route === "forecast" && profile.role === "STANDARD_USER")
-      ? "invoices"
+      ? "mywork"
       : route;
+  function changeChoice(id: string) {
+    setChoice((current) => ({ ...current, id, generation: current.generation + 1 }));
+    try {
+      if (id !== "__all__")
+        localStorage.setItem(
+          preference(profile.subject),
+          JSON.stringify({ version: 1, entityId: id }),
+        );
+    } catch {
+      /* The current selection remains valid when storage is unavailable. */
+    }
+  }
   return (
     <div className={`workspace-shell${collapsed ? " navigation-collapsed" : ""}`}>
       <a className="skip-link" href="#workspace-main">
@@ -142,10 +162,24 @@ export function Workspace({
         <nav aria-label="Main navigation">
           <button
             type="button"
+            aria-current={currentRoute === "mywork" ? "page" : undefined}
+            onClick={() => navigate("mywork")}
+          >
+            My Work
+          </button>
+          <button
+            type="button"
             aria-current={currentRoute === "invoices" ? "page" : undefined}
             onClick={() => navigate("invoices")}
           >
             Invoices
+          </button>
+          <button
+            type="button"
+            aria-current={currentRoute === "jobs" ? "page" : undefined}
+            onClick={() => navigate("jobs")}
+          >
+            Service jobs
           </button>
           {profile.role !== "STANDARD_USER" ? (
             <button
@@ -181,21 +215,15 @@ export function Workspace({
           <EntitySelector
             entities={entities}
             selectedId={aggregate ? "__all__" : (selected?.id ?? null)}
-            allowAll={currentRoute === "forecast" && profile.role !== "STANDARD_USER"}
+            allowAll={
+              currentRoute === "mywork" ||
+              (currentRoute === "forecast" && profile.role !== "STANDARD_USER")
+            }
             onSelect={(id) => {
               if (dirty && !window.confirm("Discard unsaved changes before switching entity?"))
                 return;
               setDirty(false);
-              setChoice((current) => ({ ...current, id, generation: current.generation + 1 }));
-              try {
-                if (id !== "__all__")
-                  localStorage.setItem(
-                    preference(profile.subject),
-                    JSON.stringify({ version: 1, entityId: id }),
-                  );
-              } catch {
-                /* Storage can be unavailable; selection remains valid in memory. */
-              }
+              changeChoice(id);
             }}
           />
           <div
@@ -269,6 +297,22 @@ export function Workspace({
                 onAccessDenied={onAccessDenied}
               />
             </Suspense>
+          ) : currentRoute === "mywork" && entities.length ? (
+            <Suspense fallback={<Loading label="Opening My Work…" />}>
+              <MyWork
+                key={`${profile.subject}:${profile.role}`}
+                api={api}
+                profile={profile}
+                entity={selected ?? null}
+                entities={entities}
+                onDirty={setDirty}
+                onAccessDenied={onAccessDenied}
+                onSelectEntity={(id) => {
+                  setDirty(false);
+                  changeChoice(id);
+                }}
+              />
+            </Suspense>
           ) : currentRoute === "forecast" ? (
             <Suspense fallback={<Loading label="Opening Forecast…" />}>
               <Forecast
@@ -282,6 +326,17 @@ export function Workspace({
                 onAccessDenied={onAccessDenied}
               />
             </Suspense>
+          ) : currentRoute === "jobs" && selected ? (
+            <Suspense fallback={<Loading label="Opening service jobs…" />}>
+              <JobsList
+                key={`${profile.subject}:${profile.role}:${selected.id}:${choice.generation}`}
+                api={api}
+                entity={selected}
+                profile={profile}
+                onAccessDenied={onAccessDenied}
+                onDirty={setDirty}
+              />
+            </Suspense>
           ) : selected ? (
             <Invoices
               key={`${profile.subject}:${profile.role}:${selected.id}:${choice.generation}`}
@@ -293,7 +348,13 @@ export function Workspace({
             />
           ) : (
             <>
-              <h1>Invoices</h1>
+              <h1>
+                {currentRoute === "jobs"
+                  ? "Service jobs"
+                  : currentRoute === "mywork"
+                    ? "My Work"
+                    : "Invoices"}
+              </h1>
               <Notice>
                 No entities are available.{" "}
                 {profile.role === "DIRECTOR" ? (

@@ -310,6 +310,27 @@ describe("UC5 Director settings", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Needs reconnection")).toBeInTheDocument();
   });
+  it("GL-T08 offers reconnection when quote permissions are missing", async () => {
+    const { api } = testApi((url) =>
+      url.pathname.endsWith("/xero")
+        ? { ...connected, quoteAccess: "RECONNECT_REQUIRED" }
+        : notConnected,
+    );
+    renderSettings(api);
+    expect(
+      await screen.findByText("Reconnect to allow quote and contact access."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reconnect First entity" })).toBeInTheDocument();
+  });
+  it("GL-T08 explains when quote permissions cannot be verified", async () => {
+    const { api } = testApi((url) =>
+      url.pathname.endsWith("/xero") ? { ...connected, quoteAccess: "UNKNOWN" } : notConnected,
+    );
+    renderSettings(api);
+    expect(
+      await screen.findByText(/permissions for the quote workflow could not be verified/),
+    ).toBeInTheDocument();
+  });
   it("FR-UC15-16 rechecks the current session after changing its role", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     const recheck = vi.fn();

@@ -50,6 +50,154 @@
         } ]
       }
     },
+    "/api/v1/vwork-connection" : {
+      "get" : {
+        "tags" : [ "vwork-connection-controller" ],
+        "summary" : "Read vWork connection status",
+        "operationId" : "getVworkConnection",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/VworkConnection"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      },
+      "put" : {
+        "tags" : [ "vwork-connection-controller" ],
+        "summary" : "Connect or replace the vWork key (Director only)",
+        "operationId" : "connectVwork",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/VworkConnectionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/VworkConnection"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      },
+      "delete" : {
+        "tags" : [ "vwork-connection-controller" ],
+        "summary" : "Disconnect vWork (Director only)",
+        "operationId" : "disconnectVwork",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/VworkConnection"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/vwork-templates" : {
+      "get" : {
+        "tags" : [ "vwork-templates-controller" ],
+        "summary" : "Read an entity's vWork template assignments",
+        "operationId" : "listEntityVworkTemplates",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/EntityVworkTemplate"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      },
+      "put" : {
+        "tags" : [ "vwork-templates-controller" ],
+        "summary" : "Replace an entity's vWork templates (Director only)",
+        "operationId" : "updateEntityVworkTemplates",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/EntityVworkTemplatesRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/EntityVworkTemplate"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
     "/api/v1/entities/{entityId}/invoices/{invoiceId}/assignment" : {
       "put" : {
         "tags" : [ "invoice-controller" ],
@@ -98,6 +246,76 @@
               "application/json" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/SalesAssignment"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/green-line/settings" : {
+      "get" : {
+        "tags" : [ "green-line-settings-controller" ],
+        "summary" : "Read workflow status and Director settings for an entity",
+        "operationId" : "getGreenLineSettings",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/GreenLineSettings"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      },
+      "put" : {
+        "tags" : [ "green-line-settings-controller" ],
+        "summary" : "Update an entity's workflow settings (Director only)",
+        "operationId" : "updateGreenLineSettings",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SettingsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/GreenLineSettings"
                 }
               }
             }
@@ -472,6 +690,415 @@
               "application/json" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/XeroAuthorizationStart"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/work-items/{itemId}/vwork-job" : {
+      "post" : {
+        "tags" : [ "vwork-job-controller" ],
+        "summary" : "Create or link a vWork job",
+        "operationId" : "createVworkJob",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "itemId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateJobRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CreateJobResult"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/work-items/{itemId}/operations/{operationId}/retry" : {
+      "post" : {
+        "tags" : [ "vwork-job-controller" ],
+        "summary" : "Retry a failed vWork job creation",
+        "operationId" : "retryVworkOperation",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "itemId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "operationId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateJobRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CreateJobResult"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/work-items/{itemId}/operations/{operationId}/lookup" : {
+      "post" : {
+        "tags" : [ "vwork-job-controller" ],
+        "summary" : "Look up an unconfirmed vWork job",
+        "operationId" : "lookupVworkOperation",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "itemId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "operationId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LookupResult"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/work-items/{itemId}/no-invoice-needed" : {
+      "post" : {
+        "tags" : [ "work-item-controller" ],
+        "summary" : "Close a work item that needs no invoice",
+        "operationId" : "closeWorkItemNoInvoice",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "itemId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Detail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/work-items/{itemId}/mark-sent" : {
+      "post" : {
+        "tags" : [ "work-item-controller" ],
+        "summary" : "Confirm that an authorised invoice was sent",
+        "operationId" : "markInvoiceSent",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "itemId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/VersionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Detail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/work-items/{itemId}/invoice" : {
+      "post" : {
+        "tags" : [ "invoice-draft-controller" ],
+        "summary" : "Prepare a draft invoice for the job",
+        "operationId" : "prepareInvoice",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "itemId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PrepareInvoiceRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PrepareInvoiceResult"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/work-items/{itemId}/close-lost" : {
+      "post" : {
+        "tags" : [ "work-item-controller" ],
+        "summary" : "Close a quoted work item as lost",
+        "operationId" : "closeWorkItemLost",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "itemId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Detail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/green-line/sync" : {
+      "get" : {
+        "tags" : [ "green-line-sync-controller" ],
+        "summary" : "Read workflow sync status",
+        "operationId" : "getGreenLineSync",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/GreenLineSyncStatus"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "green-line-sync-controller" ],
+        "summary" : "Refresh workflow quotes",
+        "operationId" : "refreshGreenLine",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/GreenLineSyncStatus"
                 }
               }
             }
@@ -1082,6 +1709,92 @@
         } ]
       }
     },
+    "/api/v1/entities/{entityId}/work-items/{itemId}" : {
+      "get" : {
+        "tags" : [ "work-item-controller" ],
+        "summary" : "Read an entity's work item and timeline",
+        "operationId" : "getWorkItem",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "itemId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Detail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      },
+      "patch" : {
+        "tags" : [ "work-item-controller" ],
+        "summary" : "Update the work item's follow-up date and notes",
+        "operationId" : "updateWorkItem",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "itemId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Detail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
     "/api/v1/entities/{entityId}/forecast/staffing/{id}" : {
       "patch" : {
         "tags" : [ "forecast-assumption-controller" ],
@@ -1243,6 +1956,151 @@
         } ]
       }
     },
+    "/api/v1/work-items" : {
+      "get" : {
+        "tags" : [ "work-item-list-controller" ],
+        "summary" : "List work items with entity-scoped filters and pagination",
+        "operationId" : "listWorkItems",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "stage",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "QUOTED", "TO_SCHEDULE", "SCHEDULED", "TO_INVOICE", "INVOICE_DRAFTED", "INVOICED", "CLOSED" ]
+          }
+        }, {
+          "name" : "xeroStatus",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "DRAFT", "SENT", "ACCEPTED", "DECLINED", "DELETED", "INVOICED" ]
+          }
+        }, {
+          "name" : "ownerId",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "followUpDueBy",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        }, {
+          "name" : "late",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean"
+          }
+        }, {
+          "name" : "search",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : ""
+          }
+        }, {
+          "name" : "sort",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : "stageEnteredAt",
+            "enum" : [ "stageEnteredAt", "quoteNumber", "customer", "followUpDate", "total" ]
+          }
+        }, {
+          "name" : "direction",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : "ASC",
+            "enum" : [ "ASC", "DESC" ]
+          }
+        }, {
+          "name" : "page",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 1
+          }
+        }, {
+          "name" : "pageSize",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 25
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/WorkItemPage"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/work-items/my-work" : {
+      "get" : {
+        "tags" : [ "my-work-controller" ],
+        "summary" : "Read the current user's work and attention queues",
+        "operationId" : "getMyWork",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MyWork"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
     "/api/v1/staff" : {
       "get" : {
         "tags" : [ "staff-controller" ],
@@ -1351,6 +2209,84 @@
               "application/json" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/XeroConnection"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/work-items/{itemId}/job-draft" : {
+      "get" : {
+        "tags" : [ "vwork-job-controller" ],
+        "summary" : "Prepare a price-free vWork job draft",
+        "operationId" : "getCreateJobDraft",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "itemId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CreateJobDraft"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/work-items/{itemId}/invoice-draft" : {
+      "get" : {
+        "tags" : [ "invoice-draft-controller" ],
+        "summary" : "Review invoice details from the Xero quote",
+        "operationId" : "reviewInvoiceDraft",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "itemId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvoiceDraftReview"
                 }
               }
             }
@@ -1941,9 +2877,89 @@
           },
           "errorCode" : {
             "type" : "string"
+          },
+          "quoteAccess" : {
+            "type" : "string",
+            "enum" : [ "NOT_ENABLED", "UNKNOWN", "READY", "RECONNECT_REQUIRED" ]
           }
         },
         "required" : [ "entityId", "status" ]
+      },
+      "VworkConnectionRequest" : {
+        "type" : "object",
+        "properties" : {
+          "apiKey" : {
+            "type" : "string",
+            "description" : "vWork API key; write only",
+            "writeOnly" : true
+          }
+        },
+        "required" : [ "apiKey" ]
+      },
+      "VworkConnection" : {
+        "type" : "object",
+        "description" : "All active staff see status; only Directors receive connection metadata. Credentials are never returned.",
+        "properties" : {
+          "status" : {
+            "type" : "string"
+          },
+          "configuredBy" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "configuredAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "verifiedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "errorCode" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "status" ]
+      },
+      "EntityVworkTemplateInput" : {
+        "type" : "object",
+        "properties" : {
+          "templateRef" : {
+            "type" : "string",
+            "maxLength" : 120,
+            "minLength" : 1
+          },
+          "isDefault" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "isDefault", "templateRef" ]
+      },
+      "EntityVworkTemplatesRequest" : {
+        "type" : "object",
+        "properties" : {
+          "templates" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/EntityVworkTemplateInput"
+            },
+            "maxItems" : 20,
+            "minItems" : 1
+          }
+        },
+        "required" : [ "templates" ]
+      },
+      "EntityVworkTemplate" : {
+        "type" : "object",
+        "properties" : {
+          "templateRef" : {
+            "type" : "string"
+          },
+          "isDefault" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "isDefault", "templateRef" ]
       },
       "AssignInvoice" : {
         "type" : "object",
@@ -1983,6 +2999,65 @@
           }
         },
         "required" : [ "invoiceId" ]
+      },
+      "SettingsRequest" : {
+        "type" : "object",
+        "properties" : {
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "defaultOwnerId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "serviceManagerId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "lateThresholdWorkingDays" : {
+            "type" : "integer",
+            "format" : "int32",
+            "maximum" : 30,
+            "minimum" : 1
+          },
+          "backfillDays" : {
+            "type" : "integer",
+            "format" : "int32",
+            "maximum" : 365,
+            "minimum" : 0
+          }
+        },
+        "required" : [ "backfillDays", "enabled", "lateThresholdWorkingDays" ]
+      },
+      "GreenLineSettings" : {
+        "type" : "object",
+        "description" : "All active staff see entity and enabled status; only Directors receive the other settings.",
+        "properties" : {
+          "entityId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "defaultOwnerId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "serviceManagerId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "lateThresholdWorkingDays" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "backfillDays" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        },
+        "required" : [ "enabled", "entityId" ]
       },
       "NoteRequest" : {
         "type" : "object",
@@ -2199,6 +3274,503 @@
           }
         },
         "required" : [ "attemptId", "authorizationUrl", "expiresAt" ]
+      },
+      "CreateJobRequest" : {
+        "type" : "object",
+        "properties" : {
+          "version" : {
+            "type" : "integer",
+            "format" : "int32",
+            "minimum" : 0
+          },
+          "reference" : {
+            "type" : "string",
+            "maxLength" : 255,
+            "minLength" : 0
+          },
+          "templateId" : {
+            "type" : "string",
+            "maxLength" : 120,
+            "minLength" : 0
+          },
+          "description" : {
+            "type" : "string",
+            "maxLength" : 4000,
+            "minLength" : 0
+          },
+          "customer" : {
+            "type" : "string",
+            "maxLength" : 500,
+            "minLength" : 0
+          },
+          "contactPerson" : {
+            "type" : "string",
+            "maxLength" : 500,
+            "minLength" : 0
+          },
+          "phone" : {
+            "type" : "string",
+            "maxLength" : 40,
+            "minLength" : 0
+          },
+          "siteAddress" : {
+            "type" : "string",
+            "maxLength" : 2000,
+            "minLength" : 0
+          },
+          "notes" : {
+            "type" : "string",
+            "maxLength" : 2000,
+            "minLength" : 0
+          },
+          "scope" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/CreateJobScopeLine"
+            },
+            "maxItems" : 200,
+            "minItems" : 0
+          }
+        },
+        "required" : [ "contactPerson", "customer", "description", "phone", "reference", "scope", "siteAddress", "templateId", "version" ]
+      },
+      "CreateJobScopeLine" : {
+        "type" : "object",
+        "properties" : {
+          "description" : {
+            "type" : "string",
+            "maxLength" : 4000,
+            "minLength" : 0
+          },
+          "quantity" : {
+            "type" : "string",
+            "maxLength" : 80,
+            "minLength" : 0
+          }
+        },
+        "required" : [ "description", "quantity" ]
+      },
+      "CreateJobResult" : {
+        "type" : "object",
+        "properties" : {
+          "operationId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "outcome" : {
+            "type" : "string",
+            "enum" : [ "CREATED", "LINKED_EXISTING", "NOT_FOUND" ]
+          }
+        },
+        "required" : [ "operationId", "outcome" ]
+      },
+      "LookupResult" : {
+        "type" : "object",
+        "properties" : {
+          "outcome" : {
+            "type" : "string",
+            "enum" : [ "CREATED", "LINKED_EXISTING", "NOT_FOUND" ]
+          }
+        }
+      },
+      "ReasonRequest" : {
+        "type" : "object",
+        "properties" : {
+          "version" : {
+            "type" : "integer",
+            "format" : "int32",
+            "minimum" : 0
+          },
+          "reason" : {
+            "type" : "string",
+            "maxLength" : 500,
+            "minLength" : 1
+          }
+        },
+        "required" : [ "reason", "version" ]
+      },
+      "Detail" : {
+        "type" : "object",
+        "properties" : {
+          "summary" : {
+            "$ref" : "#/components/schemas/Summary"
+          },
+          "notes" : {
+            "type" : "string"
+          },
+          "closingNote" : {
+            "type" : "string"
+          },
+          "vwork" : {
+            "$ref" : "#/components/schemas/VworkPanel"
+          },
+          "invoice" : {
+            "$ref" : "#/components/schemas/InvoicePanel"
+          },
+          "links" : {
+            "$ref" : "#/components/schemas/Links"
+          },
+          "events" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/EventView"
+            }
+          },
+          "operations" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/OperationView"
+            }
+          },
+          "allowedActions" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "enum" : [ "EDIT_NOTES", "CLOSE_LOST", "CREATE_JOB", "PREPARE_INVOICE", "NO_INVOICE_NEEDED", "MARK_SENT" ]
+            },
+            "uniqueItems" : true
+          }
+        }
+      },
+      "EventView" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "at" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "actor" : {
+            "$ref" : "#/components/schemas/StaffRef"
+          },
+          "source" : {
+            "type" : "string"
+          },
+          "eventType" : {
+            "type" : "string"
+          },
+          "fromStage" : {
+            "type" : "string"
+          },
+          "toStage" : {
+            "type" : "string"
+          },
+          "fromOwnerId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "toOwnerId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "before" : {
+            "type" : "string"
+          },
+          "after" : {
+            "type" : "string"
+          }
+        }
+      },
+      "InvoicePanel" : {
+        "type" : "object",
+        "properties" : {
+          "invoiceId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "invoiceNumber" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "sent" : {
+            "type" : "boolean"
+          },
+          "total" : {
+            "type" : "string"
+          },
+          "amountDue" : {
+            "type" : "string"
+          },
+          "dueDate" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        }
+      },
+      "Links" : {
+        "type" : "object",
+        "properties" : {
+          "xeroQuoteUrl" : {
+            "type" : "string"
+          },
+          "xeroInvoiceUrl" : {
+            "type" : "string"
+          },
+          "vworkJobUrl" : {
+            "type" : "string"
+          }
+        }
+      },
+      "OperationView" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "kind" : {
+            "type" : "string",
+            "enum" : [ "VWORK_CREATE_JOB", "XERO_CREATE_INVOICE", "XERO_ATTACH_REPORT" ]
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "PENDING", "UNKNOWN", "FAILED", "SUCCEEDED" ]
+          },
+          "outcome" : {
+            "type" : "string",
+            "enum" : [ "CREATED", "LINKED_EXISTING", "NOT_FOUND" ]
+          },
+          "requestedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "allowLookup" : {
+            "type" : "boolean"
+          },
+          "allowRetry" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "StaffRef" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "displayName" : {
+            "type" : "string"
+          }
+        }
+      },
+      "Summary" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "entityId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "entityName" : {
+            "type" : "string"
+          },
+          "xeroQuoteId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "quoteNumber" : {
+            "type" : "string"
+          },
+          "jobId" : {
+            "type" : "string"
+          },
+          "customerName" : {
+            "type" : "string"
+          },
+          "xeroQuoteStatus" : {
+            "type" : "string"
+          },
+          "quoteTotal" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "stage" : {
+            "type" : "string",
+            "enum" : [ "QUOTED", "TO_SCHEDULE", "SCHEDULED", "TO_INVOICE", "INVOICE_DRAFTED", "INVOICED", "CLOSED" ]
+          },
+          "closeReason" : {
+            "type" : "string"
+          },
+          "owner" : {
+            "$ref" : "#/components/schemas/StaffRef"
+          },
+          "followUpDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "stageEnteredAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "daysInStage" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "late" : {
+            "type" : "boolean"
+          },
+          "nextAction" : {
+            "type" : "string"
+          },
+          "flags" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            },
+            "uniqueItems" : true
+          },
+          "attention" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            },
+            "uniqueItems" : true
+          },
+          "version" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "VworkPanel" : {
+        "type" : "object",
+        "properties" : {
+          "jobId" : {
+            "type" : "string"
+          },
+          "jobNumber" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "technician" : {
+            "type" : "string"
+          },
+          "scheduledStart" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "completedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "technicianNotes" : {
+            "type" : "string"
+          },
+          "reportStatus" : {
+            "type" : "string"
+          },
+          "searchState" : {
+            "type" : "string"
+          }
+        }
+      },
+      "VersionRequest" : {
+        "type" : "object",
+        "properties" : {
+          "version" : {
+            "type" : "integer",
+            "format" : "int32",
+            "minimum" : 0
+          }
+        },
+        "required" : [ "version" ]
+      },
+      "PrepareInvoiceRequest" : {
+        "type" : "object",
+        "properties" : {
+          "version" : {
+            "type" : "integer",
+            "format" : "int32",
+            "minimum" : 0
+          },
+          "fingerprint" : {
+            "type" : "string",
+            "minLength" : 1,
+            "pattern" : "[0-9a-f]{64}"
+          }
+        },
+        "required" : [ "fingerprint", "version" ]
+      },
+      "PrepareInvoiceResult" : {
+        "type" : "object",
+        "properties" : {
+          "operationId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "outcome" : {
+            "type" : "string",
+            "enum" : [ "CREATED", "LINKED_EXISTING", "NOT_FOUND" ]
+          }
+        },
+        "required" : [ "operationId", "outcome" ]
+      },
+      "GreenLineSyncRun" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "startedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "finishedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "errorCode" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "id", "startedAt", "status" ]
+      },
+      "GreenLineSyncStatus" : {
+        "type" : "object",
+        "properties" : {
+          "entityId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "xero" : {
+            "$ref" : "#/components/schemas/GreenLineSystemSyncStatus"
+          },
+          "vwork" : {
+            "$ref" : "#/components/schemas/GreenLineSystemSyncStatus"
+          }
+        },
+        "required" : [ "entityId", "vwork", "xero" ]
+      },
+      "GreenLineSystemSyncStatus" : {
+        "type" : "object",
+        "properties" : {
+          "latest" : {
+            "$ref" : "#/components/schemas/GreenLineSyncRun"
+          },
+          "lastSuccess" : {
+            "$ref" : "#/components/schemas/GreenLineSyncRun"
+          },
+          "lastFailure" : {
+            "$ref" : "#/components/schemas/GreenLineSyncRun"
+          }
+        }
       },
       "SyncRun" : {
         "type" : "object",
@@ -2453,6 +4025,29 @@
         },
         "required" : [ "displayName" ]
       },
+      "UpdateRequest" : {
+        "type" : "object",
+        "properties" : {
+          "version" : {
+            "type" : "integer",
+            "format" : "int32",
+            "minimum" : 0
+          },
+          "followUpDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "notes" : {
+            "type" : "string",
+            "maxLength" : 4000,
+            "minLength" : 0
+          },
+          "clearFollowUp" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "version" ]
+      },
       "XeroAuthorizationAttempt" : {
         "type" : "object",
         "properties" : {
@@ -2496,6 +4091,63 @@
           }
         },
         "required" : [ "connectionId", "name" ]
+      },
+      "WorkItemPage" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Summary"
+            }
+          },
+          "page" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "pageSize" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "total" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "totalPages" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "MyWork" : {
+        "type" : "object",
+        "properties" : {
+          "needsAction" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Summary"
+            }
+          },
+          "waiting" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Summary"
+            }
+          },
+          "needsAttention" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Summary"
+            }
+          },
+          "generatedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "truncated" : {
+            "type" : "boolean"
+          }
+        }
       },
       "StaffOption" : {
         "type" : "object",
@@ -2637,6 +4289,129 @@
           }
         },
         "required" : [ "containsOverdue", "generatable", "month", "paymentCount", "pendingNewItems", "receiptCount", "state" ]
+      },
+      "CreateJobDraft" : {
+        "type" : "object",
+        "properties" : {
+          "entityId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "itemId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "version" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "reference" : {
+            "type" : "string"
+          },
+          "quoteNumber" : {
+            "type" : "string"
+          },
+          "customer" : {
+            "type" : "string"
+          },
+          "contactPerson" : {
+            "type" : "string"
+          },
+          "phone" : {
+            "type" : "string"
+          },
+          "siteAddress" : {
+            "type" : "string"
+          },
+          "scope" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ScopeLine"
+            }
+          },
+          "templates" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Template"
+            }
+          },
+          "defaultTemplate" : {
+            "type" : "string"
+          },
+          "missingFields" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            },
+            "uniqueItems" : true
+          }
+        },
+        "required" : [ "entityId", "itemId", "missingFields", "quoteNumber", "scope", "templates", "version" ]
+      },
+      "ScopeLine" : {
+        "type" : "object",
+        "properties" : {
+          "description" : {
+            "type" : "string"
+          },
+          "quantity" : {
+            "type" : "string"
+          }
+        }
+      },
+      "Template" : {
+        "type" : "object",
+        "properties" : {
+          "templateRef" : {
+            "type" : "string"
+          },
+          "isDefault" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "InvoiceDraftReview" : {
+        "type" : "object",
+        "properties" : {
+          "entityId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "itemId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "version" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "quoteNumber" : {
+            "type" : "string"
+          },
+          "organisationName" : {
+            "type" : "string"
+          },
+          "customer" : {
+            "type" : "string"
+          },
+          "reference" : {
+            "type" : "string"
+          },
+          "lineCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "total" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "fingerprint" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "currency", "customer", "entityId", "fingerprint", "itemId", "lineCount", "organisationName", "quoteNumber", "reference", "total", "version" ]
       },
       "InvoicePage" : {
         "type" : "object",

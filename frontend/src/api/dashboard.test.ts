@@ -138,4 +138,19 @@ describe("UC5 generated-contract feature adapters", () => {
       code: "INVALID_RESPONSE",
     });
   });
+  it("GL-T08 accepts the documented quote workflow permissions in Xero authorisation", async () => {
+    const url = new URL("https://login.xero.com/identity/connect/authorize");
+    url.searchParams.set("response_type", "code");
+    url.searchParams.set("state", "a".repeat(43));
+    url.searchParams.set(
+      "scope",
+      "offline_access accounting.invoices.read accounting.attachments.read accounting.contacts.read",
+    );
+    const body = {
+      attemptId: entity,
+      authorizationUrl: url.toString(),
+      expiresAt: "2026-11-07T00:10:00Z",
+    };
+    await expect(setup(body).api.startConnection(entity)).resolves.toEqual(body);
+  });
 });

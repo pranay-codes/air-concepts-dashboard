@@ -55,7 +55,8 @@ public class XeroConnectionService {
       var tokens = provider.exchange(code);
       UUID id = UUID.randomUUID();
       repository.saveGrant(attempt, new StoredGrant(id, cipher.encrypt(id, "access", tokens.accessToken()),
-          cipher.encrypt(id, "refresh", tokens.refreshToken()), tokens.expiresAt(), GrantState.ACTIVE, null, null, null), clock.instant());
+          cipher.encrypt(id, "refresh", tokens.refreshToken()), tokens.expiresAt(), GrantState.ACTIVE, null, null, null,
+          tokens.grantedScopes()), clock.instant());
     } catch (ApiFailure failure) {
       repository.failAttempt(attempt.id(), failure.code(), failure instanceof ProviderFailure p ? p.upstreamStatus() : null);
     }
@@ -89,9 +90,16 @@ public class XeroConnectionService {
     entities.get(user, entity);
     return repository.connection(entity).map(c -> new ConnectionViews.Connection(entity,
         c.grantState() == GrantState.NEEDS_RECONNECTION ? ConnectionViews.Status.NEEDS_RECONNECTION : ConnectionViews.Status.CONNECTED,
-        c.tenantName(), ConnectionViews.maskTenant(c.tenantId()), c.connectedBy(), c.verifiedAt(), c.lastCheckedAt(), c.errorCode()))
+        c.tenantName(), ConnectionViews.maskTenant(c.tenantId()), c.connectedBy(), c.verifiedAt(), c.lastCheckedAt(), c.errorCode(), quoteAccess(c.grantedScopes())))
         .orElseGet(() -> new ConnectionViews.Connection(entity, ConnectionViews.Status.NOT_CONNECTED,
-            null, null, null, null, null, null));
+            null, null, null, null, null, null, quoteAccess(null)));
+  }
+
+  private ConnectionViews.QuoteAccess quoteAccess(Set<String> scopes) {
+    if (!settings.quoteWorkflowEnabled()) return ConnectionViews.QuoteAccess.NOT_ENABLED;
+    if (scopes == null) return ConnectionViews.QuoteAccess.UNKNOWN;
+    return scopes.contains(XeroScopes.QUOTES_READ) && scopes.contains(XeroScopes.CONTACTS_READ)
+        ? ConnectionViews.QuoteAccess.READY : ConnectionViews.QuoteAccess.RECONNECT_REQUIRED;
   }
 
   public TenantAccess authorisedAccess(CurrentUser user, UUID entity) {
@@ -109,7 +117,7 @@ public class XeroConnectionService {
     var connection = repository.connection(entity).orElseThrow(() -> new ApiFailure(HttpStatus.CONFLICT,
         "XERO_NOT_CONNECTED", "Ask a Director to connect this entity to Xero in Settings."));
     var access = grants.access(connection.grantId());
-    return new TenantAccess(entity, connection.tenantId(), connection.grantId(), access.accessToken());
+    return new TenantAccess(entity, connection.tenantId(), connection.grantId(), access.accessToken(), access.grantedScopes());
   }
 
   private List<XeroTenant> discover(UUID grant) {

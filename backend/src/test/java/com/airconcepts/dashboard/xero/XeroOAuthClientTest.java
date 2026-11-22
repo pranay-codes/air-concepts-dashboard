@@ -51,6 +51,21 @@ class XeroOAuthClientTest {
   }
 
   @Test
+  void gl01_recordsOnlyScopesExplicitlyReturnedByTheTokenEndpoint() {
+    tokenServer.expect(anything()).andRespond(withSuccess(tokenBody().replace("\"token_type\":\"Bearer\"",
+        "\"token_type\":\"Bearer\",\"scope\":\"offline_access accounting.invoices.read accounting.contacts.read\""), MediaType.APPLICATION_JSON));
+    var tokens = client.exchange("synthetic-code");
+    assertThat(tokens.grantedScopes()).containsExactlyInAnyOrder("offline_access", "accounting.invoices.read", "accounting.contacts.read");
+    assertThat(tokens.toString()).doesNotContain("synthetic-access", "synthetic-refresh");
+  }
+
+  @Test
+  void gl01_absentScopeIsUnknownRatherThanAssumedGranted() {
+    tokenServer.expect(anything()).andRespond(withSuccess(tokenBody(), MediaType.APPLICATION_JSON));
+    assertThat(client.exchange("synthetic-code").grantedScopes()).isNull();
+  }
+
+  @Test
   void frUc15_03_discoversMultipleAuthorisedTenantsWithoutHardCodedNames() {
     var connection = UUID.randomUUID(); var tenant = UUID.randomUUID();
     apiServer.expect(requestTo("https://api.xero.com/connections")).andExpect(header("Authorization", "Bearer synthetic-access"))

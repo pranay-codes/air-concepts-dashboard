@@ -63,6 +63,40 @@ select
       or has_table_privilege('anon','public.invoice_assignments','SELECT,INSERT,UPDATE,DELETE')
     then 'FAIL: sales assignments missing or browser-accessible' end)::int::text,
     'PASS: sales assignments are server-owned with RLS') as assignment_security,
+  coalesce((case when exists (
+      select 1 from unnest(array['public.green_line_entity_settings','public.work_items','public.work_item_events','public.green_line_sync_runs']) as tables(name)
+      where to_regclass(name) is null
+        or not coalesce((select relrowsecurity from pg_class where oid=to_regclass(name)),false)
+        or has_table_privilege('authenticated',to_regclass(name),'SELECT,INSERT,UPDATE,DELETE')
+        or has_table_privilege('anon',to_regclass(name),'SELECT,INSERT,UPDATE,DELETE'))
+    then 'FAIL: green-line tables missing, RLS disabled or browser-accessible' end)::int::text,
+    'PASS: green-line tables are server-owned with RLS') as green_line_security,
+  coalesce((case when has_table_privilege('service_role',to_regclass('public.work_item_events'),'UPDATE,DELETE,TRUNCATE')
+      or has_table_privilege('service_role',to_regclass('public.vwork_connection_events'),'UPDATE,DELETE,TRUNCATE')
+    then 'FAIL: service role can modify green-line audit events' end)::int::text,
+    'PASS: green-line audit events are append-only') as green_line_audit_security,
+  coalesce((case when not exists (
+      select 1 from information_schema.columns where table_schema='public' and table_name='work_items'
+        and column_name='xero_quote_reference' and data_type='text' and is_nullable='YES')
+    then 'FAIL: full Xero quote reference column is missing' end)::int::text,
+    'PASS: full Xero quote reference column present') as green_line_quote_reference,
+  coalesce((case when not exists (
+      select 1 from information_schema.columns where table_schema='public' and table_name='work_items'
+        and column_name='xero_tenant_id' and data_type='uuid' and is_nullable='YES')
+    then 'FAIL: work-item tenant provenance column is missing' end)::int::text,
+    'PASS: work-item tenant provenance column present') as green_line_tenant_origin,
+  coalesce((case when not exists (
+      select 1 from information_schema.columns where table_schema='public' and table_name='xero_grants'
+        and column_name='granted_scopes' and data_type='ARRAY' and is_nullable='YES')
+    then 'FAIL: Xero granted-scope tracking column is missing' end)::int::text,
+    'PASS: Xero granted-scope tracking column present') as xero_granted_scopes,
+  coalesce((case when to_regclass('public.external_operations') is null
+      or not coalesce((select relrowsecurity from pg_class where oid=to_regclass('public.external_operations')),false)
+      or has_table_privilege('authenticated',to_regclass('public.external_operations'),'SELECT,INSERT,UPDATE,DELETE')
+      or has_table_privilege('anon',to_regclass('public.external_operations'),'SELECT,INSERT,UPDATE,DELETE')
+      or has_table_privilege('service_role',to_regclass('public.external_operations'),'DELETE')
+    then 'FAIL: external operations missing or grants are unsafe' end)::int::text,
+    'PASS: external operations are server-owned with RLS') as green_line_operation_security,
   coalesce((case when has_table_privilege('anon', 'public.entities', 'INSERT')
       or has_table_privilege('anon', 'public.entities', 'UPDATE')
       or has_table_privilege('anon', 'public.entities', 'DELETE')

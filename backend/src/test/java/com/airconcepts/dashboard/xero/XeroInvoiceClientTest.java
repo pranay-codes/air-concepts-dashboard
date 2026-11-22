@@ -17,7 +17,7 @@ class XeroInvoiceClientTest {
   private final MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
   private final Clock clock = Clock.fixed(Instant.parse("2026-11-07T00:00:00Z"), ZoneOffset.UTC);
   private final XeroInvoiceClient client = new XeroInvoiceClient(builder.build(), clock);
-  private final TenantAccess access = new TenantAccess(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "synthetic-access");
+  private final TenantAccess access = new TenantAccess(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "synthetic-access", java.util.Set.of("accounting.invoices.read"));
   private final UUID id = UUID.randomUUID();
 
   @Test void frUc15_08_26_sendsFullResultFiltersAndBoundedPageWithServerTenant() {
@@ -39,6 +39,54 @@ class XeroInvoiceClientTest {
       assertThat(i.overdue()).isTrue();
       assertThat(i.status()).isEqualTo(InvoiceStatus.AUTHORISED);
     });
+    server.verify();
+  }
+
+  @Test void gl19_searchesReferencesWithServerTenantAndValidatedPagination() {
+    server.expect(request -> {
+      assertThat(request.getURI().getQuery()).contains("SearchTerm=J-123", "page=1", "pageSize=100", "where=");
+    }).andExpect(header("xero-tenant-id", access.tenantId().toString()))
+        .andRespond(withSuccess(page(invoice("ACCREC")).replace("\"pageSize\":25", "\"pageSize\":100"), MediaType.APPLICATION_JSON));
+    assertThat(client.searchReference(access, "J-123", 1).items()).singleElement()
+        .satisfies(row -> assertThat(row.id()).isEqualTo(id));
+    server.verify();
+  }
+
+  @Test void gl19_searchRejectsMissingPaginationRatherThanAssumingNoInvoice() {
+    server.expect(anything()).andRespond(withSuccess("{\"Invoices\":[]}", MediaType.APPLICATION_JSON));
+    assertThatThrownBy(() -> client.searchReference(access, "J-123", 1)).isInstanceOf(ProviderFailure.class);
+  }
+
+  @Test void gl19_searchRequiresScopeAndUsesSharedTenantPacer() {
+    var pacedTenants = new java.util.ArrayList<UUID>();
+    var pacedClient = new XeroInvoiceClient(builder.build(), clock, pacedTenants::add);
+    var noScope = new TenantAccess(access.entityId(), access.tenantId(), access.grantId(), "synthetic", null);
+    assertThatThrownBy(() -> pacedClient.searchReference(noScope, "J-123", 1))
+        .isInstanceOfSatisfying(com.airconcepts.dashboard.web.ApiFailure.class,
+            error -> assertThat(error.code()).isEqualTo("XERO_SCOPE_REQUIRED"));
+    assertThat(pacedTenants).isEmpty();
+    server.expect(anything()).andRespond(withSuccess(page(invoice("ACCREC")).replace("\"pageSize\":25", "\"pageSize\":100"), MediaType.APPLICATION_JSON));
+    pacedClient.searchReference(access, "J-123", 1);
+    assertThat(pacedTenants).containsExactly(access.tenantId());
+  }
+
+  @Test void gl21_readsLinkedSalesInvoiceWithServerTenantAndPreservesSendFlag() {
+    server.expect(request -> assertThat(request.getURI().getPath()).endsWith("/Invoices/"+id))
+        .andExpect(header("xero-tenant-id",access.tenantId().toString()))
+        .andRespond(withSuccess("{\"Invoices\":["+invoice("ACCREC").replace("\"Type\":\"ACCREC\"","\"Type\":\"ACCREC\",\"SentToContact\":true")+"]}",MediaType.APPLICATION_JSON));
+    var result=client.workflowInvoice(access,id);
+    assertThat(result.id()).isEqualTo(id);
+    assertThat(result.sentToContact()).isTrue();
+    assertThat(result.amountDue()).isNotNull();
+    server.verify();
+  }
+
+  @Test void gl19_searchTermCannotInjectAdditionalQueryParameters() {
+    server.expect(request -> {
+      var uri = request.getURI().toString();
+      assertThat(uri).contains("%26").doesNotContain("&page=999");
+    }).andRespond(withSuccess(page(invoice("ACCREC")).replace("\"pageSize\":25", "\"pageSize\":100"), MediaType.APPLICATION_JSON));
+    client.searchReference(access, "J-1&page=999", 1);
     server.verify();
   }
 

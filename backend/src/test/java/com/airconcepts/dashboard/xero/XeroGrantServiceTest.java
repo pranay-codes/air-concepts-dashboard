@@ -20,6 +20,17 @@ class XeroGrantServiceTest {
         cipher.encrypt(id, "refresh", "previous-synthetic-refresh"), clock.instant().minusSeconds(1), state, pending, retry, null);
   }
 
+  @Test void gl01_rotatedGrantStoresTheScopesReturnedByTheProvider() {
+    when(repository.lockGrant(id)).thenReturn(expired(GrantState.ACTIVE, null, null));
+    when(provider.refresh(anyString())).thenReturn(new XeroTokens("synthetic-access", "synthetic-refresh",
+        clock.instant().plusSeconds(1800), Set.of("accounting.contacts.read")));
+    var access = service.access(id);
+    assertThat(access.grantedScopes()).containsExactly("accounting.contacts.read");
+    var saved = org.mockito.ArgumentCaptor.forClass(StoredGrant.class);
+    verify(repository).saveRotated(saved.capture());
+    assertThat(saved.getValue().grantedScopes()).containsExactly("accounting.contacts.read");
+  }
+
   @Test
   void frUc15_10_sharedGrantRotatesOnceAndPersistsBothEncryptedValuesBeforeReuse() {
     var stored = new AtomicReference<>(expired(GrantState.ACTIVE, null, null));
