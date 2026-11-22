@@ -43,7 +43,8 @@ class WorkItemEndpointTest {
     when(jwtDecoder.decode(TestJwts.TOKEN)).thenReturn(TestJwts.forSubject(subject));
     when(roles.findRole(subject)).thenReturn(Optional.ofNullable(role));
     when(reads.get(any(), eq(entity), eq(item))).thenReturn(mock(WorkItemReadService.Detail.class));
-    when(actions.edit(any(), any(), any(), anyInt(), anyBoolean(), any(), anyBoolean(), anyBoolean(), any())).thenReturn(mock(WorkItemReadService.Detail.class));
+    when(actions.edit(any(), any(), any(), anyInt(), anyBoolean(), any(), anyBoolean(), anyBoolean(), any(),
+        anyBoolean(), any(), anyBoolean())).thenReturn(mock(WorkItemReadService.Detail.class));
     when(actions.closeNoInvoice(any(), any(), any(), anyInt(), any())).thenReturn(mock(WorkItemReadService.Detail.class));
   }
   private String path() { return "/api/v1/entities/" + entity + "/work-items/" + item; }
@@ -55,11 +56,31 @@ class WorkItemEndpointTest {
         .content("{\"version\":2,\"notes\":\"Call\"}"))
         .andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"));
     verify(entities).get(any(), eq(entity));
-    verify(actions).edit(any(), eq(entity), eq(item), eq(2), eq(false), isNull(), eq(false), eq(true), eq("Call"));
+    verify(actions).edit(any(), eq(entity), eq(item), eq(2), eq(false), isNull(), eq(false), eq(true), eq("Call"),
+        eq(false), isNull(), eq(false));
     mvc.perform(patch(path()).header("Authorization", auth()).contentType(MediaType.APPLICATION_JSON)
         .content("{\"version\":2,\"followUpDate\":\"2026-11-25\",\"clearFollowUp\":true}"))
         .andExpect(status().isBadRequest());
-    verify(actions, never()).edit(any(), any(), any(), anyInt(), eq(true), eq(LocalDate.of(2026,11,25)), eq(true), anyBoolean(), any());
+    verify(actions, never()).edit(any(), any(), any(), anyInt(), eq(true), eq(LocalDate.of(2026,11,25)), eq(true), anyBoolean(), any(),
+        anyBoolean(), any(), anyBoolean());
+  }
+
+  @Test void owner_passesAssignedOrClearedOwnerAndRejectsBoth() throws Exception {
+    as(Role.DIRECTOR);
+    var owner = java.util.UUID.fromString("00000000-0000-0000-0000-00000000abcd");
+    mvc.perform(patch(path()).header("Authorization", auth()).contentType(MediaType.APPLICATION_JSON)
+        .content("{\"version\":2,\"ownerId\":\"" + owner + "\"}"))
+        .andExpect(status().isOk());
+    verify(actions).edit(any(), eq(entity), eq(item), eq(2), eq(false), isNull(), eq(false), eq(false), isNull(),
+        eq(true), eq(owner), eq(false));
+    mvc.perform(patch(path()).header("Authorization", auth()).contentType(MediaType.APPLICATION_JSON)
+        .content("{\"version\":2,\"clearOwner\":true}"))
+        .andExpect(status().isOk());
+    verify(actions).edit(any(), eq(entity), eq(item), eq(2), eq(false), isNull(), eq(false), eq(false), isNull(),
+        eq(false), isNull(), eq(true));
+    mvc.perform(patch(path()).header("Authorization", auth()).contentType(MediaType.APPLICATION_JSON)
+        .content("{\"version\":2,\"ownerId\":\"" + owner + "\",\"clearOwner\":true}"))
+        .andExpect(status().isBadRequest());
   }
 
   @Test void gl05_and_gl20_financeActionsRequireRoleAndValidReason() throws Exception {
@@ -77,10 +98,10 @@ class WorkItemEndpointTest {
     verify(actions).closeNoInvoice(any(), eq(entity), eq(item), eq(1), eq("No charge"));
   }
 
-  @Test void gl04_ownerChangeIsRejectedRatherThanIgnored() throws Exception {
+  @Test void gl04_unknownFieldsAreStillRejectedRatherThanIgnored() throws Exception {
     as(Role.DIRECTOR);
     mvc.perform(patch(path()).header("Authorization", auth()).contentType(MediaType.APPLICATION_JSON)
-        .content("{\"version\":2,\"ownerId\":\"" + UUID.randomUUID() + "\"}"))
+        .content("{\"version\":2,\"ownerName\":\"Someone\"}"))
         .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     verifyNoInteractions(actions);
   }

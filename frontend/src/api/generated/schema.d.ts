@@ -539,7 +539,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Update the work item's follow-up date and notes */
+        /** Update the work item's follow-up date, notes and owner */
         patch: operations["updateWorkItem"];
         trace?: never;
     };
@@ -1369,6 +1369,9 @@ export interface components {
             followUpDate?: string;
             notes?: string;
             clearFollowUp?: boolean;
+            /** Format: uuid */
+            ownerId?: string;
+            clearOwner?: boolean;
         };
         XeroAuthorizationAttempt: {
             /** Format: uuid */

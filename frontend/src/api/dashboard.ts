@@ -183,7 +183,14 @@ export class DashboardApi {
   async updateWorkItem(
     entity: string,
     item: string,
-    body: { version: number; notes?: string; followUpDate?: string; clearFollowUp?: boolean },
+    body: {
+      version: number;
+      notes?: string;
+      followUpDate?: string;
+      clearFollowUp?: boolean;
+      ownerId?: string;
+      clearOwner?: boolean;
+    },
     signal?: AbortSignal,
   ) {
     const result = await this.client.json(

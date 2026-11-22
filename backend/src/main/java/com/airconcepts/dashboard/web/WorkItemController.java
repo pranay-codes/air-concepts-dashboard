@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping(value = "/api/v1/entities/{entityId}/work-items/{itemId}", produces = MediaType.APPLICATION_JSON_VALUE)
 public class WorkItemController {
   public record UpdateRequest(@NotNull @Min(0) Integer version, LocalDate followUpDate,
-      @Size(max = 4000) String notes, Boolean clearFollowUp) {
+      @Size(max = 4000) String notes, Boolean clearFollowUp, UUID ownerId, Boolean clearOwner) {
     @JsonAnySetter public void rejectUnknown(String name, Object value) {
       throw new IllegalArgumentException("Unsupported work item field");
     }
@@ -60,15 +60,18 @@ public class WorkItemController {
       @PathVariable UUID itemId) { return detail(active(jwt, entityId), entityId, itemId); }
 
   @PatchMapping
-  @Operation(operationId = "updateWorkItem", summary = "Update the work item's follow-up date and notes")
+  @Operation(operationId = "updateWorkItem", summary = "Update the work item's follow-up date, notes and owner")
   public ResponseEntity<WorkItemReadService.Detail> update(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID entityId,
       @PathVariable UUID itemId, @Valid @RequestBody UpdateRequest request) {
     var user = active(jwt, entityId);
     boolean clear = Boolean.TRUE.equals(request.clearFollowUp());
     if (clear && request.followUpDate() != null)
       throw new ApiFailure(org.springframework.http.HttpStatus.BAD_REQUEST, "INVALID_WORK_ITEM_UPDATE", "Choose a follow-up date or clear it, not both.");
+    boolean clearOwner = Boolean.TRUE.equals(request.clearOwner());
+    if (clearOwner && request.ownerId() != null)
+      throw new ApiFailure(org.springframework.http.HttpStatus.BAD_REQUEST, "INVALID_WORK_ITEM_UPDATE", "Choose an owner or clear it, not both.");
     var result = actions.edit(user, entityId, itemId, request.version(), request.followUpDate() != null, request.followUpDate(),
-        clear, request.notes() != null, request.notes());
+        clear, request.notes() != null, request.notes(), request.ownerId() != null, request.ownerId(), clearOwner);
     return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(result);
   }
   @PostMapping("/close-lost")

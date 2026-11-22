@@ -26,8 +26,23 @@ public class WorkItemService {
   @Transactional
   public WorkItemRepository.Item editPartial(CurrentUser user, UUID entity, UUID id, int version,
       boolean followUpProvided, LocalDate followUp, boolean clearFollowUp, boolean notesProvided, String notes) {
+    return editItem(user, entity, id, version, followUpProvided, followUp, clearFollowUp, notesProvided, notes,
+        false, null, false);
+  }
+
+  /**
+   * Owner changes are finance-only and must name an active Director or Financial Admin. Owners may still
+   * edit the follow-up date and notes on their own items.
+   */
+  @Transactional
+  public WorkItemRepository.Item editItem(CurrentUser user, UUID entity, UUID id, int version,
+      boolean followUpProvided, LocalDate followUp, boolean clearFollowUp, boolean notesProvided, String notes,
+      boolean ownerProvided, UUID ownerId, boolean clearOwner) {
     if (clearFollowUp && followUpProvided) {
       throw new ApiFailure(HttpStatus.BAD_REQUEST, "INVALID_WORK_ITEM_UPDATE", "Choose a follow-up date or clear it, not both.");
+    }
+    if (ownerProvided && clearOwner) {
+      throw new ApiFailure(HttpStatus.BAD_REQUEST, "INVALID_WORK_ITEM_UPDATE", "Choose an owner or clear it, not both.");
     }
     if (notesProvided && notes != null && notes.length() > 4000) {
       throw new ApiFailure(HttpStatus.BAD_REQUEST, "INVALID_NOTES", "Notes must be at most 4,000 characters.");
@@ -37,18 +52,27 @@ public class WorkItemService {
     WorkItemRepository.Item item = item(entity, id);
     boolean finance = role == Role.DIRECTOR || role == Role.FINANCIAL_ADMIN;
     if (!finance && !actor.equals(item.ownerId())) throw new AccessDeniedException("Only the owner or finance can edit this item.");
+    boolean ownerRequested = ownerProvided || clearOwner;
+    if (ownerRequested && !finance) throw new AccessDeniedException("Only a Director or Financial Admin can change the owner.");
     if (item.stage() == WorkItemStage.CLOSED) throw stageConflict();
     requireVersion(item, version);
+    if (ownerProvided && !repository.isAssignableOwner(ownerId)) {
+      throw new ApiFailure(HttpStatus.CONFLICT, "OWNER_UNAVAILABLE", "Choose an active Director or Financial Admin.");
+    }
+    UUID owner = clearOwner ? null : ownerProvided ? ownerId : item.ownerId();
     if (!followUpProvided && !clearFollowUp) followUp = item.followUpDate();
     if (clearFollowUp) followUp = null;
     if (!notesProvided) notes = item.notes();
     boolean dateChanged = !Objects.equals(followUp, item.followUpDate());
     boolean notesChanged = !Objects.equals(notes, item.notes());
-    if (!dateChanged && !notesChanged) return item;
-    requireSaved(repository.save(entity, id, item.stage(), followUp, notes, version));
+    boolean ownerChanged = !Objects.equals(owner, item.ownerId());
+    if (!dateChanged && !notesChanged && !ownerChanged) return item;
+    requireSaved(repository.save(entity, id, item.stage(), followUp, notes, owner, version));
     if (dateChanged) repository.auditEdit(entity, id, actor, "FOLLOW_UP_CHANGED", date(item.followUpDate()), date(followUp));
     if (notesChanged) repository.auditEdit(entity, id, actor, "NOTES_CHANGED", item.notes(), notes);
-    return new WorkItemRepository.Item(id, entity, item.stage(), item.ownerId(), followUp, notes, version + 1);
+    if (ownerChanged) repository.auditEdit(entity, id, actor, "OWNER_CHANGED",
+        item.ownerId() == null ? null : item.ownerId().toString(), owner == null ? null : owner.toString());
+    return new WorkItemRepository.Item(id, entity, item.stage(), owner, followUp, notes, version + 1);
   }
 
   @Transactional

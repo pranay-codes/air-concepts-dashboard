@@ -28,7 +28,7 @@ class WorkItemServiceTest {
   @BeforeEach void setUp() {
     when(repository.lockActor(actor)).thenReturn(Optional.of(Role.STANDARD_USER));
     when(repository.lockItem(entity, item)).thenReturn(Optional.of(open(actor, 2)));
-    when(repository.save(any(), any(), any(), any(), any(), anyInt())).thenReturn(1);
+    when(repository.save(any(), any(), any(), any(), any(), any(), anyInt())).thenReturn(1);
     when(repository.closeLost(any(), any(), anyInt(), any())).thenReturn(1);
   }
 
@@ -36,7 +36,7 @@ class WorkItemServiceTest {
     var date = LocalDate.of(2026, 11, 23);
     var result = service.edit(user, entity, item, 2, date, "Call customer");
     assertThat(result.version()).isEqualTo(3);
-    verify(repository).save(entity, item, WorkItemStage.QUOTED, date, "Call customer", 2);
+    verify(repository).save(entity, item, WorkItemStage.QUOTED, date, "Call customer", actor, 2);
     verify(repository).auditEdit(entity, item, actor, "FOLLOW_UP_CHANGED", null, date.toString());
     verify(repository).auditEdit(entity, item, actor, "NOTES_CHANGED", null, "Call customer");
   }
@@ -50,20 +50,20 @@ class WorkItemServiceTest {
     when(repository.lockItem(entity, item)).thenReturn(Optional.of(open(UUID.randomUUID(), 2)));
     assertThatThrownBy(() -> service.edit(user, entity, item, 2, null, "note"))
         .isInstanceOf(AccessDeniedException.class);
-    verify(repository, never()).save(any(), any(), any(), any(), any(), anyInt());
+    verify(repository, never()).save(any(), any(), any(), any(), any(), any(), anyInt());
   }
 
   @Test void gl06_unknownOrCrossEntityItemIsNotFound() {
     when(repository.lockItem(entity, item)).thenReturn(Optional.empty());
     assertThatThrownBy(() -> service.edit(user, entity, item, 2, null, "note"))
         .isInstanceOf(ApiFailure.class).extracting(e -> ((ApiFailure) e).code()).isEqualTo("WORK_ITEM_NOT_FOUND");
-    verify(repository, never()).save(any(), any(), any(), any(), any(), anyInt());
+    verify(repository, never()).save(any(), any(), any(), any(), any(), any(), anyInt());
   }
 
   @Test void gl04_staleVersionOrFailedCompareAndSetNeverAudits() {
     assertThatThrownBy(() -> service.edit(user, entity, item, 1, null, "note"))
         .isInstanceOf(ApiFailure.class).extracting(e -> ((ApiFailure) e).code()).isEqualTo("WORK_ITEM_CHANGED");
-    when(repository.save(any(), any(), any(), any(), any(), anyInt())).thenReturn(0);
+    when(repository.save(any(), any(), any(), any(), any(), any(), anyInt())).thenReturn(0);
     assertThatThrownBy(() -> service.edit(user, entity, item, 2, null, "note"))
         .isInstanceOf(ApiFailure.class).extracting(e -> ((ApiFailure) e).code()).isEqualTo("WORK_ITEM_CHANGED");
     verify(repository, never()).auditEdit(any(), any(), any(), any(), any(), any());
@@ -82,7 +82,7 @@ class WorkItemServiceTest {
   @Test void gl04_unchangedEditDoesNotIncrementVersionOrAudit() {
     var result = service.edit(user, entity, item, 2, null, null);
     assertThat(result.version()).isEqualTo(2);
-    verify(repository, never()).save(any(), any(), any(), any(), any(), anyInt());
+    verify(repository, never()).save(any(), any(), any(), any(), any(), any(), anyInt());
     verify(repository, never()).auditEdit(any(), any(), any(), any(), any(), any());
   }
 
@@ -96,6 +96,49 @@ class WorkItemServiceTest {
     assertThat(result.version()).isEqualTo(3);
     verify(repository).auditNoInvoice(entity, item, actor, "No charge");
   }
+  @Test void owner_financeAssignsActiveDirectorOrFinancialAdminAndAudits() {
+    var previous = UUID.randomUUID();
+    var newOwner = UUID.randomUUID();
+    when(repository.lockActor(actor)).thenReturn(Optional.of(Role.FINANCIAL_ADMIN));
+    when(repository.lockItem(entity, item)).thenReturn(Optional.of(open(previous, 2)));
+    when(repository.isAssignableOwner(newOwner)).thenReturn(true);
+    var result = service.editItem(user, entity, item, 2, false, null, false, false, null, true, newOwner, false);
+    assertThat(result.ownerId()).isEqualTo(newOwner);
+    assertThat(result.version()).isEqualTo(3);
+    verify(repository).save(entity, item, WorkItemStage.QUOTED, null, null, newOwner, 2);
+    verify(repository).auditEdit(entity, item, actor, "OWNER_CHANGED", previous.toString(), newOwner.toString());
+  }
+
+  @Test void owner_clearsToUnassignedForFinance() {
+    when(repository.lockActor(actor)).thenReturn(Optional.of(Role.DIRECTOR));
+    var result = service.editItem(user, entity, item, 2, false, null, false, false, null, false, null, true);
+    assertThat(result.ownerId()).isNull();
+    verify(repository).save(entity, item, WorkItemStage.QUOTED, null, null, null, 2);
+    verify(repository).auditEdit(entity, item, actor, "OWNER_CHANGED", actor.toString(), null);
+  }
+
+  @Test void owner_standardOwnerCannotReassignEvenOwnItem() {
+    assertThatThrownBy(() -> service.editItem(user, entity, item, 2, false, null, false, false, null, true,
+        UUID.randomUUID(), false)).isInstanceOf(AccessDeniedException.class);
+    verify(repository, never()).save(any(), any(), any(), any(), any(), any(), anyInt());
+  }
+
+  @Test void owner_rejectsCandidateThatIsNotActiveDirectorOrFinancialAdmin() {
+    var candidate = UUID.randomUUID();
+    when(repository.lockActor(actor)).thenReturn(Optional.of(Role.FINANCIAL_ADMIN));
+    when(repository.isAssignableOwner(candidate)).thenReturn(false);
+    assertThatThrownBy(() -> service.editItem(user, entity, item, 2, false, null, false, false, null, true, candidate, false))
+        .isInstanceOf(ApiFailure.class).extracting(e -> ((ApiFailure) e).code()).isEqualTo("OWNER_UNAVAILABLE");
+    verify(repository, never()).save(any(), any(), any(), any(), any(), any(), anyInt());
+  }
+
+  @Test void owner_setAndClearTogetherIsRejected() {
+    when(repository.lockActor(actor)).thenReturn(Optional.of(Role.FINANCIAL_ADMIN));
+    assertThatThrownBy(() -> service.editItem(user, entity, item, 2, false, null, false, false, null, true,
+        UUID.randomUUID(), true)).isInstanceOf(ApiFailure.class)
+        .extracting(e -> ((ApiFailure) e).code()).isEqualTo("INVALID_WORK_ITEM_UPDATE");
+  }
+
   @Test void gl21_financeCanConfirmAuthorisedInvoiceWasSent() {
     when(repository.lockActor(actor)).thenReturn(Optional.of(Role.FINANCIAL_ADMIN));
     when(repository.lockItem(entity,item)).thenReturn(Optional.of(new WorkItemRepository.Item(
@@ -162,7 +205,7 @@ class WorkItemServiceTest {
         item, entity, WorkItemStage.QUOTED, actor, previousDate, "Existing note", 2)));
     var result = service.editPartial(user, entity, item, 2, false, null, false, true, "New note");
     assertThat(result.followUpDate()).isEqualTo(previousDate);
-    verify(repository).save(entity, item, WorkItemStage.QUOTED, previousDate, "New note", 2);
+    verify(repository).save(entity, item, WorkItemStage.QUOTED, previousDate, "New note", actor, 2);
     verify(repository, never()).auditEdit(eq(entity), eq(item), eq(actor), eq("FOLLOW_UP_CHANGED"), any(), any());
     verify(repository).auditEdit(entity, item, actor, "NOTES_CHANGED", "Existing note", "New note");
   }
