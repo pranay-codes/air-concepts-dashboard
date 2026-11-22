@@ -35,7 +35,7 @@ class VworkConnectionRepositoryTest {
     jdbc = new JdbcTemplate(data);
     transaction = new TransactionTemplate(new DataSourceTransactionManager(data));
     repository = new VworkConnectionRepository(jdbc);
-    jdbc.execute("create role anon; create role authenticated; create role service_role; create role supabase_auth_admin; "
+    jdbc.execute("create role anon; create role authenticated; create role service_role bypassrls; create role supabase_auth_admin; "
         + "create schema auth; create table auth.users(id uuid primary key)");
     try (var migrations = Files.list(Path.of("..", "supabase", "migrations"))) {
       for (var file : migrations.filter(p -> p.toString().endsWith(".sql")).sorted().toList()) jdbc.execute(Files.readString(file));

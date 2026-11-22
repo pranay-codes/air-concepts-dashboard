@@ -71,7 +71,8 @@ select
         or has_table_privilege('anon',to_regclass(name),'SELECT,INSERT,UPDATE,DELETE'))
     then 'FAIL: green-line tables missing, RLS disabled or browser-accessible' end)::int::text,
     'PASS: green-line tables are server-owned with RLS') as green_line_security,
-  coalesce((case when has_table_privilege('service_role',to_regclass('public.work_item_events'),'UPDATE,DELETE')
+  coalesce((case when has_table_privilege('service_role',to_regclass('public.work_item_events'),'UPDATE,DELETE,TRUNCATE')
+      or has_table_privilege('service_role',to_regclass('public.vwork_connection_events'),'UPDATE,DELETE,TRUNCATE')
     then 'FAIL: service role can modify green-line audit events' end)::int::text,
     'PASS: green-line audit events are append-only') as green_line_audit_security,
   coalesce((case when not exists (

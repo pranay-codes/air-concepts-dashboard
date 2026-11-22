@@ -48,7 +48,7 @@ class QuoteMirrorRepositoryTest {
     jdbc = new JdbcTemplate(datasource);
     transaction = new TransactionTemplate(new DataSourceTransactionManager(datasource));
     service = new QuoteMirrorService(new QuoteMirrorRepository(jdbc), Clock.fixed(NOW, ZoneOffset.UTC));
-    jdbc.execute("create role anon; create role authenticated; create role service_role; create role supabase_auth_admin; "
+    jdbc.execute("create role anon; create role authenticated; create role service_role bypassrls; create role supabase_auth_admin; "
         + "create schema auth; create table auth.users(id uuid primary key)");
     try (var migrations = Files.list(Path.of("..", "supabase", "migrations"))) {
       for (var file : migrations.filter(p -> p.toString().endsWith(".sql")).sorted().toList()) jdbc.execute(Files.readString(file));
@@ -736,7 +736,7 @@ class QuoteMirrorRepositoryTest {
   private static QuoteMirrorService.Mapping mapping(UUID entity) {
     var grant = UUID.randomUUID(); var tenant = UUID.randomUUID();
     jdbc.update("insert into public.xero_grants(id,access_ciphertext,refresh_ciphertext,expires_at,status) values (?,?,?,now(),'ACTIVE')",
-        grant, "synthetic-ciphertext-1", "synthetic-ciphertext-2");
+        grant, "synthetic-access-ciphertext-padded-to-schema-minimum", "synthetic-refresh-ciphertext-padded-to-schema-minimum");
     jdbc.update("insert into public.xero_entity_connections(entity_id,grant_id,tenant_id,connection_id,tenant_name,verified_at) values (?,?,?,?,?,now())",
         entity, grant, tenant, UUID.randomUUID(), "Synthetic");
     return new QuoteMirrorService.Mapping(entity, tenant, grant);
