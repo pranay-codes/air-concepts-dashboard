@@ -58,22 +58,38 @@ describe("GL-01 and GL-03 Jobs list", () => {
     });
   });
 
-  it("saves an inline follow-up without overwriting other fields", async () => {
+  it("saves an inline follow-up automatically without overwriting other fields", async () => {
     const { api, fetcher } = testApi((url) =>
       url.pathname.endsWith("/work-items") ? page(entities[0]!.id) : detail(entities[0]!.id, 1),
     );
     render(<JobsList api={api} entity={entities[0]!} profile={profile} onAccessDenied={vi.fn()} />);
     const field = (await screen.findAllByLabelText("Follow-up date for Q-100"))[0]!;
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
     fireEvent.change(field, { target: { value: "2026-12-01" } });
-    fireEvent.click(screen.getAllByRole("button", { name: "Save" })[0]!);
     await waitFor(() =>
       expect(fetcher.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true),
     );
-    const write = fetcher.mock.calls.find(([, init]) => init?.method === "PATCH");
-    expect(JSON.parse(String(write?.[1]?.body))).toEqual({
+    const writes = fetcher.mock.calls.filter(([, init]) => init?.method === "PATCH");
+    expect(writes).toHaveLength(1);
+    expect(JSON.parse(String(writes[0]?.[1]?.body))).toEqual({
       version: 0,
       followUpDate: "2026-12-01",
     });
+  });
+
+  it("does not save a partly typed follow-up date", async () => {
+    const { api, fetcher } = testApi((url) =>
+      url.pathname.endsWith("/work-items") ? page(entities[0]!.id) : detail(entities[0]!.id, 1),
+    );
+    render(<JobsList api={api} entity={entities[0]!} profile={profile} onAccessDenied={vi.fn()} />);
+    const field = (
+      await screen.findAllByLabelText("Follow-up date for Q-100")
+    )[0] as HTMLInputElement;
+    // jsdom has no badInput, so simulate a partly typed date through the validity object.
+    Object.defineProperty(field, "validity", { value: { badInput: true }, configurable: true });
+    fireEvent.change(field, { target: { value: "" } });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fetcher.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(false);
   });
 
   it("clears an existing follow-up without changing notes", async () => {
@@ -86,7 +102,6 @@ describe("GL-01 and GL-03 Jobs list", () => {
     render(<JobsList api={api} entity={entities[0]!} profile={profile} onAccessDenied={vi.fn()} />);
     const field = (await screen.findAllByLabelText("Follow-up date for Q-100"))[0]!;
     fireEvent.change(field, { target: { value: "" } });
-    fireEvent.click(screen.getAllByRole("button", { name: "Save" })[0]!);
     await waitFor(() =>
       expect(fetcher.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true),
     );

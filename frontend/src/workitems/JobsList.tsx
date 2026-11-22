@@ -54,14 +54,16 @@ function FollowUp({
         ? "Due today"
         : "Overdue"
       : null;
-  async function save() {
+  async function save(next: string) {
+    if (next === (item.followUpDate ?? "")) return;
+    setValue(next);
     const result = await action.run(
       (signal) =>
         api.updateWorkItem(
           item.entityId,
           item.id,
-          value
-            ? { version: item.version, followUpDate: value }
+          next
+            ? { version: item.version, followUpDate: next }
             : { version: item.version, clearFollowUp: true },
           signal,
         ),
@@ -74,21 +76,21 @@ function FollowUp({
   return (
     <div>
       {canEdit ? (
-        <>
-          <input
-            aria-label={`Follow-up date for ${item.quoteNumber}`}
-            type="date"
-            value={value}
-            onChange={(event) => setValue(event.target.value)}
-          />
-          <button
-            type="button"
-            disabled={action.busy || value === (item.followUpDate ?? "")}
-            onClick={save}
-          >
-            Save
-          </button>
-        </>
+        <input
+          className="date-compact"
+          aria-label={`Follow-up date for ${item.quoteNumber}`}
+          type="date"
+          value={value}
+          disabled={action.busy}
+          onChange={(event) => {
+            // A partly typed date reports an empty value with badInput; wait for a complete date.
+            if (event.target.validity.badInput) {
+              setValue(event.target.value);
+              return;
+            }
+            void save(event.target.value);
+          }}
+        />
       ) : (
         formatDate(item.followUpDate)
       )}
