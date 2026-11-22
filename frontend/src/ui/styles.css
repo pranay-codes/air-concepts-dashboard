@@ -132,6 +132,9 @@ input[type="checkbox"] {
   min-height: 1.25rem;
   accent-color: var(--accent);
 }
+input.date-compact {
+  width: 10.5rem;
+}
 label {
   display: block;
   font-weight: 600;
