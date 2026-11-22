@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiMessage, isAccessFailure } from "../api/client";
-import type { Entity, Profile } from "../api/contracts";
+import type { Entity, Profile, StaffOption } from "../api/contracts";
 import type { DashboardApi } from "../api/dashboard";
 import { useResource } from "../api/useResource";
 import { useAction } from "../api/useAction";
@@ -101,6 +101,65 @@ function FollowUp({
     </div>
   );
 }
+function OwnerSelect({
+  item,
+  choices,
+  api,
+  profile,
+  onChanged,
+  onAccessDenied,
+}: {
+  item: WorkItem;
+  choices: StaffOption[];
+  api: DashboardApi;
+  profile: Profile;
+  onChanged(): void;
+  onAccessDenied(): void;
+}) {
+  const action = useAction(`owner:${profile.subject}:${item.entityId}:${item.id}`);
+  const current = item.owner?.id ?? "";
+  // Keep the current owner selectable even if they are no longer an assignment choice.
+  const options =
+    item.owner && !choices.some((choice) => choice.id === item.owner?.id)
+      ? [...choices, { id: item.owner.id, displayName: item.owner.displayName }]
+      : choices;
+  async function change(next: string) {
+    if (next === current) return;
+    const result = await action.run(
+      (signal) =>
+        api.updateWorkItem(
+          item.entityId,
+          item.id,
+          next
+            ? { version: item.version, ownerId: next }
+            : { version: item.version, clearOwner: true },
+          signal,
+        ),
+      (error) => {
+        if (isAccessFailure(error)) onAccessDenied();
+      },
+    );
+    if (result) onChanged();
+  }
+  return (
+    <div>
+      <select
+        aria-label={`Owner for ${item.quoteNumber}`}
+        value={current}
+        disabled={action.busy}
+        onChange={(event) => void change(event.target.value)}
+      >
+        <option value="">Unassigned</option>
+        {options.map((choice) => (
+          <option key={choice.id} value={choice.id}>
+            {choice.displayName}
+          </option>
+        ))}
+      </select>
+      {action.error ? <p role="alert">{apiMessage(action.error)}</p> : null}
+    </div>
+  );
+}
 export function JobsList({
   api,
   entity,
@@ -143,6 +202,22 @@ export function JobsList({
     [api, entity.id, state.query, onAccessDenied],
   );
   const resource = useResource(JSON.stringify([scope, state.query]), load, state.scope === scope);
+  const canAssignOwner = profile.role === "DIRECTOR" || profile.role === "FINANCIAL_ADMIN";
+  const loadChoices = useCallback((signal: AbortSignal) => api.staff(signal), [api]);
+  const choices = useResource(`owner-choices:${profile.subject}`, loadChoices, canAssignOwner);
+  const ownerCell = (item: WorkItem) =>
+    canAssignOwner && item.stage !== "CLOSED" ? (
+      <OwnerSelect
+        item={item}
+        choices={choices.data ?? []}
+        api={api}
+        profile={profile}
+        onChanged={resource.refresh}
+        onAccessDenied={onAccessDenied}
+      />
+    ) : (
+      (item.owner?.displayName ?? "Unassigned")
+    );
   const page = state.query.page ?? 1;
   const filtered = Boolean(
     state.query.search ||
@@ -355,7 +430,7 @@ export function JobsList({
                             <span className="badge warning">Needs attention</span>
                           ) : null}
                         </td>
-                        <td>{item.owner?.displayName ?? "Unassigned"}</td>
+                        <td>{ownerCell(item)}</td>
                         <td>
                           <FollowUp
                             key={`${item.id}:${item.version}`}
@@ -388,7 +463,7 @@ export function JobsList({
                       Job ID: {item.jobId || "Not recorded"} {flags(item)}
                     </p>
                     <p>Total: {formatMoney(item.quoteTotal, item.currency)}</p>
-                    <p>Owner: {item.owner?.displayName ?? "Unassigned"}</p>
+                    <div>Owner: {ownerCell(item)}</div>
                     <div>
                       Follow-up:{" "}
                       <FollowUp

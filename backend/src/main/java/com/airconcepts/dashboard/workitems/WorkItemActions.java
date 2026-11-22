@@ -15,8 +15,10 @@ public class WorkItemActions {
 
   @Transactional
   public WorkItemReadService.Detail edit(CurrentUser user, UUID entity, UUID item, int version,
-      boolean datePresent, LocalDate date, boolean clear, boolean notesPresent, String notes) {
-    writes.editPartial(user, entity, item, version, datePresent, date, clear, notesPresent, notes);
+      boolean datePresent, LocalDate date, boolean clear, boolean notesPresent, String notes,
+      boolean ownerPresent, UUID ownerId, boolean clearOwner) {
+    writes.editItem(user, entity, item, version, datePresent, date, clear, notesPresent, notes,
+        ownerPresent, ownerId, clearOwner);
     return reads.get(user, entity, item);
   }
   @Transactional

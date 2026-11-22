@@ -1749,7 +1749,7 @@
       },
       "patch" : {
         "tags" : [ "work-item-controller" ],
-        "summary" : "Update the work item's follow-up date and notes",
+        "summary" : "Update the work item's follow-up date, notes and owner",
         "operationId" : "updateWorkItem",
         "parameters" : [ {
           "name" : "entityId",
@@ -4043,6 +4043,13 @@
             "minLength" : 0
           },
           "clearFollowUp" : {
+            "type" : "boolean"
+          },
+          "ownerId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "clearOwner" : {
             "type" : "boolean"
           }
         },

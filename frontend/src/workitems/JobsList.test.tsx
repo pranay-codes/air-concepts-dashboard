@@ -5,6 +5,7 @@ import { entities, profile } from "../test/fixtures";
 import { Workspace } from "../workspace/Workspace";
 import { JobsList } from "./JobsList";
 
+const financeOwner = { id: "00000000-0000-4000-8000-000000000020", displayName: "Finance Person" };
 const row = (entityId: string) => ({
   id: "00000000-0000-4000-8000-000000000010",
   entityId,
@@ -107,6 +108,62 @@ describe("GL-01 and GL-03 Jobs list", () => {
     );
     const write = fetcher.mock.calls.find(([, init]) => init?.method === "PATCH");
     expect(JSON.parse(String(write?.[1]?.body))).toEqual({ version: 0, clearFollowUp: true });
+  });
+
+  it("lets a Director assign an owner from active finance staff and saves on change", async () => {
+    const { api, fetcher } = testApi((url) => {
+      if (url.pathname.endsWith("/api/v1/staff")) return [financeOwner];
+      return url.pathname.endsWith("/work-items")
+        ? page(entities[0]!.id)
+        : detail(entities[0]!.id, 1);
+    });
+    render(<JobsList api={api} entity={entities[0]!} profile={profile} onAccessDenied={vi.fn()} />);
+    const select = (await screen.findAllByLabelText("Owner for Q-100"))[0] as HTMLSelectElement;
+    await waitFor(() => expect(select.querySelectorAll("option")).toHaveLength(2));
+    fireEvent.change(select, { target: { value: financeOwner.id } });
+    await waitFor(() =>
+      expect(fetcher.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true),
+    );
+    const writes = fetcher.mock.calls.filter(([, init]) => init?.method === "PATCH");
+    expect(writes).toHaveLength(1);
+    expect(JSON.parse(String(writes[0]?.[1]?.body))).toEqual({
+      version: 0,
+      ownerId: financeOwner.id,
+    });
+  });
+
+  it("clears an owner back to Unassigned", async () => {
+    const existing = { ...row(entities[0]!.id), owner: financeOwner };
+    const { api, fetcher } = testApi((url) => {
+      if (url.pathname.endsWith("/api/v1/staff")) return [financeOwner];
+      return url.pathname.endsWith("/work-items")
+        ? { ...page(entities[0]!.id), items: [existing] }
+        : detail(entities[0]!.id, 1);
+    });
+    render(<JobsList api={api} entity={entities[0]!} profile={profile} onAccessDenied={vi.fn()} />);
+    const select = (await screen.findAllByLabelText("Owner for Q-100"))[0] as HTMLSelectElement;
+    expect(select.value).toBe(financeOwner.id);
+    fireEvent.change(select, { target: { value: "" } });
+    await waitFor(() =>
+      expect(fetcher.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true),
+    );
+    const write = fetcher.mock.calls.find(([, init]) => init?.method === "PATCH");
+    expect(JSON.parse(String(write?.[1]?.body))).toEqual({ version: 0, clearOwner: true });
+  });
+
+  it("shows the owner read-only to standard users and does not load assignment choices", async () => {
+    const standard = { ...profile, role: "STANDARD_USER" as typeof profile.role };
+    const { api, fetcher } = testApi((url) =>
+      url.pathname.endsWith("/work-items") ? page(entities[0]!.id) : detail(entities[0]!.id, 1),
+    );
+    render(
+      <JobsList api={api} entity={entities[0]!} profile={standard} onAccessDenied={vi.fn()} />,
+    );
+    await screen.findAllByText("Q-100");
+    expect(screen.queryByLabelText("Owner for Q-100")).toBeNull();
+    expect(fetcher.mock.calls.some(([input]) => String(input).includes("/api/v1/staff"))).toBe(
+      false,
+    );
   });
 
   it("GL-17 reviews the entity and quote before explicitly creating a test invoice", async () => {

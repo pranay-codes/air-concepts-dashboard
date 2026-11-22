@@ -48,11 +48,19 @@ public class WorkItemRepository {
         .stream().findFirst();
   }
 
-  public int save(UUID entity, UUID id, WorkItemStage stage, LocalDate followUp, String notes, int version) {
+  /** Owners are active Directors or Financial Admins; the staff table is global, not per entity. */
+  public boolean isAssignableOwner(UUID staffId) {
+    Boolean assignable = jdbc.queryForObject("""
+        select exists(select 1 from public.staff_users where id=? and active and role in ('DIRECTOR','FINANCIAL_ADMIN'))
+        """, Boolean.class, staffId);
+    return Boolean.TRUE.equals(assignable);
+  }
+
+  public int save(UUID entity, UUID id, WorkItemStage stage, LocalDate followUp, String notes, UUID ownerId, int version) {
     return jdbc.update("""
-        update public.work_items set follow_up_date=?,notes=?,version=version+1,updated_at=now()
+        update public.work_items set follow_up_date=?,notes=?,owner_id=?,version=version+1,updated_at=now()
         where entity_id=? and id=? and stage=? and version=?
-        """, followUp, notes, entity, id, stage.name(), version);
+        """, followUp, notes, ownerId, entity, id, stage.name(), version);
   }
 
   public int closeLost(UUID entity, UUID id, int version, String reason) {
