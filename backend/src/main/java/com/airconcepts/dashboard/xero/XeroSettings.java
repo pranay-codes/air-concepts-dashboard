@@ -8,18 +8,24 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 /** Server-only app credentials and exact redirect destinations. */
 public final class XeroSettings {
-  public static final String SCOPES = "offline_access accounting.invoices.read accounting.attachments.read";
   private final String clientId, clientSecret, redirectUri, frontendCallback;
+  private final Set<String> requestedScopes;
 
   public XeroSettings(String clientId, String clientSecret, String redirectUri, String frontendCallback) {
+    this(clientId, clientSecret, redirectUri, frontendCallback, false, false, false);
+  }
+  public XeroSettings(String clientId, String clientSecret, String redirectUri, String frontendCallback,
+      boolean quoteWorkflow, boolean invoiceWrite, boolean attachmentWrite) {
     this.clientId = clientId;
     this.clientSecret = clientSecret;
     this.redirectUri = redirectUri;
     this.frontendCallback = frontendCallback;
+    this.requestedScopes = XeroScopes.requested(quoteWorkflow, invoiceWrite, attachmentWrite);
   }
   public String clientId() { return clientId; }
   public String clientSecret() { return clientSecret; }
   public String redirectUri() { return redirectUri; }
+  public boolean quoteWorkflowEnabled() { return requestedScopes.contains(XeroScopes.CONTACTS_READ); }
 
   public void requireConfigured() {
     if (clientId == null || clientId.isBlank() || clientSecret == null || clientSecret.isBlank()
@@ -34,7 +40,7 @@ public final class XeroSettings {
     requireConfigured();
     return UriComponentsBuilder.fromUriString("https://login.xero.com/identity/connect/authorize")
         .queryParam("response_type", "code").queryParam("client_id", clientId)
-        .queryParam("redirect_uri", redirectUri).queryParam("scope", SCOPES)
+        .queryParam("redirect_uri", redirectUri).queryParam("scope", String.join(" ", requestedScopes))
         .queryParam("state", state).build().encode().toUriString();
   }
 

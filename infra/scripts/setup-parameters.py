@@ -79,7 +79,8 @@ KEYS = (
     Key("backend/diagnostics/xero-enabled", "String", "API DASHBOARD_DIAGNOSTICS_XERO_ENABLED (true or false; Test only)", required=False, test_only=True),
     Key("backend/diagnostics/xero-include-bodies", "String", "API DASHBOARD_DIAGNOSTICS_XERO_INCLUDE_BODIES (true or false; synthetic Test data only)", required=False, test_only=True),
     Key("backend/diagnostics/xero-max-body-chars", "String", "API DASHBOARD_DIAGNOSTICS_XERO_MAX_BODY_CHARS (integer; Test only)", required=False, test_only=True),
-    Key("backend/vwork/api-key", "SecureString", "placeholder, no code reads it yet", required=False),
+    Key("backend/vwork/mode", "String", "API DASHBOARD_VWORK_MODE (mock or live; optional)", required=False),
+    Key("backend/vwork/credential-encryption-key", "SecureString", "API VWORK_CREDENTIAL_ENCRYPTION_KEY (separate base64 32-byte key)", required=False),
     # Frontend. Vite inlines these at build time, so they reach the browser and are not secret.
     Key("frontend/api-base-url", "String", "frontend VITE_API_BASE_URL"),
     Key("frontend/supabase-url", "String", "frontend VITE_SUPABASE_URL"),

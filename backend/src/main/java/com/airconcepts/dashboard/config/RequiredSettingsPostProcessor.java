@@ -2,6 +2,7 @@ package com.airconcepts.dashboard.config;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -48,6 +49,28 @@ public class RequiredSettingsPostProcessor implements EnvironmentPostProcessor, 
           + ". Set them as environment variables. See README.md, Run locally.");
     }
     requireNamedProject(environment, projectRef);
+    requireVworkConfiguration(environment);
+  }
+
+  private static void requireVworkConfiguration(ConfigurableEnvironment environment) {
+    String mode = environment.getProperty("dashboard.vwork.mode");
+    if (!StringUtils.hasText(mode)) mode = environment.getProperty("DASHBOARD_VWORK_MODE");
+    if (!StringUtils.hasText(mode)) return;
+    if (!mode.equals("mock") && !mode.equals("live"))
+      throw new IllegalStateException("dashboard.vwork.mode must be mock or live when configured.");
+    String configured = environment.getProperty("VWORK_CREDENTIAL_ENCRYPTION_KEY", "");
+    try {
+      byte[] key = Base64.getDecoder().decode(configured);
+      if (key.length != 32) throw new IllegalArgumentException();
+      String xero = environment.getProperty("XERO_TOKEN_ENCRYPTION_KEY", "");
+      byte[] xeroBytes;
+      try { xeroBytes = Base64.getDecoder().decode(xero); }
+      catch (IllegalArgumentException invalid) { xeroBytes = new byte[0]; }
+      if (xeroBytes.length == 32 && java.security.MessageDigest.isEqual(key, xeroBytes))
+        throw new IllegalArgumentException();
+    } catch (IllegalArgumentException invalid) {
+      throw new IllegalStateException("VWORK_CREDENTIAL_ENCRYPTION_KEY must be a separate base64-encoded 32-byte key.");
+    }
   }
 
   private static String projectRef(ConfigurableEnvironment environment) {

@@ -75,7 +75,7 @@ test("FR-UC15-31 workspace landmarks, labelled controls, targets, skip link and 
   for (const contrast of contrasts)
     expect(contrast.ratio, JSON.stringify(contrast)).toBeGreaterThanOrEqual(4.5);
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Invoices", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "My Work", exact: true })).toBeVisible();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("link", { name: "Skip to content", exact: true })).toBeFocused();
   await page.keyboard.press("Enter");

@@ -13,6 +13,8 @@ import type { Role, Staff } from "../../src/api/contracts";
 export { ENTITY_A, ENTITY_B, INVOICE_A, STAFF_A };
 export const ATTEMPT = "00000000-0000-4000-8000-000000000090";
 export const CONNECTION = "00000000-0000-4000-8000-000000000091";
+export const JOB_A = "00000000-0000-4000-8000-000000000110";
+export const JOB_B = "00000000-0000-4000-8000-000000000111";
 /** Synthetic boundaries; the production UI and Supabase browser adapter run unchanged. */
 export async function greenLane(page: Page, role: Role = "DIRECTOR") {
   const state = {
@@ -139,7 +141,53 @@ export async function greenLane(page: Page, role: Role = "DIRECTOR") {
         organisationName: "Synthetic Xero organisation",
         lastConfirmedAt: "2026-11-08T00:00:00Z",
       };
-    else if (path.includes("/invoices")) {
+    else if (path.endsWith("/green-line/sync"))
+      result = { entityId: path.split("/")[4], xero: {}, vwork: {} };
+    else if (path === "/api/v1/work-items/my-work" || path.includes("/work-items/")) {
+      const job = (entityId: string) => ({
+        id: entityId === ENTITY_A ? JOB_A : JOB_B,
+        entityId,
+        entityName: state.entities.find((item) => item.id === entityId)?.displayName ?? "Unknown",
+        xeroQuoteId:
+          entityId === ENTITY_A
+            ? "00000000-0000-4000-8000-000000000120"
+            : "00000000-0000-4000-8000-000000000121",
+        quoteNumber: entityId === ENTITY_A ? "Q-A" : "Q-B",
+        jobId: entityId === ENTITY_A ? "J-A" : "J-B",
+        customerName: entityId === ENTITY_A ? "Customer A" : "Customer B",
+        xeroQuoteStatus: "SENT",
+        stage: "QUOTED",
+        stageEnteredAt: "2026-11-19T00:00:00Z",
+        daysInStage: 2,
+        late: false,
+        nextAction: "FOLLOW_UP",
+        flags: [],
+        attention: [],
+        version: 0,
+      });
+      if (path.endsWith("/my-work")) {
+        const entity = url.searchParams.get("entityId");
+        result = {
+          needsAction: (entity ? [entity] : [ENTITY_A, ENTITY_B]).map(job),
+          waiting: [],
+          needsAttention: [],
+          generatedAt: "2026-11-19T00:00:00Z",
+          truncated: false,
+        };
+      } else {
+        const entity = path.split("/")[4]!;
+        result = {
+          summary: job(entity),
+          notes: "Synthetic note",
+          vwork: {},
+          invoice: {},
+          links: {},
+          events: [],
+          operations: [],
+          allowedActions: ["EDIT_NOTES"],
+        };
+      }
+    } else if (path.includes("/invoices")) {
       if (state.role === "STANDARD_USER" && url.searchParams.get("type") === "ACCPAY") {
         await route.fulfill({
           status: 403,
@@ -229,11 +277,15 @@ export async function greenLane(page: Page, role: Role = "DIRECTOR") {
   );
   return state;
 }
-export async function signIn(page: Page) {
+export async function signIn(page: Page, destination: "invoices" | "mywork" = "invoices") {
   await page.goto("/");
   await page.getByLabel("Email", { exact: true }).fill("alex@example.invalid");
   await page.getByRole("button", { name: "Send code", exact: true }).click();
   await page.getByLabel("Six-digit code", { exact: true }).fill("123456");
   await page.getByRole("button", { name: "Verify and sign in" }).click();
-  await expect(page.getByRole("heading", { name: "Invoices", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "My Work", exact: true })).toBeVisible();
+  if (destination === "invoices") {
+    await page.getByRole("button", { name: "Invoices", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Invoices", exact: true })).toBeVisible();
+  }
 }

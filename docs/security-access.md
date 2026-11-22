@@ -25,7 +25,8 @@ This page records who and what may read or write each environment's secrets and 
 | `backend/xero/redirect-uri` | String | API `XERO_REDIRECT_URI` | No |
 | `backend/xero/frontend-callback-uri` | String | API `XERO_FRONTEND_CALLBACK_URI` | No |
 | `backend/xero/token-encryption-key` | SecureString | API `XERO_TOKEN_ENCRYPTION_KEY` | No |
-| `backend/vwork/api-key` | SecureString | none yet (placeholder) | No |
+| `backend/vwork/mode` | String | API `DASHBOARD_VWORK_MODE` | No |
+| `backend/vwork/credential-encryption-key` | SecureString | API `VWORK_CREDENTIAL_ENCRYPTION_KEY` | When vWork is enabled |
 | `frontend/api-base-url` | String | frontend `VITE_API_BASE_URL` at build time | Yes |
 | `frontend/supabase-url` | String | frontend `VITE_SUPABASE_URL` at build time | Yes |
 | `frontend/supabase-publishable-key` | String | frontend `VITE_SUPABASE_PUBLISHABLE_KEY` at build time | Yes |
@@ -34,7 +35,8 @@ Notes:
 
 - The frontend values are inlined into the browser bundle by Vite at build time. They are public by design, so they are stored as `String`. Never put a service-role key or other secret under `frontend/`.
 - The API reads plain environment variables only. `infra/deploy/deploy-backend.sh` reads these parameters on the environment's host through SSM Run Command at deploy time and writes `runtime/backend.env`. The API never calls Parameter Store itself.
-- A blank answer in the script skips that key. The API will not start without the required backend keys, so skipping one is a deliberate choice. Xero code is wired (see [configuration.md](configuration.md)), but no Xero capability counts as implemented until a spike note confirms it. vWork has no code yet (AGENTS.md section 2).
+- A blank answer in the script skips that key. The API will not start without the required backend keys, or without a separate valid vWork encryption key when a vWork mode is selected. Provider behaviour and the vWork workflow still require the verification described in [configuration.md](configuration.md).
+- The Director enters the shared vWork API key through the application. The API stores only its encrypted envelope; it never returns the key to the browser. The old `backend/vwork/api-key` placeholder is unused and is not deleted automatically.
 - The Supabase service-role key is stored as a SecureString at `backend/supabase/service-role-key`. Only the staff administration code (`SupabaseAdminConfig`, `SupabaseAdminClient`) reads it. It is never sent to the browser.
 - Xero access and refresh tokens are never stored as static parameters. They stay server-side and encrypted.
 - The database password must not appear in `backend/db/jdbc-url`. The setup script does not check values, so the operator keeps it out of the URL.

@@ -1,6 +1,7 @@
 # Air Concepts Financial Admin Dashboard: Agent Rules
 
 ## Learned Rules
+- For Quote-to-Invoice, do not set up or run PostgreSQL locally; use CI for database verification (human instruction, 19 November 2026).
 - For the Phase 1 client-delivery release, create only the requested tag and release notes; do not use Superpowers (human instruction, 12 November 2026).
 - For UC4, work without Docker: run no Docker commands or container-backed tests locally; use unit/mock/HTTP tests and report disposable-PostgreSQL coverage as not run (human reiterated 10 November 2026).
 - For UC4, complete development locally before committing (human instruction, 10 November 2026); do not block implementation on per-slice commits or PR publication. Record slice plans and test evidence locally, then commit after development is complete.
@@ -14,6 +15,12 @@
 - Write UI/UX specifications as standalone instructions for the intended interface, with concrete design standards and behaviour rather than PDF observations or analysis framing.
 - Keep infrastructure deployment guidance direct and reusable. Separate identity-management prerequisites from CloudFormation deployment steps; do not turn deployment help into an extended IAM Identity Center setup walkthrough unless the human requests it.
 - For this INF-002 session, read the linked Notion task directly and waive the local spec-pack gate as instructed by the human. Build one reusable Test/Live CloudFormation blueprint with environment configuration; this does not authorise Live deployment or access.
+- For Quote-to-Invoice, work through the implementation plan from top to bottom, continuing past checks that must run in CI or need later external verification (human instruction, 20 November 2026).
+- For Quote-to-Invoice, prioritise getting the main end-to-end flow working and defer broader edge-case coverage for now (human instruction, 20 November 2026).
+- For Quote-to-Invoice, the human considers the goal complete when the main flow is working; document deferred edge cases and external verification (human instruction, 20 November 2026).
+- For this task, focus on completing the Green Line quote-to-invoice use case and avoid unrelated dashboard work (human reminder, 21 November 2026).
+- For the Green Line main flow, defer edge-case work unless it is needed for safe invoice handling (human reminder, 21 November 2026).
+- Finish the Green Line invoice review and mock submission, link the created invoice, and verify the synthetic quote-to-job-to-invoice journey before marking the goal complete; document CI and provider verification as follow-up (human instruction, 21 November 2026).
 
 ## 1. Core rules
 - Change one task at a time. One branch and one session per task. — Raise unrelated findings as a new task; do not fix them here.

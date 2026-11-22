@@ -19,6 +19,15 @@ public final class TokenCipher {
   public TokenCipher(String encodedKey) { this.encodedKey = encodedKey; }
 
   public String encrypt(UUID grant, String purpose, String plaintext) {
+    return encryptWithContext(context(grant, purpose), plaintext);
+  }
+
+  /** The shared vWork account has a separate key and fixed, distinct associated data. */
+  public String encryptVwork(String plaintext) {
+    return encryptWithContext("vwork:account".getBytes(StandardCharsets.UTF_8), plaintext);
+  }
+
+  private String encryptWithContext(byte[] associatedData, String plaintext) {
     if (plaintext == null || plaintext.isBlank() || plaintext.length() > 32768) throw unreadable();
     try {
       var key = key();
@@ -26,7 +35,7 @@ public final class TokenCipher {
       random.nextBytes(nonce);
       var cipher = Cipher.getInstance("AES/GCM/NoPadding");
       cipher.init(Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(128, nonce));
-      cipher.updateAAD(context(grant, purpose));
+      cipher.updateAAD(associatedData);
       byte[] encrypted = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
       byte[] envelope = ByteBuffer.allocate(1 + nonce.length + encrypted.length)
           .put((byte) 1).put(nonce).put(encrypted).array();
@@ -35,6 +44,14 @@ public final class TokenCipher {
   }
 
   public String decrypt(UUID grant, String purpose, String envelope) {
+    return decryptWithContext(context(grant, purpose), envelope);
+  }
+
+  public String decryptVwork(String envelope) {
+    return decryptWithContext("vwork:account".getBytes(StandardCharsets.UTF_8), envelope);
+  }
+
+  private String decryptWithContext(byte[] associatedData, String envelope) {
     try {
       var key = key();
       if (envelope == null || envelope.length() > 65536) throw unreadable();
@@ -42,7 +59,7 @@ public final class TokenCipher {
       if (bytes.length < 1 + NONCE_BYTES + 16 || bytes[0] != 1) throw unreadable();
       var cipher = Cipher.getInstance("AES/GCM/NoPadding");
       cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, Arrays.copyOfRange(bytes, 1, 13)));
-      cipher.updateAAD(context(grant, purpose));
+      cipher.updateAAD(associatedData);
       return new String(cipher.doFinal(bytes, 13, bytes.length - 13), StandardCharsets.UTF_8);
     } catch (GeneralSecurityException | IllegalArgumentException failure) { throw unreadable(); }
   }

@@ -44,8 +44,9 @@ public class XeroConnectionRepository {
 
   @Transactional
   public void saveGrant(OAuthAttempt attempt, StoredGrant grant, Instant now) {
-    jdbc.update("insert into public.xero_grants(id,access_ciphertext,refresh_ciphertext,expires_at,status) values(?,?,?,?,'ACTIVE')",
-        grant.id(), grant.accessCiphertext(), grant.refreshCiphertext(), Timestamp.from(grant.expiresAt()));
+    jdbc.update("insert into public.xero_grants(id,access_ciphertext,refresh_ciphertext,expires_at,status,granted_scopes) "
+        + "values(?,?,?,?,'ACTIVE',string_to_array(cast(? as text),' '))",
+        grant.id(), grant.accessCiphertext(), grant.refreshCiphertext(), Timestamp.from(grant.expiresAt()), scopes(grant.grantedScopes()));
     int updated = jdbc.update("update public.xero_oauth_attempts set status='READY', grant_id=? where id=? "
         + "and status='PROCESSING' and expires_at>?", grant.id(), attempt.id(), Timestamp.from(now));
     if (updated != 1) throw conflict("The authorisation attempt expired. Connect Xero again.");
@@ -60,14 +61,14 @@ public class XeroConnectionRepository {
     return jdbc.query("select * from public.xero_grants where id=? for update", (r, n) -> new StoredGrant(
         r.getObject("id", UUID.class), r.getString("access_ciphertext"), r.getString("refresh_ciphertext"),
         r.getTimestamp("expires_at").toInstant(), GrantState.valueOf(r.getString("status")),
-        instant(r, "refresh_pending_since"), instant(r, "retry_at"), r.getString("error_code")), id)
+        instant(r, "refresh_pending_since"), instant(r, "retry_at"), r.getString("error_code"), readScopes(r)), id)
         .stream().findFirst().orElseThrow(() -> conflict("This Xero grant is unavailable. Connect Xero again."));
   }
 
   public void saveRotated(StoredGrant grant) {
     jdbc.update("update public.xero_grants set access_ciphertext=?,refresh_ciphertext=?,expires_at=?,status='ACTIVE',"
-        + "refresh_pending_since=null,retry_at=null,error_code=null,updated_at=now() where id=?",
-        grant.accessCiphertext(), grant.refreshCiphertext(), Timestamp.from(grant.expiresAt()), grant.id());
+        + "refresh_pending_since=null,retry_at=null,error_code=null,granted_scopes=string_to_array(cast(? as text),' '),updated_at=now() where id=?",
+        grant.accessCiphertext(), grant.refreshCiphertext(), Timestamp.from(grant.expiresAt()), scopes(grant.grantedScopes()), grant.id());
   }
 
   public void recordGrantFailure(UUID id, GrantState state, String code, Instant pendingSince, Instant retryAt) {
@@ -82,14 +83,14 @@ public class XeroConnectionRepository {
   }
 
   public Optional<StoredConnection> connection(UUID entity) {
-    return jdbc.query("select c.entity_id,c.grant_id,c.tenant_id,c.tenant_name,c.verified_at,c.read_updated_at,"
+    return jdbc.query("select c.entity_id,c.grant_id,c.tenant_id,c.tenant_name,c.verified_at,c.read_updated_at,g.granted_scopes,"
         + "u.display_name as connected_by_name,case when c.read_upstream_status in (401,403) then 'NEEDS_RECONNECTION' else g.status end as status,"
         + "coalesce(g.error_code,c.read_error_code) as error_code from public.xero_entity_connections c "
         + "join public.xero_grants g on g.id=c.grant_id left join public.staff_users u on u.id=c.connected_by where c.entity_id=?",
         (r, n) -> new StoredConnection(r.getObject("entity_id", UUID.class), r.getObject("grant_id", UUID.class),
             r.getObject("tenant_id", UUID.class), r.getString("tenant_name"), r.getTimestamp("verified_at").toInstant(),
             r.getString("connected_by_name"), instant(r, "read_updated_at"),
-            GrantState.valueOf(r.getString("status")), r.getString("error_code")), entity).stream().findFirst();
+            GrantState.valueOf(r.getString("status")), r.getString("error_code"), readScopes(r)), entity).stream().findFirst();
   }
 
   @Transactional
@@ -124,5 +125,10 @@ public class XeroConnectionRepository {
     Timestamp value = row.getTimestamp(column); return value == null ? null : value.toInstant();
   }
   private static Timestamp timestamp(Instant value) { return value == null ? null : Timestamp.from(value); }
+  private static String scopes(Set<String> value) { return value == null ? null : String.join(" ", value.stream().sorted().toList()); }
+  private static Set<String> readScopes(ResultSet row) throws SQLException {
+    var value = row.getArray("granted_scopes");
+    return value == null ? null : Set.copyOf(Arrays.asList((String[]) value.getArray()));
+  }
   private static ApiFailure conflict(String detail) { return new ApiFailure(HttpStatus.CONFLICT, "XERO_CONNECTION_CONFLICT", detail); }
 }

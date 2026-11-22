@@ -33,6 +33,16 @@ VALUES = {key.path: f"test-value-{index}" for index, key in enumerate(setup.KEYS
 VALUES["backend/db/password"] = SECRET
 
 
+def test_gl26_vwork_configuration_uses_separate_secure_key_and_retires_placeholder():
+    keys = {key.path: key for key in setup.KEYS}
+    assert keys["backend/vwork/credential-encryption-key"].kind == "SecureString"
+    assert keys["backend/vwork/mode"].kind == "String"
+    assert "backend/vwork/api-key" not in keys
+    deployment = (REPO_ROOT / "infra" / "deploy" / "deploy-backend.sh").read_text(encoding="utf-8")
+    assert "[vwork/mode]=DASHBOARD_VWORK_MODE" in deployment
+    assert "[vwork/credential-encryption-key]=VWORK_CREDENTIAL_ENCRYPTION_KEY" in deployment
+
+
 class FakeSSM:
     """Records calls. It has no get_parameter, so any attempt to read a value fails the test."""
 

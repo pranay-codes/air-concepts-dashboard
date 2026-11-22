@@ -104,4 +104,32 @@ class XeroConnectionServiceTest {
     service.attempt(director, attemptId);
     verify(grants).recordReadSuccess(grant, clock.instant());
   }
+
+  @Test void gl01_authorisedTenantCarriesTheCurrentGrantScopes() {
+    var tenant = UUID.randomUUID();
+    when(repository.activeEntity(entity)).thenReturn(true);
+    when(repository.connection(entity)).thenReturn(Optional.of(new StoredConnection(entity, grant, tenant,
+        "Synthetic", clock.instant(), null, null, GrantState.ACTIVE, null)));
+    when(grants.access(grant)).thenReturn(new XeroAccess(grant, "synthetic-access", Set.of("accounting.invoices.read")));
+    var access = service.systemAccess(entity);
+    assertThat(access.tenantId()).isEqualTo(tenant);
+    assertThat(access.grantedScopes()).containsExactly("accounting.invoices.read");
+    assertThat(access.toString()).doesNotContain("synthetic-access");
+  }
+
+  @Test void gl01_connectionStatusDistinguishesUnknownMissingAndGrantedQuotePermissions() {
+    var enabled = new XeroSettings("client", "synthetic-secret", "https://api.example.invalid/api/v1/xero/callback",
+        "https://app.example.invalid/settings/entities", true, false, false);
+    var quoteService = new XeroConnectionService(repository, provider, grants, entities, cipher, enabled, clock);
+    var tenant = UUID.randomUUID();
+    when(repository.connection(entity)).thenReturn(Optional.of(new StoredConnection(entity, grant, tenant, "Synthetic",
+        clock.instant(), null, null, GrantState.ACTIVE, null, null)));
+    assertThat(quoteService.status(director, entity).quoteAccess()).isEqualTo(ConnectionViews.QuoteAccess.UNKNOWN);
+    when(repository.connection(entity)).thenReturn(Optional.of(new StoredConnection(entity, grant, tenant, "Synthetic",
+        clock.instant(), null, null, GrantState.ACTIVE, null, Set.of("accounting.invoices.read"))));
+    assertThat(quoteService.status(director, entity).quoteAccess()).isEqualTo(ConnectionViews.QuoteAccess.RECONNECT_REQUIRED);
+    when(repository.connection(entity)).thenReturn(Optional.of(new StoredConnection(entity, grant, tenant, "Synthetic",
+        clock.instant(), null, null, GrantState.ACTIVE, null, Set.of("accounting.invoices.read", "accounting.contacts.read"))));
+    assertThat(quoteService.status(director, entity).quoteAccess()).isEqualTo(ConnectionViews.QuoteAccess.READY);
+  }
 }

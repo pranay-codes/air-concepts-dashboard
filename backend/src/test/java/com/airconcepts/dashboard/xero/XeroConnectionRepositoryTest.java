@@ -42,6 +42,23 @@ class XeroConnectionRepositoryTest {
   }
   @AfterAll static void stop() { if (postgres != null) postgres.stop(); }
 
+  @Test void gl01_grantedScopesRoundTripAndMissingEvidenceRemainsUnknown() {
+    tx.executeWithoutResult(status -> {
+      var id = UUID.randomUUID();
+      insertGrant(id);
+      var existing = repository.lockGrant(id);
+      assertThat(existing.grantedScopes()).isNull();
+      var withScopes = new StoredGrant(id, existing.accessCiphertext(), existing.refreshCiphertext(), existing.expiresAt(),
+          GrantState.ACTIVE, null, null, null, Set.of("accounting.invoices.read", "accounting.contacts.read"));
+      repository.saveRotated(withScopes);
+      assertThat(repository.lockGrant(id).grantedScopes()).containsExactlyInAnyOrder("accounting.invoices.read", "accounting.contacts.read");
+      repository.saveRotated(new StoredGrant(id, existing.accessCiphertext(), existing.refreshCiphertext(), existing.expiresAt(),
+          GrantState.ACTIVE, null, null, null, null));
+      assertThat(repository.lockGrant(id).grantedScopes()).isNull();
+      status.setRollbackOnly();
+    });
+  }
+
   @Test
   void frUc15_10_stateIsSingleUseExpiringAndInvalidAfterDirectorDeactivation() {
     tx.executeWithoutResult(status -> {

@@ -26,6 +26,14 @@ The API reads these as environment variables. Locally it also reads the reposito
 | `XERO_REDIRECT_URI` | No | `XeroConfig` | not in example | `backend/xero/redirect-uri` (String) | Exactly the API callback, ending `/api/v1/xero/callback`. Must match the redirect registered in the Xero app. |
 | `XERO_FRONTEND_CALLBACK_URI` | No | `XeroConfig` | not in example | `backend/xero/frontend-callback-uri` (String) | Application page the callback redirects to, with the attempt ID and no credentials. |
 | `XERO_TOKEN_ENCRYPTION_KEY` | No | `XeroConfig`, `TokenCipher` | not in example | `backend/xero/token-encryption-key` (SecureString) | Secret. Base64 of 32 random bytes. Used by the AES-256-GCM token cipher to encrypt Xero access and refresh tokens at rest. |
+| `dashboard.green-line.xero.read-enabled` | No (default `false`) | `XeroConfig` | not in example | not yet mapped | Adds `accounting.contacts.read` to a new Xero consent request. This does not enable quote sync or prove consent was granted. |
+| `dashboard.green-line.xero.write-enabled` | No (default `false`) | `XeroConfig` | not in example | not yet mapped | Adds documented invoice-write scope to a new consent request; invoice creation remains incomplete. |
+| `dashboard.green-line.xero.invoice-mode` | No (default `disabled`) | `GreenLineSyncConfig` | not in example | local/test only | Set to `mock` only with the `local` or `test` profile to use synthetic, in-memory quote, contact and invoice providers for Green Line. Fixtures are seeded by tests and reset on application restart. Green Line quote/contact and invoice calls use these mocks; real invoice writes remain disabled. |
+| `dashboard.green-line.xero.attachments-write-enabled` | No (default `false`) | `XeroConfig` | not in example | not yet mapped | Adds documented attachment-write scope to a new consent request; report attachment remains incomplete. |
+| `dashboard.green-line.sync.enabled` | No (default `false`) | `GreenLineSyncScheduler` | not in example | not yet mapped | Enables scheduled quote-sync attempts. Keep disabled until the documented provider verification is complete; manual refresh is a separate authorised API action. |
+| `dashboard.green-line.sync.business-cron` / `dashboard.green-line.sync.off-hours-cron` | No | `GreenLineSyncScheduler` | not in example | not yet mapped | Auckland-time schedules, defaulting to every ten minutes on weekdays 07:00–18:59 and hourly otherwise. |
+| `DASHBOARD_VWORK_MODE` | No | `VworkConfig` | not in example | `backend/vwork/mode` (String) | Explicitly selects `mock` or `live`; absent disables the adapter. |
+| `VWORK_CREDENTIAL_ENCRYPTION_KEY` | When a vWork mode is selected | `VworkSecretCipher` | not in example | `backend/vwork/credential-encryption-key` (SecureString) | Base64 of 32 random bytes, different from the Xero token key. Encrypts the Director-entered vWork key at rest. |
 | `DASHBOARD_DIAGNOSTICS_XERO_ENABLED` | No | `XeroConfig`, `XeroRequestDiagnostics` | not in example | `backend/diagnostics/xero-enabled` (String) | Test only. `true` logs one `XERO_DIAGNOSTIC` line per Xero request. Default `false`. See [xero-diagnostics.md](xero-diagnostics.md). |
 | `DASHBOARD_DIAGNOSTICS_XERO_INCLUDE_BODIES` | No | `XeroConfig`, `XeroRequestDiagnostics` | not in example | `backend/diagnostics/xero-include-bodies` (String) | Test only. `true` also logs response bodies, truncated. Synthetic data only. Default `false`. |
 | `DASHBOARD_DIAGNOSTICS_XERO_MAX_BODY_CHARS` | No | `XeroConfig`, `XeroRequestDiagnostics` | not in example | `backend/diagnostics/xero-max-body-chars` (String) | Truncation length for logged bodies. Default `4000`. |
@@ -33,7 +41,13 @@ The API reads these as environment variables. Locally it also reads the reposito
 | `JAVA_TOOL_OPTIONS` | No | JVM | no | none | Set in `infra/deploy/compose.yaml` only. |
 | `API_MEMORY_LIMIT` | No (default `512m`) | compose | no | none | Container memory limit. |
 
-Settings present in Parameter Store but not read by any code yet: `backend/vwork/api-key` (SecureString, placeholder). It is not exported to the host.
+The old `backend/vwork/api-key` placeholder is no longer read or offered by the setup script. It is not removed automatically; a human may remove the unused parameter through the normal environment process.
+
+### Quote-to-invoice vWork adapter (development in progress)
+
+The vWork client is disabled unless `dashboard.vwork.mode` (environment variable `DASHBOARD_VWORK_MODE`) is explicitly set to `mock` or `live`. Either mode requires the separate credential encryption key at startup. `mock` is an in-memory synthetic provider: its state resets on restart and its template IDs are test data. Use it only with synthetic data in an isolated development or Test environment. `live` selects a documented read adapter; live job creation and automatic reference matching are unavailable. The authorised manual refresh and opt-in scheduler invoke vWork sync after the Xero attempt, with separate run records. Migrations and database behaviour have not yet been verified. Do not enable this incomplete feature for operational use. Safe template identity, report retrieval and provider verification remain outstanding; see [the vWork spike](spikes/gl-vwork-api.md).
+
+Quote refresh can apply individual quote updates before a run fails; failed runs do not advance the successful marker. Quote pagination and negative invoice-search completeness are unverified, so the current live adapters deliberately cannot report a complete sync. The refresh API is synchronous and does not yet enforce the planned hard 60-second cap. Do not use the incomplete workflow operationally.
 
 ## Frontend build (Vite)
 

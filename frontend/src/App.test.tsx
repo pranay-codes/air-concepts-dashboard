@@ -40,6 +40,17 @@ function backend(
       );
     if (url.pathname.endsWith("/staff"))
       return jsonResponse([{ id: profile.subject, displayName: profile.displayName }], 200);
+    if (url.pathname.endsWith("/work-items/my-work"))
+      return jsonResponse(
+        {
+          needsAction: [],
+          waiting: [],
+          needsAttention: [],
+          generatedAt: "2026-11-19T00:00:00Z",
+          truncated: false,
+        },
+        200,
+      );
     if (url.pathname.endsWith("/invoices"))
       return jsonResponse(
         { items: [invoice()], page: 1, pageSize: 25, pageCount: 1, itemCount: 1 },
@@ -94,7 +105,7 @@ describe("App", () => {
     render(<App auth={fakeAuth("token-abc")} apiBaseUrl="https://api.test" />);
 
     expect(await screen.findByText(profile.displayName)).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { level: 1, name: "Invoices" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "My Work" })).toBeInTheDocument();
     expect(fetchSpy).toHaveBeenCalledWith(
       "https://api.test/api/v1/me",
       expect.objectContaining({

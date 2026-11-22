@@ -20,7 +20,8 @@ public class XeroOAuthClient {
 
   @JsonIgnoreProperties(ignoreUnknown = true)
   private record TokenBody(@JsonProperty("access_token") String access, @JsonProperty("refresh_token") String refresh,
-      @JsonProperty("expires_in") Long expiry, @JsonProperty("token_type") String type) {
+      @JsonProperty("expires_in") Long expiry, @JsonProperty("token_type") String type,
+      @JsonProperty("scope") String scope) {
     @Override public String toString() { return "TokenBody[redacted]"; }
   }
   @JsonIgnoreProperties(ignoreUnknown = true)
@@ -42,7 +43,17 @@ public class XeroOAuthClient {
     if (body == null || !validToken(body.access()) || !validToken(body.refresh())
         || body.expiry() == null || body.expiry() < 1 || body.expiry() > 86400
         || !"Bearer".equalsIgnoreCase(body.type())) throw malformed(true);
-    return new XeroTokens(body.access(), body.refresh(), clock.instant().plusSeconds(body.expiry()));
+    return new XeroTokens(body.access(), body.refresh(), clock.instant().plusSeconds(body.expiry()), parseScopes(body.scope()));
+  }
+
+  private static Set<String> parseScopes(String scope) {
+    if (scope == null || scope.isBlank() || scope.length() > 8192) return null;
+    var result = new LinkedHashSet<String>();
+    for (String value : scope.strip().split(" +")) {
+      if (!value.matches("[A-Za-z0-9._:-]{1,160}")) return null;
+      result.add(value);
+    }
+    return Set.copyOf(result);
   }
 
   public List<XeroTenant> connections(String accessToken) {

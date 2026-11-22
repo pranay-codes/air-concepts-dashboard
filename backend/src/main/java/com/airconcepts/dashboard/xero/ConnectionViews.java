@@ -10,6 +10,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 public final class ConnectionViews {
   private ConnectionViews() {}
   public enum Status { CONNECTED, NOT_CONNECTED, NEEDS_RECONNECTION }
+  public enum QuoteAccess { NOT_ENABLED, UNKNOWN, READY, RECONNECT_REQUIRED }
   @Schema(name = "XeroAuthorizationStart")
   public record Start(@Schema(requiredMode = Schema.RequiredMode.REQUIRED) UUID attemptId,
       @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String authorizationUrl,
@@ -30,7 +31,8 @@ public final class ConnectionViews {
   public record Connection(@Schema(requiredMode = Schema.RequiredMode.REQUIRED) UUID entityId,
       @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Status status,
       String organisationName, String maskedTenantId, String connectedBy,
-      Instant lastConfirmedAt, Instant lastCheckedAt, String errorCode) {}
+      Instant lastConfirmedAt, Instant lastCheckedAt, String errorCode,
+      QuoteAccess quoteAccess) {}
 
   /** Returns a display form such as b41e…7c21. The full tenant ID never leaves the server. */
   public static String maskTenant(UUID tenantId) {
