@@ -43,6 +43,57 @@ const detail = (entityId: string, version = 0) => ({
 });
 
 describe("GL-01 and GL-03 Jobs list", () => {
+  it("filters quotes using Xero status and follow-up due date", async () => {
+    const { api, fetcher } = testApi(() => page(entities[0]!.id));
+    render(<JobsList api={api} entity={entities[0]!} profile={profile} onAccessDenied={vi.fn()} />);
+    await screen.findAllByText("Q-100");
+    fireEvent.change(screen.getByLabelText("Xero status"), { target: { value: "SENT" } });
+    fireEvent.change(screen.getByLabelText("Follow-up due by"), {
+      target: { value: "2026-12-01" },
+    });
+    await waitFor(() => {
+      const url = new URL(String(fetcher.mock.calls.at(-1)?.[0]), "https://api.example.invalid");
+      expect(url.searchParams.get("xeroStatus")).toBe("SENT");
+      expect(url.searchParams.get("followUpDueBy")).toBe("2026-12-01");
+    });
+  });
+
+  it("saves an inline follow-up without overwriting other fields", async () => {
+    const { api, fetcher } = testApi((url) =>
+      url.pathname.endsWith("/work-items") ? page(entities[0]!.id) : detail(entities[0]!.id, 1),
+    );
+    render(<JobsList api={api} entity={entities[0]!} profile={profile} onAccessDenied={vi.fn()} />);
+    const field = (await screen.findAllByLabelText("Follow-up date for Q-100"))[0]!;
+    fireEvent.change(field, { target: { value: "2026-12-01" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Save" })[0]!);
+    await waitFor(() =>
+      expect(fetcher.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true),
+    );
+    const write = fetcher.mock.calls.find(([, init]) => init?.method === "PATCH");
+    expect(JSON.parse(String(write?.[1]?.body))).toEqual({
+      version: 0,
+      followUpDate: "2026-12-01",
+    });
+  });
+
+  it("clears an existing follow-up without changing notes", async () => {
+    const existing = { ...row(entities[0]!.id), followUpDate: "2026-12-01" };
+    const { api, fetcher } = testApi((url) =>
+      url.pathname.endsWith("/work-items")
+        ? { ...page(entities[0]!.id), items: [existing] }
+        : detail(entities[0]!.id, 1),
+    );
+    render(<JobsList api={api} entity={entities[0]!} profile={profile} onAccessDenied={vi.fn()} />);
+    const field = (await screen.findAllByLabelText("Follow-up date for Q-100"))[0]!;
+    fireEvent.change(field, { target: { value: "" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Save" })[0]!);
+    await waitFor(() =>
+      expect(fetcher.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true),
+    );
+    const write = fetcher.mock.calls.find(([, init]) => init?.method === "PATCH");
+    expect(JSON.parse(String(write?.[1]?.body))).toEqual({ version: 0, clearFollowUp: true });
+  });
+
   it("GL-17 reviews the entity and quote before explicitly creating a test invoice", async () => {
     const entity = entities[0]!;
     let created = false;

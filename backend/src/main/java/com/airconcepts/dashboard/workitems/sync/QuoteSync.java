@@ -24,7 +24,7 @@ public final class QuoteSync {
   public record Result(int seen, int created, int updated, int unchanged, int skipped, int stale, boolean complete) {}
   private static final int MAX_PAGES_PER_STATUS = 1000;
   private static final int MAX_PAGE_SIZE = 100;
-  private static final List<XeroQuoteClient.Status> STATUSES = List.of(XeroQuoteClient.Status.SENT,
+  private static final List<XeroQuoteClient.Status> STATUSES = List.of(XeroQuoteClient.Status.SENT, XeroQuoteClient.Status.DRAFT,
       XeroQuoteClient.Status.ACCEPTED, XeroQuoteClient.Status.DECLINED, XeroQuoteClient.Status.INVOICED,
       XeroQuoteClient.Status.DELETED);
   private final QuoteMirrorService mirror;
@@ -40,6 +40,7 @@ public final class QuoteSync {
     var original = checkAccess(entity, access.get(), null);
     Set<UUID> seenIds = new HashSet<>();
     int seen = 0, created = 0, updated = 0, unchanged = 0, skipped = 0, stale = 0;
+    boolean incomplete = false;
     for (var status : STATUSES) {
       boolean complete = false;
       for (int index = 1; index <= MAX_PAGES_PER_STATUS; index++) {
@@ -72,13 +73,13 @@ public final class QuoteSync {
             case NEEDS_INVOICE_CHECK -> throw new IllegalStateException("Unresolved invoice check");
           }
         }
-        if (page.continuation() == Continuation.UNKNOWN)
-          throw failure("QUOTE_SYNC_COMPLETENESS_UNVERIFIED", "Quote pagination completeness needs verification before sync can succeed.");
+        if (page.continuation() == Continuation.UNKNOWN) { incomplete = true; complete = true; break; }
         if (page.continuation() == Continuation.COMPLETE) { complete = true; break; }
       }
       if (!complete) throw failure("QUOTE_SYNC_PAGE_LIMIT", "The quote sync exceeded its page limit.");
     }
     checkAccess(entity, access.get(), original);
+    if (incomplete) throw failure("QUOTE_SYNC_COMPLETENESS_UNVERIFIED", "Quote pagination completeness needs verification before sync can succeed.");
     return new Result(seen, created, updated, unchanged, skipped, stale, true);
   }
 

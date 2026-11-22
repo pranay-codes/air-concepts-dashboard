@@ -41,6 +41,20 @@ class QuoteSyncTest {
     verifyNoInteractions(source, mirror);
   }
 
+  @Test void draftAndSentAreBothReadEvenWhenCompletenessIsUnknown() {
+    var draft = quote(XeroQuoteClient.Status.DRAFT);
+    var sent = quote(XeroQuoteClient.Status.SENT);
+    QuoteSync.Source source = (ctx, status, page, since) -> new QuoteSync.Page(
+        status == XeroQuoteClient.Status.DRAFT ? List.of(draft) :
+        status == XeroQuoteClient.Status.SENT ? List.of(sent) : List.of(), QuoteSync.Continuation.UNKNOWN);
+    when(mirror.apply(any(), any(), any())).thenReturn(QuoteMirrorService.Outcome.CREATED);
+    assertThatThrownBy(() -> new QuoteSync(mirror, source, (ctx, q) -> QuoteMirrorService.InvoiceMatch.NOT_FOUND)
+        .run(entity, () -> access, null)).isInstanceOfSatisfying(ApiFailure.class,
+            error -> assertThat(error.code()).isEqualTo("QUOTE_SYNC_COMPLETENESS_UNVERIFIED"));
+    verify(mirror).apply(mapping, draft, QuoteMirrorService.InvoiceMatch.UNCHECKED);
+    verify(mirror).apply(mapping, sent, QuoteMirrorService.InvoiceMatch.UNCHECKED);
+  }
+
   @Test void gl01_gl02_processesCompletePagesAndResolvesFirstSyncInvoiceCheck() {
     var sent = quote(XeroQuoteClient.Status.SENT);
     var accepted = quote(XeroQuoteClient.Status.ACCEPTED);
@@ -59,7 +73,7 @@ class QuoteSyncTest {
     assertThat(result.created()).isEqualTo(2);
     assertThat(result.complete()).isTrue();
     verify(mirror).apply(mapping, accepted, QuoteMirrorService.InvoiceMatch.NOT_FOUND);
-    verify(source, times(5)).page(any(), any(), eq(1), isNull());
+    verify(source, times(6)).page(any(), any(), eq(1), isNull());
   }
 
   @Test void gl23_neverReportsSuccessWhenProviderCompletenessOrInvoiceLookupIsUnknown() {
