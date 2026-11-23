@@ -106,8 +106,16 @@ public class GreenLineSyncService {
     UUID run = repository.begin(entity, trigger, actor, clock.instant());
     try {
       var access = resolve.get();
-      if (invoices != null) invoices.run(entity,resolve);
+      ApiFailure invoiceFailure = null;
+      if (invoices != null) {
+        try { invoices.run(entity,resolve); }
+        catch (ApiFailure failure) {
+          if (!"INVOICE_SYNC_PARTIAL".equals(failure.code())) throw failure;
+          invoiceFailure = failure;
+        }
+      }
       var result = quotes.run(entity, resolve, null);
+      if (invoiceFailure != null) throw invoiceFailure;
       repository.succeed(entity, run, access, result, clock.instant());
       return run;
     } catch (ApiFailure failure) {

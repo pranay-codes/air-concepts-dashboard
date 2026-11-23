@@ -28,11 +28,14 @@ public class InvoiceMirrorService {
     var settings=quotes.lockConfig(mapping.entityId()).orElseThrow(InvoiceMirrorService::changed);
     if (!quotes.lockMapping(mapping)) throw changed();
     var item=invoices.lock(mapping,itemId).orElseThrow(InvoiceMirrorService::changed);
-    if (!invoice.id().equals(item.invoiceId()) || (item.state().stage()!=WorkItemStage.TO_INVOICE
-        && item.state().stage()!=WorkItemStage.INVOICE_DRAFTED && item.state().stage()!=WorkItemStage.INVOICED)) throw changed();
+    if (!invoice.id().equals(item.invoiceId()) || (item.state().stage()==WorkItemStage.CLOSED
+        && !"PAID".equals(item.state().closeReason()))) throw changed();
     var status=StageMachine.InvoiceStatus.valueOf(invoice.status().name());
+    var recovery = (status==StageMachine.InvoiceStatus.VOIDED || status==StageMachine.InvoiceStatus.DELETED)
+        && (item.state().stage()==WorkItemStage.INVOICED || item.state().stage()==WorkItemStage.CLOSED)
+        ? invoices.stageAfterVoid(mapping,itemId) : null;
     var result=StageMachine.apply(item.state(),new StageMachine.InvoiceObserved(status,
-        sentVerified && Boolean.TRUE.equals(invoice.sentToContact()),invoice.amountDue()),settings.owners());
+        sentVerified && Boolean.TRUE.equals(invoice.sentToContact()),invoice.amountDue(),recovery),settings.owners());
     var now=clock.instant();
     var next=result.state();
     if (next.equals(item.state()) && Objects.equals(item.number(),invoice.number())
@@ -55,7 +58,9 @@ public class InvoiceMirrorService {
     var settings=quotes.lockConfig(mapping.entityId()).orElseThrow(InvoiceMirrorService::changed);
     if (!quotes.lockMapping(mapping)) throw changed();
     var item=invoices.lock(mapping,candidate.itemId()).orElseThrow(InvoiceMirrorService::changed);
-    if (item.invoiceId()!=null || item.state().stage()!=WorkItemStage.TO_INVOICE || !invoices.referenceMatches(mapping,candidate)) throw changed();
+    if (item.invoiceId()!=null || item.state().stage()==WorkItemStage.CLOSED || !invoices.referenceMatches(mapping,candidate)) throw changed();
+    if (invoices.conflictingReferences(mapping,candidate)) throw changed();
+    if (invoices.invoiceConflictsWithOtherWorkItems(mapping,candidate,invoice)) throw changed();
     if (quotes.hasUnresolvedOperation(mapping.entityId(),candidate.itemId()))
       throw new ApiFailure(HttpStatus.CONFLICT,"INVOICE_SYNC_OPERATION_IN_PROGRESS","Resolve the existing operation before syncing this invoice.");
     var result=StageMachine.apply(item.state(),new StageMachine.InvoiceObserved(StageMachine.InvoiceStatus.valueOf(invoice.status().name()),
@@ -78,7 +83,7 @@ public class InvoiceMirrorService {
     quotes.lockConfig(mapping.entityId()).orElseThrow(InvoiceMirrorService::changed);
     if (!quotes.lockMapping(mapping)) throw changed();
     var item=invoices.lock(mapping,candidate.itemId()).orElseThrow(InvoiceMirrorService::changed);
-    if (item.invoiceId()!=null || item.state().stage()!=WorkItemStage.TO_INVOICE || !invoices.referenceMatches(mapping,candidate)) throw changed();
+    if (item.invoiceId()!=null || item.state().stage()==WorkItemStage.CLOSED || !invoices.referenceMatches(mapping,candidate)) throw changed();
     if (item.state().attention().contains("INVOICE_MULTIPLE_MATCHES")) return;
     if (quotes.hasUnresolvedOperation(mapping.entityId(),candidate.itemId()))
       throw new ApiFailure(HttpStatus.CONFLICT,"INVOICE_SYNC_OPERATION_IN_PROGRESS","Resolve the existing operation before syncing this invoice.");

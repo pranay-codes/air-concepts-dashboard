@@ -16,3 +16,9 @@ GL-T03: which draft invoice, lookup and attachment behaviours are supported? Off
 ## Decision and verification required
 
 No live-write compatibility or duplicate prevention has been demonstrated. Require sanitised demo evidence for each write and uncertain-outcome recovery before enabling it. No provider request or response samples exist for this investigation.
+
+## Documentation update, 23 November 2026
+
+The human requested documentation-based testing. Xero's [invoice API reference](https://developer.xero.com/documentation/api/accounting/invoices) describes `SentToContact` as whether the invoice is displayed as sent in Xero, and `SearchTerm` as case-insensitive across invoice number and reference. This confirms the documented meaning of the field, not customer delivery, actual account behaviour, or the completeness of a specific search.
+
+Xero's [quote-to-invoice instructions](https://central.xero.com/0/article/Create-an-invoice-from-a-quote) state that creating an invoice copies the quote details; when the quote has no reference, its quote number is copied into the invoice reference. The new invoice can be edited, so the copied reference alone is not an immutable or globally unique link. Duplicate, missing or changed references still require safe review. These are documentation findings, not a Demo-account test.

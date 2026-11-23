@@ -20,6 +20,15 @@ function json(value: unknown, status = 200) {
 const isString = (value: unknown): value is string => typeof value === "string";
 
 describe("UC5 authenticated API boundary", () => {
+  it("GL-STATUS-01 explains a partial invoice refresh", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(json({ code: "INVOICE_SYNC_PARTIAL" }, 409));
+    const api = new ApiClient("", auth(), fetcher);
+    await expect(api.json("/api/v1/entities", isString)).rejects.toThrow(
+      "Some invoice checks could not be completed. Retry or ask an administrator to review.",
+    );
+  });
   it("FR-UC15-05 calls fetch without binding the API client as its browser receiver", async () => {
     const fetcher: typeof fetch = async function (this: unknown) {
       if (this !== undefined) throw new TypeError("Illegal invocation");

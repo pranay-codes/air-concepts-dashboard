@@ -33,4 +33,15 @@ class ManualInvoiceLookupTest {
     when(client.searchReference(access,"J-1",1)).thenReturn(page());
     assertThat(lookup.find(access,"J-1",null)).isEmpty();
   }
+  @Test void gl_status_02_xeroCopiedQuoteNumberFindsInvoiceWhenQuoteReferenceIsBlank() {
+    // Xero documents copying the quote number to the invoice reference when the quote reference is empty.
+    var id=UUID.randomUUID();
+    when(client.searchReference(access,"QU-0042",1)).thenReturn(page(invoice(id,"QU-0042")));
+    assertThat(lookup.find(access,null,"QU-0042")).containsExactly(id);
+  }
+  @Test void gl_status_04_copiedReferenceWithMultipleInvoicesIsNotUnique() {
+    var first=UUID.randomUUID(); var second=UUID.randomUUID();
+    when(client.searchReference(access,"Job 42",1)).thenReturn(page(invoice(first,"Job 42"),invoice(second,"Job 42")));
+    assertThat(lookup.find(access,"Job 42",null)).containsExactlyInAnyOrder(first,second);
+  }
 }

@@ -80,6 +80,18 @@ class XeroInvoiceClientTest {
     assertThat(result.amountDue()).isNotNull();
     server.verify();
   }
+  @Test void gl_status_02_missingSentToContactRemainsUnknown() {
+    server.expect(anything()).andRespond(withSuccess("{\"Invoices\":["+invoice("ACCREC")+"]}",MediaType.APPLICATION_JSON));
+    assertThat(client.workflowInvoice(access,id).sentToContact()).isNull();
+    server.verify();
+  }
+  @Test void gl_status_04_documentedInvoiceContactIdIsRetainedForMatching() {
+    var contact=UUID.randomUUID();
+    var body=invoice("ACCREC").replaceFirst("\\\"ContactID\\\":\\\"[^\\\"]+\\\"", "\"ContactID\":\""+contact+"\"");
+    server.expect(anything()).andRespond(withSuccess("{\"Invoices\":["+body+"]}",MediaType.APPLICATION_JSON));
+    assertThat(client.workflowInvoice(access,id).contactId()).isEqualTo(contact);
+    server.verify();
+  }
 
   @Test void gl19_searchTermCannotInjectAdditionalQueryParameters() {
     server.expect(request -> {

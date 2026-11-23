@@ -17,3 +17,7 @@ GL-T02: what quote and contact read behaviour is available? Official Xero docume
 ## Decision and verification required
 
 Documentation can inform a read adapter but does not prove account-specific behaviour. Before enabling the affected sync, verify filters, completeness and boundaries using a Xero demo organisation and sanitised examples; record actual observations here. No request or response samples exist for this investigation.
+
+## Documentation update, 23 November 2026
+
+Xero's [API efficiency guidance](https://developer.xero.com/documentation/best-practices/api-call-efficiencies/rate-limits/) lists Quotes among endpoints supporting paging. Its [general HTTP guidance](https://developer.xero.com/documentation/api/accounting/requests-and-responses/) describes an older practice of requesting subsequent pages until none are returned, but its current list of endpoints covered by pagination metadata omits Quotes. These sources support using the `page` parameter, but do not explicitly establish a Quotes-specific empty-page termination contract or stable ordering during concurrent changes. Do not treat a short page alone as proof of completeness.

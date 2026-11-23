@@ -17,6 +17,62 @@ class StageMachineTest {
     return new StageMachine.State(stage, OWNER, null, null, job, invoice, Set.of());
   }
 
+  @Test void gl_status_02_sentInvoiceCanAdvanceAnUnscheduledItem() {
+    for (var stage : new WorkItemStage[]{WorkItemStage.QUOTED, WorkItemStage.TO_SCHEDULE, WorkItemStage.SCHEDULED}) {
+      var result = StageMachine.apply(item(stage, false, false),
+          new StageMachine.InvoiceObserved(StageMachine.InvoiceStatus.AUTHORISED, true, new BigDecimal("50")), SETTINGS);
+      assertThat(result.state().stage()).isEqualTo(WorkItemStage.INVOICED);
+      assertThat(result.state().invoiceLinked()).isTrue();
+    }
+  }
+  @Test void gl_status_02_earlySentInvoiceHandsOwnershipToFinance() {
+    var pending=new StageMachine.State(WorkItemStage.TO_SCHEDULE,MANAGER,null,null,false,false,Set.of());
+    var result=StageMachine.apply(pending,
+        new StageMachine.InvoiceObserved(StageMachine.InvoiceStatus.AUTHORISED,true,new BigDecimal("50")),SETTINGS);
+    assertThat(result.state().stage()).isEqualTo(WorkItemStage.INVOICED);
+    assertThat(result.state().ownerId()).isEqualTo(OWNER);
+  }
+
+  @Test void gl_status_03_aVerifiedJobCanBeLinkedAndScheduledFromQuoted() {
+    var linked = StageMachine.apply(item(WorkItemStage.QUOTED, false, false), new StageMachine.LinkJob(), SETTINGS);
+    var scheduled = StageMachine.apply(linked.state(), new StageMachine.JobObserved(true, true, false, false), SETTINGS);
+    assertThat(scheduled.state().stage()).isEqualTo(WorkItemStage.SCHEDULED);
+    assertThat(scheduled.state().ownerId()).isEqualTo(MANAGER);
+  }
+  @Test void gl_status_01_unchangedQuoteStatusAfterSchedulingDoesNotRaiseRegression() {
+    var scheduled=item(WorkItemStage.SCHEDULED,true,false);
+    var observed=new StageMachine.QuoteObserved(StageMachine.QuoteStatus.SENT,StageMachine.QuoteStatus.SENT);
+    assertThat(StageMachine.apply(scheduled,observed,SETTINGS).state().attention()).doesNotContain("XERO_STATUS_REGRESSED");
+  }
+  @Test void gl_status_01_anUnsentInvoiceKeepsTheWorkStageVisible() {
+    for (var stage : new WorkItemStage[]{WorkItemStage.QUOTED, WorkItemStage.TO_SCHEDULE, WorkItemStage.SCHEDULED}) {
+      for (var status : new StageMachine.InvoiceStatus[]{StageMachine.InvoiceStatus.DRAFT,
+          StageMachine.InvoiceStatus.SUBMITTED, StageMachine.InvoiceStatus.AUTHORISED}) {
+        var result=StageMachine.apply(item(stage, false, false),
+            new StageMachine.InvoiceObserved(status,false,new BigDecimal("50")),SETTINGS);
+        assertThat(result.state().stage()).isEqualTo(stage);
+        assertThat(result.state().invoiceLinked()).isTrue();
+      }
+    }
+  }
+  @Test void gl_status_01_voidedEarlyInvoiceKeepsTheWorkStageVisible() {
+    for (var stage : new WorkItemStage[]{WorkItemStage.QUOTED, WorkItemStage.TO_SCHEDULE, WorkItemStage.SCHEDULED}) {
+      var result=StageMachine.apply(item(stage, false, true),
+          new StageMachine.InvoiceObserved(StageMachine.InvoiceStatus.VOIDED,false,BigDecimal.ZERO),SETTINGS);
+      assertThat(result.state().stage()).isEqualTo(stage);
+      assertThat(result.state().invoiceLinked()).isFalse();
+      assertThat(result.state().attention()).contains("INVOICE_VOIDED");
+    }
+  }
+  @Test void gl_status_01_paidItemReopensIfPaymentIsReversed() {
+    var paid=new StageMachine.State(WorkItemStage.CLOSED,OWNER,"PAID",null,true,true,Set.of());
+    var result=StageMachine.apply(paid,
+        new StageMachine.InvoiceObserved(StageMachine.InvoiceStatus.AUTHORISED,true,new BigDecimal("50")),SETTINGS);
+    assertThat(result.state().stage()).isEqualTo(WorkItemStage.INVOICED);
+    assertThat(result.state().closeReason()).isNull();
+    assertThat(result.state().invoiceLinked()).isTrue();
+  }
+
   @Test void gl05_manualLostClosureRequiresQuotedStageAndValidReason() {
     var quoted = item(WorkItemStage.QUOTED, false, false);
     var result = StageMachine.apply(quoted, new StageMachine.CloseLost("Customer declined"), SETTINGS);

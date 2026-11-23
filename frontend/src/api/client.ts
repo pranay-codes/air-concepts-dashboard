@@ -15,6 +15,8 @@ const messages = {
     "Xero refresh could not confirm that all quotes were returned.",
   QUOTE_SYNC_INVOICE_CHECK_REQUIRED:
     "Xero refresh needs a confirmed invoice check before it can finish.",
+  INVOICE_SYNC_PARTIAL:
+    "Some invoice checks could not be completed. Retry or ask an administrator to review.",
   XERO_SCOPE_REQUIRED: "Xero permissions need attention from a Director in Settings.",
   FORECAST_PERIOD_INVALID: "Choose the current month or one of the previous 12 months.",
   FORECAST_INPUT_INVALID: "Check the highlighted forecast fields.",

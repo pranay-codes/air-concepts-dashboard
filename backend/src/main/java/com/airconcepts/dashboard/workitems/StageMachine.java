@@ -28,9 +28,13 @@ public final class StageMachine {
   }
 
   public sealed interface Event permits QuoteObserved, JobObserved, InvoiceObserved, NoInvoiceNeeded, CloseLost, LinkJob, MarkSent {}
-  public record QuoteObserved(QuoteStatus status) implements Event {}
+  public record QuoteObserved(QuoteStatus status, QuoteStatus previousStatus) implements Event {
+    public QuoteObserved(QuoteStatus status) { this(status, null); }
+  }
   public record JobObserved(boolean hasTechnician, boolean hasStart, boolean completed, boolean cancelled) implements Event {}
-  public record InvoiceObserved(InvoiceStatus status, boolean sent, BigDecimal amountDue) implements Event {}
+  public record InvoiceObserved(InvoiceStatus status, boolean sent, BigDecimal amountDue, WorkItemStage stageAfterVoid) implements Event {
+    public InvoiceObserved(InvoiceStatus status, boolean sent, BigDecimal amountDue) { this(status, sent, amountDue, null); }
+  }
   public record NoInvoiceNeeded(String reason) implements Event {}
   public record CloseLost(String reason) implements Event {}
   public record LinkJob() implements Event {}
@@ -79,14 +83,16 @@ public final class StageMachine {
     if (event instanceof CloseLost manual) return closeLost(state, manual.reason());
     if (event instanceof LinkJob) return linkJob(state);
     if (event instanceof MarkSent markSent) return markSent(state, markSent);
-    if (state.stage() == WorkItemStage.CLOSED) return unchanged(state);
-    if (event instanceof QuoteObserved quote) return quote(state, Objects.requireNonNull(quote.status()), settings);
+    if (state.stage() == WorkItemStage.CLOSED && !(event instanceof InvoiceObserved && "PAID".equals(state.closeReason())))
+      return unchanged(state);
+    if (event instanceof QuoteObserved quote) return quote(state, quote, settings);
     if (event instanceof JobObserved job) return job(state, job, settings);
-    if (event instanceof InvoiceObserved invoice) return invoice(state, invoice);
+    if (event instanceof InvoiceObserved invoice) return invoice(state, invoice, settings);
     throw new IllegalArgumentException("Unsupported event");
   }
 
-  private static Result quote(State s, QuoteStatus status, Settings settings) {
+  private static Result quote(State s, QuoteObserved observed, Settings settings) {
+    QuoteStatus status = Objects.requireNonNull(observed.status());
     if (s.stage() == WorkItemStage.QUOTED) {
       return switch (status) {
         case ACCEPTED -> handOff(s, WorkItemStage.TO_SCHEDULE, settings.serviceManagerId(),
@@ -101,6 +107,7 @@ public final class StageMachine {
         case DRAFT, SENT -> unchanged(s);
       };
     }
+    if (status == observed.previousStatus()) return unchanged(s);
     if (status == QuoteStatus.SENT || status == QuoteStatus.DECLINED
         || status == QuoteStatus.DELETED || status == QuoteStatus.DRAFT) {
       return attention(s, "XERO_STATUS_REGRESSED");
@@ -109,40 +116,63 @@ public final class StageMachine {
   }
 
   private static Result job(State s, JobObserved event, Settings settings) {
-    if (s.stage() != WorkItemStage.TO_SCHEDULE && s.stage() != WorkItemStage.SCHEDULED) return unchanged(s);
+    if (s.stage() != WorkItemStage.QUOTED && s.stage() != WorkItemStage.TO_SCHEDULE && s.stage() != WorkItemStage.SCHEDULED) return unchanged(s);
     if (!s.jobLinked()) throw new IllegalArgumentException("A job must be linked before observation");
     if (event.cancelled()) return attention(s, "VWORK_JOB_CANCELLED");
     if (event.completed()) return handOff(s, WorkItemStage.TO_INVOICE, settings.defaultOwnerId(),
         settings.defaultOwnerActive(), "NO_DEFAULT_OWNER");
-    WorkItemStage next = event.hasTechnician() && event.hasStart() ? WorkItemStage.SCHEDULED : WorkItemStage.TO_SCHEDULE;
+    WorkItemStage next = event.hasTechnician() && event.hasStart() ? WorkItemStage.SCHEDULED
+        : s.stage() == WorkItemStage.QUOTED ? WorkItemStage.QUOTED : WorkItemStage.TO_SCHEDULE;
     if (s.stage() == next) return unchanged(s);
+    if (s.stage() == WorkItemStage.QUOTED && next == WorkItemStage.SCHEDULED)
+      return handOff(s, next, settings.serviceManagerId(), settings.serviceManagerActive(), "NO_SERVICE_MANAGER");
     return new Result(copy(s, next, s.ownerId(), s.closeReason(), s.closingNote(), s.jobLinked(), s.invoiceLinked(), s.attention()), "STAGE_CHANGED");
   }
 
-  private static Result invoice(State s, InvoiceObserved event) {
+  private static Result invoice(State s, InvoiceObserved event, Settings settings) {
     InvoiceStatus status = Objects.requireNonNull(event.status(), "invoice status");
-    if (s.stage() != WorkItemStage.TO_INVOICE && s.stage() != WorkItemStage.INVOICE_DRAFTED
+    if (s.stage() != WorkItemStage.CLOSED && s.stage() != WorkItemStage.QUOTED && s.stage() != WorkItemStage.TO_SCHEDULE
+        && s.stage() != WorkItemStage.SCHEDULED && s.stage() != WorkItemStage.TO_INVOICE && s.stage() != WorkItemStage.INVOICE_DRAFTED
         && s.stage() != WorkItemStage.INVOICED) return unchanged(s);
     if (status == InvoiceStatus.VOIDED || status == InvoiceStatus.DELETED) {
       if (!s.invoiceLinked()) return unchanged(s);
-      State unlinked = copy(s, WorkItemStage.TO_INVOICE, s.ownerId(), null, null, s.jobLinked(), false, s.attention());
+      WorkItemStage afterVoid = (s.stage() == WorkItemStage.QUOTED || s.stage() == WorkItemStage.TO_SCHEDULE
+          || s.stage() == WorkItemStage.SCHEDULED) ? s.stage()
+          : event.stageAfterVoid() != null ? event.stageAfterVoid() : WorkItemStage.TO_INVOICE;
+      if (afterVoid != WorkItemStage.QUOTED && afterVoid != WorkItemStage.TO_SCHEDULE
+          && afterVoid != WorkItemStage.SCHEDULED && afterVoid != WorkItemStage.TO_INVOICE)
+        throw new IllegalArgumentException("Invalid stage after void");
+      State unlinked = copy(s, afterVoid, s.ownerId(), null, null, s.jobLinked(), false, s.attention());
+      if (afterVoid != s.stage() && (afterVoid == WorkItemStage.TO_SCHEDULE || afterVoid == WorkItemStage.SCHEDULED))
+        unlinked = handOff(unlinked, afterVoid, settings.serviceManagerId(), settings.serviceManagerActive(), "NO_SERVICE_MANAGER").state();
       return new Result(withAttention(unlinked, "INVOICE_VOIDED"), "INVOICE_UNLINKED");
     }
     if (status == InvoiceStatus.PAID || (status == InvoiceStatus.AUTHORISED
         && event.amountDue() != null && event.amountDue().compareTo(BigDecimal.ZERO) == 0)) {
+      if (s.stage() == WorkItemStage.CLOSED) return unchanged(s);
       State linked = copy(s, s.stage(), s.ownerId(), null, null, s.jobLinked(), true, s.attention());
       return close(linked, "PAID", null, "STAGE_CHANGED");
     }
+    if (s.stage() == WorkItemStage.CLOSED) {
+      if (status != InvoiceStatus.AUTHORISED || event.amountDue() == null || event.amountDue().signum() <= 0)
+        return unchanged(s);
+      WorkItemStage reopened = event.sent() ? WorkItemStage.INVOICED : WorkItemStage.INVOICE_DRAFTED;
+      return new Result(copy(s, reopened, s.ownerId(), null, null, s.jobLinked(), true, s.attention()), "STAGE_CHANGED");
+    }
     WorkItemStage next = s.stage();
-    if (s.stage() == WorkItemStage.TO_INVOICE && (status == InvoiceStatus.DRAFT || status == InvoiceStatus.SUBMITTED
+    if (s.stage() == WorkItemStage.TO_INVOICE
+        && (status == InvoiceStatus.DRAFT || status == InvoiceStatus.SUBMITTED
         || (status == InvoiceStatus.AUTHORISED && !event.sent()))) {
       next = WorkItemStage.INVOICE_DRAFTED;
-    } else if ((s.stage() == WorkItemStage.TO_INVOICE || s.stage() == WorkItemStage.INVOICE_DRAFTED)
+    } else if (s.stage() != WorkItemStage.INVOICED
         && status == InvoiceStatus.AUTHORISED && event.sent()) {
       next = WorkItemStage.INVOICED;
     }
     boolean newlyLinked = !s.invoiceLinked();
     State result = copy(s, next, s.ownerId(), null, null, s.jobLinked(), true, s.attention());
+    if (next == WorkItemStage.INVOICED && (s.stage() == WorkItemStage.QUOTED
+        || s.stage() == WorkItemStage.TO_SCHEDULE || s.stage() == WorkItemStage.SCHEDULED))
+      result = handOff(result, next, settings.defaultOwnerId(), settings.defaultOwnerActive(), "NO_DEFAULT_OWNER").state();
     if (next != s.stage()) return new Result(result, next == WorkItemStage.INVOICE_DRAFTED ? "INVOICE_LINKED" : "STAGE_CHANGED");
     return newlyLinked ? new Result(result, "INVOICE_LINKED") : unchanged(s);
   }
@@ -160,7 +190,7 @@ public final class StageMachine {
   }
 
   private static Result linkJob(State s) {
-    if (s.stage() != WorkItemStage.TO_SCHEDULE || s.jobLinked()) {
+    if (s.stage() == WorkItemStage.CLOSED || s.jobLinked()) {
       throw new IllegalArgumentException("Job cannot be linked in this state");
     }
     return new Result(copy(s, s.stage(), s.ownerId(), null, null, true, s.invoiceLinked(), s.attention()), "JOB_LINKED");

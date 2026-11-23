@@ -31,6 +31,17 @@ public class VworkMirrorRepository {
         + "order by w.stage_entered_at,w.id limit 50", mapper, entity));
     return List.copyOf(result);
   }
+  public List<Candidate> additionalTrackingCandidates(UUID entity) {
+    return jdbc.query("""
+        select w.id,w.job_id,w.vwork_job_id from public.work_items w
+        join public.entities e on e.id=w.entity_id and e.archived_at is null
+        join public.green_line_entity_settings s on s.entity_id=w.entity_id and s.enabled
+        join public.xero_entity_connections c on c.entity_id=w.entity_id and c.tenant_id=w.xero_tenant_id
+        where w.entity_id=? and w.stage in ('QUOTED','TO_INVOICE','INVOICE_DRAFTED','INVOICED')
+          and (w.vwork_job_id is not null or w.job_id is not null)
+        order by w.stage_entered_at,w.id
+        """, (r,n) -> new Candidate(r.getObject("id",UUID.class),r.getString("job_id"),r.getString("vwork_job_id")),entity);
+  }
   public Map<String, UUID> templateOwners() {
     var result = new HashMap<String, UUID>();
     jdbc.query("select template_ref,entity_id from public.vwork_entity_templates", r -> {
