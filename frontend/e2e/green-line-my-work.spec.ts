@@ -7,7 +7,9 @@ for (const width of [390, 1440]) {
     const state = await greenLane(page, "STANDARD_USER");
     await signIn(page, "mywork");
     await expect(page.getByRole("button", { name: "Follow up Q-A" })).toBeVisible();
-    await expect(page.getByText("Xero has not synced yet.")).toBeVisible();
+    await expect(
+      page.getByRole("group", { name: "Xero data" }).getByText("Not synced", { exact: true }),
+    ).toBeVisible();
     await page.getByRole("button", { name: "Refresh sync" }).click();
     await expect
       .poll(() =>
