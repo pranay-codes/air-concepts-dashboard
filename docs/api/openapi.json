@@ -951,6 +951,55 @@
         } ]
       }
     },
+    "/api/v1/entities/{entityId}/work-items/{itemId}/mark-accepted" : {
+      "post" : {
+        "tags" : [ "work-item-controller" ],
+        "summary" : "Accept the quote in Xero and move the job to To schedule",
+        "operationId" : "markQuoteAccepted",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "itemId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/VersionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Detail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
     "/api/v1/entities/{entityId}/work-items/{itemId}/invoice" : {
       "post" : {
         "tags" : [ "invoice-draft-controller" ],
@@ -3359,7 +3408,7 @@
           },
           "outcome" : {
             "type" : "string",
-            "enum" : [ "CREATED", "LINKED_EXISTING", "NOT_FOUND" ]
+            "enum" : [ "CREATED", "LINKED_EXISTING", "NOT_FOUND", "ACCEPTED" ]
           }
         },
         "required" : [ "operationId", "outcome" ]
@@ -3369,7 +3418,7 @@
         "properties" : {
           "outcome" : {
             "type" : "string",
-            "enum" : [ "CREATED", "LINKED_EXISTING", "NOT_FOUND" ]
+            "enum" : [ "CREATED", "LINKED_EXISTING", "NOT_FOUND", "ACCEPTED" ]
           }
         }
       },
@@ -3426,7 +3475,7 @@
             "type" : "array",
             "items" : {
               "type" : "string",
-              "enum" : [ "EDIT_NOTES", "CLOSE_LOST", "CREATE_JOB", "PREPARE_INVOICE", "NO_INVOICE_NEEDED", "MARK_SENT" ]
+              "enum" : [ "EDIT_NOTES", "CLOSE_LOST", "CREATE_JOB", "PREPARE_INVOICE", "NO_INVOICE_NEEDED", "MARK_SENT", "MARK_ACCEPTED" ]
             },
             "uniqueItems" : true
           }
@@ -3525,7 +3574,7 @@
           },
           "kind" : {
             "type" : "string",
-            "enum" : [ "VWORK_CREATE_JOB", "XERO_CREATE_INVOICE", "XERO_ATTACH_REPORT" ]
+            "enum" : [ "VWORK_CREATE_JOB", "XERO_CREATE_INVOICE", "XERO_ATTACH_REPORT", "XERO_ACCEPT_QUOTE" ]
           },
           "status" : {
             "type" : "string",
@@ -3533,7 +3582,7 @@
           },
           "outcome" : {
             "type" : "string",
-            "enum" : [ "CREATED", "LINKED_EXISTING", "NOT_FOUND" ]
+            "enum" : [ "CREATED", "LINKED_EXISTING", "NOT_FOUND", "ACCEPTED" ]
           },
           "requestedAt" : {
             "type" : "string",
@@ -3713,7 +3762,7 @@
           },
           "outcome" : {
             "type" : "string",
-            "enum" : [ "CREATED", "LINKED_EXISTING", "NOT_FOUND" ]
+            "enum" : [ "CREATED", "LINKED_EXISTING", "NOT_FOUND", "ACCEPTED" ]
           }
         },
         "required" : [ "operationId", "outcome" ]

@@ -203,6 +203,17 @@ export class DashboardApi {
       throw new ApiError(502, "INVALID_RESPONSE");
     return result;
   }
+  async markQuoteAccepted(entity: string, item: string, version: number, signal?: AbortSignal) {
+    const result = await this.client.json(
+      `${root(entity)}/work-items/${id(item)}/mark-accepted`,
+      w.isWorkItemDetail,
+      signal,
+      { method: "POST", body: { version } },
+    );
+    if (result.summary.entityId !== entity || result.summary.id !== item)
+      throw new ApiError(502, "INVALID_RESPONSE");
+    return result;
+  }
   async markInvoiceSent(entity: string, item: string, version: number, signal?: AbortSignal) {
     const result = await this.client.json(
       `${root(entity)}/work-items/${id(item)}/mark-sent`,

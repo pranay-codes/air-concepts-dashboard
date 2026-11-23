@@ -930,3 +930,74 @@ button.danger {
   margin: 0;
   padding-left: 20px;
 }
+
+/* Job detail: header, two-column layout and form field spacing. */
+.detail-header h1 {
+  margin-bottom: var(--space-2);
+}
+.detail-header .supporting {
+  margin-bottom: var(--space-3);
+}
+.badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+.detail-figures {
+  margin-top: var(--space-4);
+}
+.detail-grid {
+  display: grid;
+  gap: var(--space-6);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+.detail-main {
+  display: grid;
+  gap: var(--space-6);
+  min-width: 0;
+}
+.detail-main > .card,
+.detail-aside > .card {
+  margin: 0;
+}
+.detail-main h2,
+.detail-aside h2 {
+  font-size: var(--font-section);
+  margin-bottom: var(--space-3);
+}
+.detail-aside {
+  min-width: 0;
+}
+.detail-form .field {
+  display: grid;
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+}
+.detail-form label {
+  font-weight: 600;
+}
+.field-date {
+  width: min(100%, 11rem);
+}
+.detail-form textarea {
+  width: min(100%, 40rem);
+  min-height: 7rem;
+}
+.stack-actions {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+}
+.activity-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: 1.25rem;
+}
+@media (width >= 75rem) {
+  .detail-grid {
+    grid-template-columns: minmax(0, 1fr) 16rem;
+  }
+}

@@ -5,6 +5,9 @@ const messages = {
   VWORK_CAPABILITY_UNVERIFIED: "Job creation is unavailable until vWork templates are verified.",
   VWORK_SEARCH_UNAVAILABLE: "The vWork job could not be checked. Review it before trying again.",
   EXTERNAL_OUTCOME_UNKNOWN: "The outcome needs review before trying again.",
+  QUOTE_ACCEPT_UNAVAILABLE: "Accepting quotes in Xero is unavailable for this connection.",
+  QUOTE_ACCEPT_RECORD_FAILED:
+    "Xero accepted the quote, but the dashboard could not record it. Review the job before trying again.",
   OPERATION_ALREADY_EXISTS: "Review the existing job operation before trying again.",
   SYNC_IN_PROGRESS: "A refresh is already running for this entity.",
   SYNC_RATE_LIMITED: "Wait one minute before refreshing this entity again.",

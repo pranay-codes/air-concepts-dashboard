@@ -104,6 +104,14 @@ public class WorkItemController {
     entities.get(user,entityId);
     return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(actions.markSent(user,entityId,itemId,request.version()));
   }
+  @PostMapping("/mark-accepted") @Operation(operationId="markQuoteAccepted",summary="Accept the quote in Xero and move the job to To schedule")
+  public ResponseEntity<WorkItemReadService.Detail> markAccepted(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID entityId,
+      @PathVariable UUID itemId,@Valid @RequestBody VersionRequest request) {
+    var user=users.from(jwt);
+    user.requireRole(Role.DIRECTOR,Role.FINANCIAL_ADMIN);
+    entities.get(user,entityId);
+    return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(actions.acceptQuote(user,entityId,itemId,request.version()));
+  }
   private static void requireReason(String reason) {
     if (reason == null || reason.isBlank() || reason.length() > 500)
       throw new ApiFailure(org.springframework.http.HttpStatus.BAD_REQUEST, "REASON_REQUIRED", "Enter a reason of 1 to 500 characters.");

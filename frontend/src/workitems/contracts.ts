@@ -107,12 +107,14 @@ function isOperation(v: unknown): v is OperationView {
     isRecord(v) &&
     isUuid(v.id) &&
     typeof v.kind === "string" &&
-    ["VWORK_CREATE_JOB", "XERO_CREATE_INVOICE", "XERO_ATTACH_REPORT"].includes(v.kind) &&
+    ["VWORK_CREATE_JOB", "XERO_CREATE_INVOICE", "XERO_ATTACH_REPORT", "XERO_ACCEPT_QUOTE"].includes(
+      v.kind,
+    ) &&
     typeof v.status === "string" &&
     ["PENDING", "UNKNOWN", "FAILED", "SUCCEEDED"].includes(v.status) &&
     (v.outcome === undefined ||
       (typeof v.outcome === "string" &&
-        ["CREATED", "LINKED_EXISTING", "NOT_FOUND"].includes(v.outcome))) &&
+        ["CREATED", "LINKED_EXISTING", "NOT_FOUND", "ACCEPTED"].includes(v.outcome))) &&
     typeof v.requestedAt === "string" &&
     v.requestedAt.endsWith("Z") &&
     Number.isFinite(Date.parse(v.requestedAt)) &&
@@ -218,6 +220,7 @@ export function isWorkItemDetail(v: unknown): v is WorkItemDetail {
     "PREPARE_INVOICE",
     "NO_INVOICE_NEEDED",
     "MARK_SENT",
+    "MARK_ACCEPTED",
   ]);
   return (
     isRecord(v) &&

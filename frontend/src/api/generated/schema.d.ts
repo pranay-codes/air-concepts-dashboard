@@ -290,6 +290,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/entities/{entityId}/work-items/{itemId}/mark-accepted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept the quote in Xero and move the job to To schedule */
+        post: operations["markQuoteAccepted"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/entities/{entityId}/work-items/{itemId}/invoice": {
         parameters: {
             query?: never;
@@ -1106,11 +1123,11 @@ export interface components {
             /** Format: uuid */
             operationId: string;
             /** @enum {string} */
-            outcome: "CREATED" | "LINKED_EXISTING" | "NOT_FOUND";
+            outcome: "CREATED" | "LINKED_EXISTING" | "NOT_FOUND" | "ACCEPTED";
         };
         LookupResult: {
             /** @enum {string} */
-            outcome?: "CREATED" | "LINKED_EXISTING" | "NOT_FOUND";
+            outcome?: "CREATED" | "LINKED_EXISTING" | "NOT_FOUND" | "ACCEPTED";
         };
         ReasonRequest: {
             /** Format: int32 */
@@ -1126,7 +1143,7 @@ export interface components {
             links?: components["schemas"]["Links"];
             events?: components["schemas"]["EventView"][];
             operations?: components["schemas"]["OperationView"][];
-            allowedActions?: ("EDIT_NOTES" | "CLOSE_LOST" | "CREATE_JOB" | "PREPARE_INVOICE" | "NO_INVOICE_NEEDED" | "MARK_SENT")[];
+            allowedActions?: ("EDIT_NOTES" | "CLOSE_LOST" | "CREATE_JOB" | "PREPARE_INVOICE" | "NO_INVOICE_NEEDED" | "MARK_SENT" | "MARK_ACCEPTED")[];
         };
         EventView: {
             /** Format: int64 */
@@ -1165,11 +1182,11 @@ export interface components {
             /** Format: uuid */
             id?: string;
             /** @enum {string} */
-            kind?: "VWORK_CREATE_JOB" | "XERO_CREATE_INVOICE" | "XERO_ATTACH_REPORT";
+            kind?: "VWORK_CREATE_JOB" | "XERO_CREATE_INVOICE" | "XERO_ATTACH_REPORT" | "XERO_ACCEPT_QUOTE";
             /** @enum {string} */
             status?: "PENDING" | "UNKNOWN" | "FAILED" | "SUCCEEDED";
             /** @enum {string} */
-            outcome?: "CREATED" | "LINKED_EXISTING" | "NOT_FOUND";
+            outcome?: "CREATED" | "LINKED_EXISTING" | "NOT_FOUND" | "ACCEPTED";
             /** Format: date-time */
             requestedAt?: string;
             allowLookup?: boolean;
@@ -1237,7 +1254,7 @@ export interface components {
             /** Format: uuid */
             operationId: string;
             /** @enum {string} */
-            outcome: "CREATED" | "LINKED_EXISTING" | "NOT_FOUND";
+            outcome: "CREATED" | "LINKED_EXISTING" | "NOT_FOUND" | "ACCEPTED";
         };
         GreenLineSyncRun: {
             /** Format: uuid */
@@ -2290,6 +2307,33 @@ export interface operations {
         };
     };
     markInvoiceSent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entityId: string;
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Detail"];
+                };
+            };
+        };
+    };
+    markQuoteAccepted: {
         parameters: {
             query?: never;
             header?: never;

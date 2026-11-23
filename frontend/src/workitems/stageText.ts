@@ -33,6 +33,9 @@ export function eventLabel(event: string): string {
     INVOICE_UNLINKED: "Invoice unlinked",
     ATTENTION_RAISED: "Attention required",
     MARKED_SENT: "Invoice marked sent",
+    QUOTE_ACCEPTED: "Quote accepted in Xero",
+    QUOTE_ACCEPT_REQUESTED: "Quote acceptance requested",
+    OPERATION_OUTCOME: "External write outcome recorded",
   };
   return labels[event] ?? event.replaceAll("_", " ").toLowerCase();
 }

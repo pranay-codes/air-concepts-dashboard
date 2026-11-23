@@ -10,7 +10,7 @@ import org.springframework.stereotype.Repository;
 /** Used under the item lock and the surrounding reservation transaction. */
 @Repository
 public class ExternalOperationRepository {
-  public enum Kind { VWORK_CREATE_JOB, XERO_CREATE_INVOICE, XERO_ATTACH_REPORT }
+  public enum Kind { VWORK_CREATE_JOB, XERO_CREATE_INVOICE, XERO_ATTACH_REPORT, XERO_ACCEPT_QUOTE }
   public record Context(String jobId, UUID invoiceId, UUID serviceManagerId) {}
   public record Existing(UUID id, OperationState.Status status, int attempt) {
     public Existing(OperationState.Status status, int attempt) { this(null, status, attempt); }
@@ -51,7 +51,11 @@ public class ExternalOperationRepository {
   }
 
   public void auditRequested(UUID entity, UUID item, UUID actor, UUID operation, Kind kind) {
-    String event = kind == Kind.VWORK_CREATE_JOB ? "JOB_CREATE_REQUESTED" : "INVOICE_REQUESTED";
+    String event = switch (kind) {
+      case VWORK_CREATE_JOB -> "JOB_CREATE_REQUESTED";
+      case XERO_ACCEPT_QUOTE -> "QUOTE_ACCEPT_REQUESTED";
+      default -> "INVOICE_REQUESTED";
+    };
     jdbc.update("""
         insert into public.work_item_events(entity_id,work_item_id,actor_id,source,event_type,after)
         values (?,?,?,'USER',?,jsonb_build_object('operationId',cast(? as uuid),'kind',cast(? as text)))
@@ -86,6 +90,37 @@ public class ExternalOperationRepository {
         values (?,?,'SYSTEM','JOB_LINKED',jsonb_build_object('operationId',cast(? as uuid),'outcome',cast(? as text)))
         """, entity, item, operation, result.name());
   }
+  /** Work item facts needed to accept its quote. Read-only; the reservation re-checks them under the item lock. */
+  public record AcceptContext(UUID quoteId, UUID tenantId, UUID grantId, int version, String stage, String quoteStatus) {}
+
+  public Optional<AcceptContext> acceptContext(UUID entity, UUID item) {
+    return jdbc.query("""
+        select w.version,w.stage,w.xero_quote_id,w.xero_quote_status,c.tenant_id,c.grant_id
+        from public.work_items w
+        join public.green_line_entity_settings s on s.entity_id=w.entity_id and s.enabled
+        join public.xero_entity_connections c on c.entity_id=w.entity_id and c.tenant_id=w.xero_tenant_id
+        where w.entity_id=? and w.id=?
+        """, (row, index) -> new AcceptContext(row.getObject("xero_quote_id", UUID.class), row.getObject("tenant_id", UUID.class),
+        row.getObject("grant_id", UUID.class), row.getInt("version"), row.getString("stage"), row.getString("xero_quote_status")),
+        entity, item).stream().findFirst();
+  }
+
+  /** Current quote status for a work item, read under the item lock held by the caller. */
+  public Optional<String> quoteStatus(UUID entity, UUID item) {
+    return jdbc.query("select xero_quote_status from public.work_items where entity_id=? and id=?",
+        (row, index) -> row.getString("xero_quote_status"), entity, item).stream().findFirst();
+  }
+
+  /** Records a user-initiated quote acceptance with the previous and new stage and owner. */
+  public void auditQuoteAccepted(UUID entity, UUID item, UUID actor, UUID operation, String fromStage, String toStage,
+      UUID fromOwner, UUID toOwner) {
+    jdbc.update("""
+        insert into public.work_item_events(entity_id,work_item_id,actor_id,source,event_type,from_stage,to_stage,
+          from_owner_id,to_owner_id,after)
+        values (?,?,?,'USER','QUOTE_ACCEPTED',?,?,?,?,jsonb_build_object('operationId',cast(? as uuid),'outcome','ACCEPTED'))
+        """, entity, item, actor, fromStage, toStage, fromOwner, toOwner, operation);
+  }
+
   public void auditInvoiceCompleted(UUID entity, UUID item, UUID operation, OperationState.Result result) {
     jdbc.update("""
         insert into public.work_item_events(entity_id,work_item_id,source,event_type,after)

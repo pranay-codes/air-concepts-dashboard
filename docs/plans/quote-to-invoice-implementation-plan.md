@@ -19,10 +19,11 @@
 ## 1. Executive Summary
 
 The green line turns one **Xero quote** into one **dashboard work item**. The item carries a single Job ID (the quote Reference) from the moment the quote is Sent until its invoice is fully paid.
-- The dashboard does not replace Xero or vWork. It **mirrors** their state, **coordinates** two hand-offs and **performs exactly three external writes**, each started by a person:
+- The dashboard does not replace Xero or vWork. It **mirrors** their state, **coordinates** two hand-offs and **performs exactly four external writes**, each started by a person:
   1. Create a vWork job from an accepted quote (no prices).
   2. Create a **draft** ACCREC invoice in the item's own Xero organisation.
   3. Attach the vWork report PDF to that draft.
+  4. Mark a **sent** quote as **accepted** in its own Xero organisation (GL-27, approved 23 November 2026). Confirmation step, one reserved operation, no second write after an unknown outcome.
 - Everything else is read: quote status, contact details, schedule, completion, invoice status and payment.
 - Each user's home screen becomes **My Work**. It shows what that user must do next across every entity they can see.
 - The Director gets an **oversight view**.
@@ -202,6 +203,7 @@ All facts below were confirmed by reading the repository on 19 November 2026.
 | Director overview | Counts by stage per entity, the oldest item in To invoice and Invoice drafted, and the completed-not-invoiced list | GL-24 |
 | Sync freshness | Per entity and system: last successful sync, manual refresh, and failures shown immediately | GL-25 |
 | Data safety | No prices in vWork payloads. Tokens and keys never reach the browser, logs or git | GL-26 |
+| Accept in Xero (added 23 November 2026, approved) | Finance or a Director marks a Sent quote as Accepted in Xero from the job, after a confirmation step. Xero is updated first through `external_operations`; on success the item moves Quoted → To schedule with the Service Manager as owner, exactly as the sync hand-off does. A rejected or unknown outcome is recorded, never retried silently. The live Xero write is disabled (`quote-accept-mode: disabled`) until a demo-organisation check confirms the endpoint, scope and idempotency behaviour | GL-27 |
 
 ### 3.3 Business rules
 
@@ -212,7 +214,7 @@ All facts below were confirmed by reading the repository on 19 November 2026.
 5. **Elapsed time never closes an item.**
 6. **Late:** stage ∈ {TO_INVOICE, INVOICE_DRAFTED} and the number of working days since entering the stage is greater than the entity threshold.
 7. **Partial payment** keeps the item in INVOICED.
-8. **Read-only rule:** the dashboard never writes to Xero quotes, never changes a Xero invoice's status and never sends an invoice. The FA approves and sends in Xero.
+8. **Write rule:** the dashboard writes to a Xero quote only to mark it Accepted, from the job, with confirmation (GL-27). It never changes a Xero invoice's status and never sends an invoice. The FA approves and sends in Xero.
 
 ### 3.4 Unclear or missing decisions
 

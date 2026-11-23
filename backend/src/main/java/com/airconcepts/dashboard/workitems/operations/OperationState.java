@@ -3,7 +3,7 @@ package com.airconcepts.dashboard.workitems.operations;
 /** Conservative transition rules. Callers must persist each change under the entity and item locks. */
 public final class OperationState {
   public enum Status { PENDING, UNKNOWN, FAILED, SUCCEEDED }
-  public enum Result { CREATED, LINKED_EXISTING, NOT_FOUND }
+  public enum Result { CREATED, LINKED_EXISTING, NOT_FOUND, ACCEPTED }
   private OperationState() {}
 
   public static Status unknown(Status previous) {
