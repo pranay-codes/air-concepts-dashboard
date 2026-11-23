@@ -42,7 +42,32 @@ describe("GL-25 sync freshness", () => {
     expect(within(vwork).getByText("Not synced")).toBeInTheDocument();
     expect(within(vwork).getByText("No successful sync recorded")).toBeInTheDocument();
     expect(screen.queryByText("Synced")).not.toBeInTheDocument();
+    expect(
+      within(xero).getByText(/could not confirm that the complete list was received/),
+    ).toBeInTheDocument();
     expect(screen.getByText(/QUOTE_SYNC_COMPLETENESS_UNVERIFIED/)).toBeInTheDocument();
+  });
+
+  it("explains a missing vWork connection and handles unknown failures safely", async () => {
+    const { api } = testApi(() => ({
+      entityId: entity.id,
+      xero: { latest: { ...failure, errorCode: "UNRECOGNISED_ERROR" } },
+      vwork: { latest: { ...failure, errorCode: "VWORK_NOT_CONNECTED" } },
+    }));
+    render(
+      <SyncFreshness
+        api={api}
+        entity={entity}
+        profile={profile}
+        onChanged={vi.fn()}
+        onAccessDenied={vi.fn()}
+      />,
+    );
+    const vwork = await screen.findByRole("group", { name: "vWork data" });
+    expect(within(vwork).getByText(/vWork is not connected/)).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("group", { name: "Xero data" })).getByText(/could not be completed/),
+    ).toBeInTheDocument();
   });
 
   it("runs an explicit entity-scoped refresh and reloads work", async () => {
