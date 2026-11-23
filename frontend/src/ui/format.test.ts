@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { amountSign, formatMoney, formatDate, dateRange, formatDecimal } from "./format";
+import {
+  amountSign,
+  formatDate,
+  formatDecimal,
+  formatFetchTime,
+  formatMoney,
+  dateRange,
+} from "./format";
 
 describe("UC5 shared financial and calendar formatting", () => {
   it("reads the sign of an amount from its digits, treating zero and missing values as neutral", () => {
@@ -48,5 +55,13 @@ describe("UC5 shared financial and calendar formatting", () => {
       from: "2028-02-01",
       to: "2028-02-29",
     });
+  });
+  it("shows dashboard times in Auckland time without a zone name", () => {
+    // 21:01 UTC on 22 Nov 2026 is 10:01 am NZDT on 23 Nov 2026.
+    expect(formatFetchTime("2026-11-22T21:01:00Z")).toBe("23 Nov 2026, 10:01 am");
+    expect(formatFetchTime(new Date("2026-11-22T21:01:00Z"))).toBe("23 Nov 2026, 10:01 am");
+    expect(formatFetchTime("2026-11-22T21:01:00Z")).not.toMatch(/NZDT|NZST|Pacific\/Auckland|\(/);
+    expect(formatFetchTime(null)).toBe("Fetch time unknown");
+    expect(formatFetchTime("not a date")).toBe("Fetch time unknown");
   });
 });

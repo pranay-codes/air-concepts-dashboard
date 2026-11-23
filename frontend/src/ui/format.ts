@@ -100,14 +100,11 @@ const fetchTimeFormat = new Intl.DateTimeFormat("en-NZ", {
   hour: "numeric",
   minute: "2-digit",
   timeZone: "Pacific/Auckland",
-  timeZoneName: "short",
 });
 export function formatFetchTime(value: string | Date | null | undefined): string {
   if (!value) return "Fetch time unknown";
   const date = value instanceof Date ? value : new Date(value);
-  return Number.isFinite(date.getTime())
-    ? `${fetchTimeFormat.format(date)} (Pacific/Auckland)`
-    : "Fetch time unknown";
+  return Number.isFinite(date.getTime()) ? fetchTimeFormat.format(date) : "Fetch time unknown";
 }
 
 export type DatePreset = "ALL_DATES" | "THIS_MONTH" | "LAST_THREE_MONTHS" | "THIS_YEAR" | "CUSTOM";
