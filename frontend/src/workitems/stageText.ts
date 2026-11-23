@@ -39,3 +39,33 @@ export function eventLabel(event: string): string {
   };
   return labels[event] ?? event.replaceAll("_", " ").toLowerCase();
 }
+
+/** Plain-language reason for each attention code the server can set. Unknown codes get a safe generic reason. */
+export function attentionLabel(code: string, stage?: WorkItem["stage"]): string {
+  switch (code) {
+    case "NO_DEFAULT_OWNER":
+      return "No default owner is set for this entity. A Director can set one in Workflow settings.";
+    case "NO_SERVICE_MANAGER":
+      return "No Service Manager is set for this entity. Set one in Workflow settings before accepted quotes can be handed off.";
+    case "OWNER_INACTIVE":
+      return "The current owner is no longer active. Assign another owner.";
+    case "QUOTE_INVOICED_IN_XERO":
+      return "This quote was already invoiced in Xero. Check the invoice before continuing.";
+    case "INVOICE_MULTIPLE_MATCHES":
+      return "Multiple Xero invoices match this job. Review them in Xero before continuing.";
+    case "INVOICE_VOIDED":
+      return "The linked Xero invoice was voided. Review the job before continuing.";
+    case "XERO_STATUS_REGRESSED":
+      return "Xero now shows an earlier status for this quote. Check it in Xero.";
+    case "VWORK_JOB_CANCELLED":
+      return "The vWork job was cancelled. Check it in vWork before continuing.";
+    case "OPERATION_UNKNOWN":
+      return "A write to Xero needs review. Check the quote or invoice in Xero before trying again.";
+    case "OPERATION_FAILED":
+      return stage === "QUOTED"
+        ? "The last acceptance in Xero did not apply. Review the quote, then try again."
+        : "The last write did not apply. Review the job before trying again.";
+    default:
+      return "This job needs review.";
+  }
+}
