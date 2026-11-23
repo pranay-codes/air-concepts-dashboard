@@ -1307,3 +1307,9 @@ button.danger:hover:not(:disabled) {
     grid-template-columns: minmax(0, 1fr) 18rem;
   }
 }
+
+.mywork-sync-explanation {
+  flex-basis: 100%;
+  color: var(--text-primary, #17242e);
+  max-width: 65ch;
+}
