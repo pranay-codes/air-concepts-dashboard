@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { testApi } from "../test/api";
 import { entities, profile } from "../test/fixtures";
@@ -35,9 +35,14 @@ describe("GL-25 sync freshness", () => {
         onAccessDenied={vi.fn()}
       />,
     );
-    expect(await screen.findByText(/Xero last synced/)).toBeInTheDocument();
-    expect(screen.getByText(/Xero refresh did not complete/)).toBeInTheDocument();
-    expect(screen.getByText("vWork has not synced yet.")).toBeInTheDocument();
+    const xero = await screen.findByRole("group", { name: "Xero data" });
+    expect(within(xero).getByText("Sync failed")).toBeInTheDocument();
+    expect(within(xero).getByText(/Last successful sync/)).toBeInTheDocument();
+    const vwork = screen.getByRole("group", { name: "vWork data" });
+    expect(within(vwork).getByText("Not synced")).toBeInTheDocument();
+    expect(within(vwork).getByText("No successful sync recorded")).toBeInTheDocument();
+    expect(screen.queryByText("Synced")).not.toBeInTheDocument();
+    expect(screen.getByText(/QUOTE_SYNC_COMPLETENESS_UNVERIFIED/)).toBeInTheDocument();
   });
 
   it("runs an explicit entity-scoped refresh and reloads work", async () => {
@@ -74,7 +79,7 @@ describe("GL-25 sync freshness", () => {
       />,
     );
     expect(await screen.findByText("Sync status is unavailable. Try again.")).toBeInTheDocument();
-    expect(screen.queryByText(/Xero last synced/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Synced")).not.toBeInTheDocument();
   });
 
   it("reports a failed refresh and re-reads the last recorded status", async () => {
@@ -139,8 +144,10 @@ describe("GL-25 sync freshness", () => {
         onAccessDenied={vi.fn()}
       />,
     );
-    expect(await screen.findByText("Xero has not synced yet.")).toBeInTheDocument();
+    const xero = await screen.findByRole("group", { name: "Xero data" });
+    expect(within(xero).getByText("Not synced")).toBeInTheDocument();
     finishFirst({ entityId: entity.id, xero: { lastSuccess: run }, vwork: {} });
-    await waitFor(() => expect(screen.queryByText(/Xero last synced/)).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText("Synced")).not.toBeInTheDocument());
+    expect(within(xero).getByText("Not synced")).toBeInTheDocument();
   });
 });

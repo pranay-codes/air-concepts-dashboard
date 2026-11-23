@@ -378,11 +378,228 @@ label {
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
   gap: var(--space-4);
 }
-.mywork-list {
+.mywork-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.mywork-header h1 {
+  margin: 0;
+}
+.mywork-header p {
+  margin: 0;
+}
+.mywork-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.mywork-sync {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-control);
+}
+.mywork-sync p {
+  margin: 0;
+}
+.mywork-sync-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-6);
+}
+.mywork-sync-row > button {
+  margin-left: auto;
+}
+.mywork-sync-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.mywork-sync-name {
+  font-weight: 600;
+}
+.mywork-details {
+  font-size: var(--font-small);
+}
+.mywork-details summary {
+  cursor: pointer;
+  color: var(--accent);
+}
+.mywork-details h3 {
+  font-size: var(--font-small);
+  margin: var(--space-2) 0 var(--space-1);
+}
+.mywork-details ul {
+  margin: 0;
+  padding-left: var(--space-4);
+  color: var(--secondary);
+}
+.mywork-summary {
   display: grid;
-  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.mywork-tile {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 3.5rem;
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--boundary);
+}
+.mywork-tile strong {
+  font-size: 1.75rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.mywork-tile[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--selected);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  font-weight: 600;
+}
+.mywork-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-2);
+}
+.mywork-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 10rem;
+}
+.mywork-field label {
+  font-size: var(--font-small);
+  color: var(--secondary);
+}
+.mywork-table-wrap {
+  max-height: 65vh;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-control);
+  margin-bottom: var(--space-4);
+}
+.mywork-table {
+  width: 100%;
+  min-width: 48rem;
+  border-collapse: collapse;
+  font-size: var(--font-small);
+}
+.mywork-table th,
+.mywork-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--divider);
+}
+.mywork-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface);
+  color: var(--secondary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.mywork-table tbody th {
+  font-weight: 400;
+}
+.mywork-table tbody th .supporting,
+.mywork-table td .supporting {
+  display: block;
+  margin: var(--space-1) 0 0;
+}
+.mywork-table td > .supporting {
+  margin-top: var(--space-1);
+}
+.mywork-table td > .badge + .supporting,
+.mywork-table td > .supporting + .supporting {
+  margin-top: var(--space-1);
+}
+.mywork-row.urgent > th:first-child {
+  box-shadow: inset 3px 0 var(--warning);
+}
+.mywork-needs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+.mywork-needs .supporting {
+  flex-basis: 100%;
+  margin: 0;
+}
+.badge.neutral {
+  background: var(--divider);
+  color: var(--text);
+}
+.mywork-cards {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4);
   padding: 0;
   list-style: none;
+}
+.mywork-card {
+  padding: var(--space-4);
+}
+.mywork-card.urgent {
+  border-left: 3px solid var(--warning);
+}
+.mywork-card p {
+  margin: 0 0 var(--space-2);
+}
+.mywork-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+.mywork-card h3 {
+  margin: 0;
+}
+.mywork-facts {
+  margin: var(--space-3) 0;
+}
+.mywork-facts > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--divider);
+}
+.mywork-facts dt {
+  color: var(--secondary);
+}
+.mywork-facts dd {
+  margin: 0;
+  text-align: right;
+}
+.mywork-action {
+  width: 100%;
+  min-height: 2.75rem;
 }
 .search-field {
   grid-column: span 2;
