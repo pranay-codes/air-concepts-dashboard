@@ -44,4 +44,12 @@ class ManualInvoiceLookupTest {
     when(client.searchReference(access,"Job 42",1)).thenReturn(page(invoice(first,"Job 42"),invoice(second,"Job 42")));
     assertThat(lookup.find(access,"Job 42",null)).containsExactlyInAnyOrder(first,second);
   }
+  @Test void gl_status_05_budgetedSearchStopsAfterTwoPagesWithoutClaimingCompleteness() {
+    when(client.searchReference(access,"J-1",1,true)).thenReturn(new InvoiceViews.Page(List.of(),1,100,3,201));
+    when(client.searchReference(access,"J-1",2,true)).thenReturn(new InvoiceViews.Page(List.of(),2,100,3,201));
+    assertThatThrownBy(() -> new ManualInvoiceLookup(client,true).find(access,"J-1",null))
+        .isInstanceOfSatisfying(com.airconcepts.dashboard.web.ApiFailure.class,
+            failure -> assertThat(failure.code()).isEqualTo("INVOICE_LOOKUP_INCOMPLETE"));
+    verify(client,never()).searchReference(access,"J-1",3,true);
+  }
 }

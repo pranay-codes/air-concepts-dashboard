@@ -50,9 +50,9 @@ public class InvoiceMirrorRepository {
           where w.entity_id=? and w.xero_invoice_id is null
             and w.stage in ('QUOTED','TO_SCHEDULE','SCHEDULED','TO_INVOICE','INVOICE_DRAFTED','INVOICED')
         )
-        select id,job_id,quote_number,xero_contact_id from candidates order by id limit 20
+        select id,job_id,quote_number,xero_contact_id from candidates order by id limit 5
         offset (greatest(0,(select count(*) from public.green_line_sync_runs where entity_id=? and system='XERO')-1)
-          % greatest(1,((select count(*) from candidates)+19)/20) * 20)
+          % greatest(1,((select count(*) from candidates)+4)/5) * 5)
         """, (r,n) -> new Unlinked(r.getObject(1,UUID.class),r.getString(2),r.getString(3),r.getObject(4,UUID.class)),entity,entity);
   }
   public boolean conflictingReferences(QuoteMirrorService.Mapping mapping, Unlinked candidate) {

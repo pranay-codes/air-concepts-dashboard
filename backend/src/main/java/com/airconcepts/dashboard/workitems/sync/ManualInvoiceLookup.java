@@ -10,8 +10,11 @@ import org.springframework.http.HttpStatus;
 /** Searches documented invoice reference results; an empty result never authorises a write. */
 public final class ManualInvoiceLookup {
   private static final int MAX_PAGES=100;
+  private static final int EARLY_MAX_PAGES=2;
   private final XeroInvoiceClient client;
-  public ManualInvoiceLookup(XeroInvoiceClient client) { this.client=Objects.requireNonNull(client); }
+  private final boolean budgeted;
+  public ManualInvoiceLookup(XeroInvoiceClient client) { this(client,false); }
+  public ManualInvoiceLookup(XeroInvoiceClient client, boolean budgeted) { this.client=Objects.requireNonNull(client); this.budgeted=budgeted; }
   public Set<UUID> find(TenantAccess access, String jobId, String quoteNumber) {
     var terms=new LinkedHashSet<String>();
     for (String term : new String[]{jobId,quoteNumber}) {
@@ -23,8 +26,9 @@ public final class ManualInvoiceLookup {
     var matches=new LinkedHashSet<UUID>();
     for (String term : terms) {
       long count=-1; int pages=-1; var seen=new HashSet<UUID>();
-      for (int page=1; page<=MAX_PAGES; page++) {
-        var result=client.searchReference(access,term,page);
+      int maxPages=budgeted ? EARLY_MAX_PAGES : MAX_PAGES;
+      for (int page=1; page<=maxPages; page++) {
+        var result=budgeted ? client.searchReference(access,term,page,true) : client.searchReference(access,term,page);
         if (result==null) throw incomplete();
         if (count<0) { count=result.itemCount(); pages=result.pageCount(); }
         else if (count!=result.itemCount() || pages!=result.pageCount()) throw incomplete();
@@ -35,7 +39,7 @@ public final class ManualInvoiceLookup {
             matches.add(invoice.id());
         }
         if (page>=pages) break;
-        if (page==MAX_PAGES) throw incomplete();
+        if (page==maxPages) throw incomplete();
       }
     }
     return Set.copyOf(matches);

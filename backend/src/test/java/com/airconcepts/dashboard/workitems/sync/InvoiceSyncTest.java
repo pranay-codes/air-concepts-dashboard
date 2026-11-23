@@ -133,6 +133,30 @@ class InvoiceSyncTest {
         error -> assertThat(error.code()).isEqualTo("INVOICE_SYNC_PARTIAL"));
     verify(mirror).link(new QuoteMirrorService.Mapping(entity,tenant,grant),valid,invoice,true);
   }
+  @Test void gl_status_05_budgetStopEndsOptionalLookupAsPartial() {
+    var first=new InvoiceMirrorRepository.Unlinked(item,"J-1","Q-1");
+    var second=new InvoiceMirrorRepository.Unlinked(UUID.randomUUID(),"J-2","Q-2");
+    when(repository.unlinkedAllOpen(entity)).thenReturn(List.of(first,second));
+    var calls=new int[1];
+    InvoiceSync.Lookup lookup=(a,j,q) -> {
+      calls[0]++;
+      throw new ApiFailure(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS,"XERO_DAILY_BUDGET_RESERVED","Reserved");
+    };
+    var withLookup=new InvoiceSync(repository,mirror,source,true,lookup,true);
+    assertThatThrownBy(() -> withLookup.run(entity,() -> access)).isInstanceOfSatisfying(ApiFailure.class,
+        failure -> assertThat(failure.code()).isEqualTo("INVOICE_SYNC_PARTIAL"));
+    assertThat(calls[0]).isEqualTo(1);
+    verifyNoInteractions(source,mirror);
+  }
+  @Test void gl_status_05_tooManyPotentialMatchesDoNotTriggerUnboundedInvoiceReads() {
+    var candidate=new InvoiceMirrorRepository.Unlinked(item,"J-1","Q-1");
+    when(repository.unlinkedAllOpen(entity)).thenReturn(List.of(candidate));
+    var many=Set.of(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID());
+    var sync=new InvoiceSync(repository,mirror,source,true,(a,j,q) -> many,true);
+    assertThatThrownBy(() -> sync.run(entity,() -> access)).isInstanceOfSatisfying(ApiFailure.class,
+        failure -> assertThat(failure.code()).isEqualTo("INVOICE_SYNC_PARTIAL"));
+    verifyNoInteractions(source,mirror);
+  }
   @Test void gl_status_04_documentedMatchRequiresTheSameXeroContact() {
     var quoteContact=UUID.randomUUID();
     var candidate=new InvoiceMirrorRepository.Unlinked(item,null,"Q-1",quoteContact);

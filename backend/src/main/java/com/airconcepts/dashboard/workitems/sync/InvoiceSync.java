@@ -66,6 +66,7 @@ public final class InvoiceSync {
       var mapping=new QuoteMirrorService.Mapping(entity,current.tenantId(),current.grantId());
       if (earlyLookupVerified) {
         if (matches.isEmpty()) continue;
+        if (matches.size()>3) throw new ApiFailure(HttpStatus.CONFLICT,"INVOICE_LOOKUP_INCOMPLETE","Too many possible invoice matches need review.");
         if (repository.conflictingReferences(mapping,candidate)) { mirror.multiple(mapping,candidate); continue; }
         var valid=new ArrayList<XeroInvoiceClient.WorkflowInvoice>();
         for (var id : matches) {
@@ -100,6 +101,10 @@ public final class InvoiceSync {
       mirror.link(new QuoteMirrorService.Mapping(entity,current.tenantId(),current.grantId()),candidate,invoice,sentVerified);
       seen++;
       } catch (ApiFailure failure) {
+        if (Set.of("XERO_DAILY_BUDGET_RESERVED","XERO_DAILY_BUDGET_UNAVAILABLE").contains(failure.code())) {
+          partial=true;
+          break;
+        }
         if (!itemFailure(failure)) throw failure;
         partial=true;
       }

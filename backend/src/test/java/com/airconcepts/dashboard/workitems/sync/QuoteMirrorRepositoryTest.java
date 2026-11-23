@@ -809,9 +809,17 @@ class QuoteMirrorRepositoryTest {
       var first=repository.unlinkedAllOpen(entity);
       jdbc.update("insert into public.green_line_sync_runs(id,entity_id,system,trigger,started_at,status) values (?,?,'XERO','SCHEDULED',now(),'RUNNING')",UUID.randomUUID(),entity);
       var second=repository.unlinkedAllOpen(entity);
-      assertThat(first).hasSize(20);
-      assertThat(second).hasSize(1);
+      assertThat(first).hasSize(5);
+      assertThat(second).hasSize(5);
       assertThat(first).doesNotContainAnyElementsOf(second);
+      var seen=new HashSet<UUID>();
+      first.forEach(row -> seen.add(row.itemId()));
+      second.forEach(row -> seen.add(row.itemId()));
+      for (int page=0;page<3;page++) {
+        jdbc.update("insert into public.green_line_sync_runs(id,entity_id,system,trigger,started_at,status) values (?,?,'XERO','SCHEDULED',now(),'RUNNING')",UUID.randomUUID(),entity);
+        repository.unlinkedAllOpen(entity).forEach(row -> seen.add(row.itemId()));
+      }
+      assertThat(seen).hasSize(21);
       tx.setRollbackOnly();
     });
   }

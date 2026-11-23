@@ -59,7 +59,8 @@ public class GreenLineSyncConfig {
         (access,jobId,quoteNumber) -> mock.find(access,jobId,quoteNumber).matches().stream()
             .map(XeroInvoiceClient.WorkflowInvoice::id).collect(java.util.stream.Collectors.toUnmodifiableSet()),true);
     // Xero documents SentToContact as the indicator shown as sent in its interface.
-    return new InvoiceSync(repository,mirror,invoices::workflowInvoice,true,new ManualInvoiceLookup(invoices)::find,earlyInvoiceLookup,false,true);
+    return new InvoiceSync(repository,mirror,invoices::workflowInvoice,true,
+        new ManualInvoiceLookup(invoices,earlyInvoiceLookup)::find,earlyInvoiceLookup,false,true);
   }
 
   @Bean GreenLineSyncService greenLineSyncService(GreenLineSyncRunRepository repository, QuoteSync quotes,

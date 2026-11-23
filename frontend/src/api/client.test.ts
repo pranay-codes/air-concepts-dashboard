@@ -20,6 +20,15 @@ function json(value: unknown, status = 200) {
 const isString = (value: unknown): value is string => typeof value === "string";
 
 describe("UC5 authenticated API boundary", () => {
+  it("GL-STATUS-05 explains the reserved Xero daily budget", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(json({ code: "XERO_DAILY_BUDGET_RESERVED" }, 429));
+    const api = new ApiClient("", auth(), fetcher);
+    await expect(api.json("/api/v1/entities", isString)).rejects.toThrow(
+      "Xero's daily request allowance is nearly used. Try again later.",
+    );
+  });
   it("GL-STATUS-01 explains a partial invoice refresh", async () => {
     const fetcher = vi
       .fn<typeof fetch>()

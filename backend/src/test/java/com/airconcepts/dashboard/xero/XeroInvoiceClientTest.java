@@ -56,6 +56,51 @@ class XeroInvoiceClientTest {
     server.expect(anything()).andRespond(withSuccess("{\"Invoices\":[]}", MediaType.APPLICATION_JSON));
     assertThatThrownBy(() -> client.searchReference(access, "J-123", 1)).isInstanceOf(ProviderFailure.class);
   }
+  @Test void gl_status_05_earlySearchStopsWhenXeroReportsOnlyTheDailyReserve() {
+    server.expect(anything()).andRespond(withSuccess(page(invoice("ACCREC")).replace("\"pageSize\":25", "\"pageSize\":100"),
+        MediaType.APPLICATION_JSON).header("X-DayLimit-Remaining","150"));
+    client.searchReference(access,"Q-1",1,true);
+    assertThatThrownBy(() -> client.searchReference(access,"Q-1",2,true))
+        .isInstanceOfSatisfying(com.airconcepts.dashboard.web.ApiFailure.class,
+            failure -> assertThat(failure.code()).isEqualTo("XERO_DAILY_BUDGET_RESERVED"));
+    server.verify();
+  }
+  @Test void gl_status_05_earlySearchCannotAssumeBudgetWhenHeaderIsMissing() {
+    server.expect(anything()).andRespond(withSuccess(page(invoice("ACCREC")).replace("\"pageSize\":25", "\"pageSize\":100"),
+        MediaType.APPLICATION_JSON));
+    assertThatThrownBy(() -> client.searchReference(access,"Q-1",1,true))
+        .isInstanceOfSatisfying(com.airconcepts.dashboard.web.ApiFailure.class,
+            failure -> assertThat(failure.code()).isEqualTo("XERO_DAILY_BUDGET_UNAVAILABLE"));
+  }
+  @Test void gl_status_05_dailyReserveIsScopedToTheXeroTenant() {
+    var other=new TenantAccess(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID(),"synthetic-other",java.util.Set.of("accounting.invoices.read"));
+    var body=page(invoice("ACCREC")).replace("\"pageSize\":25", "\"pageSize\":100");
+    server.expect(header("xero-tenant-id",access.tenantId().toString()))
+        .andRespond(withSuccess(body,MediaType.APPLICATION_JSON).header("X-DayLimit-Remaining","150"));
+    server.expect(header("xero-tenant-id",other.tenantId().toString()))
+        .andRespond(withSuccess(body,MediaType.APPLICATION_JSON).header("X-DayLimit-Remaining","200"));
+    client.searchReference(access,"Q-1",1,true);
+    assertThat(client.searchReference(other,"Q-1",1,true).items()).hasSize(1);
+    server.verify();
+  }
+  @Test void gl_status_05_lowBudgetIsRecheckedAfterThePause() {
+    var now=new java.util.concurrent.atomic.AtomicReference<>(Instant.parse("2026-11-07T00:00:00Z"));
+    Clock mutableClock=new Clock() {
+      @Override public ZoneId getZone() { return ZoneOffset.UTC; }
+      @Override public Clock withZone(ZoneId zone) { return this; }
+      @Override public Instant instant() { return now.get(); }
+    };
+    var timed=new XeroInvoiceClient(builder.build(),mutableClock);
+    var body=page(invoice("ACCREC")).replace("\"pageSize\":25", "\"pageSize\":100");
+    server.expect(anything()).andRespond(withSuccess(body,MediaType.APPLICATION_JSON).header("X-DayLimit-Remaining","150"));
+    server.expect(anything()).andRespond(withSuccess(body,MediaType.APPLICATION_JSON).header("X-DayLimit-Remaining","800"));
+    timed.searchReference(access,"Q-1",1,true);
+    assertThatThrownBy(() -> timed.searchReference(access,"Q-1",1,true))
+        .isInstanceOf(com.airconcepts.dashboard.web.ApiFailure.class);
+    now.set(now.get().plusSeconds(16*60));
+    assertThat(timed.searchReference(access,"Q-1",1,true).items()).hasSize(1);
+    server.verify();
+  }
 
   @Test void gl19_searchRequiresScopeAndUsesSharedTenantPacer() {
     var pacedTenants = new java.util.ArrayList<UUID>();
