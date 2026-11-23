@@ -10,7 +10,7 @@ import { Modal } from "../ui/Modal";
 import { CreateJobForm } from "./CreateJobForm";
 import { InvoiceReviewDialog } from "./InvoiceReviewDialog";
 import type { WorkItemDetail } from "./contracts";
-import { eventLabel, flagLabel, stageLabels } from "./stageText";
+import { attentionLabel, eventLabel, flagLabel, stageLabels } from "./stageText";
 
 const quoteStatusLabels: Record<string, string> = {
   DRAFT: "Draft",
@@ -124,6 +124,7 @@ function DetailContent({
   const current = saved && saved.summary.version >= value.summary.version ? saved : value;
   const [notes, setNotes] = useState(current.notes ?? "");
   const [date, setDate] = useState(current.summary.followUpDate ?? "");
+  const [justSaved, setJustSaved] = useState(false);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [reason, setReason] = useState("");
   const [reasonError, setReasonError] = useState(false);
@@ -154,6 +155,11 @@ function DetailContent({
     if (dirty && !window.confirm("Discard unsaved changes before returning to jobs?")) return;
     onDirty(false);
     onBack();
+  }
+  function discardNotes() {
+    setNotes(current.notes ?? "");
+    setDate(current.summary.followUpDate ?? "");
+    setJustSaved(false);
   }
   function failure(error: unknown) {
     if (isAccessFailure(error)) onAccessDenied();
@@ -189,7 +195,7 @@ function DetailContent({
       setDate(result.summary.followUpDate ?? "");
       onDirty(false);
       onChanged();
-      setMessage("Changes saved.");
+      setJustSaved(true);
     }
   }
   async function close(event: FormEvent) {
@@ -289,49 +295,127 @@ function DetailContent({
       />
     );
   const attention = current.summary.attention;
+  const followUp = current.summary.followUpDate;
+  const owner = current.summary.owner?.displayName;
+  const quoteStatus =
+    quoteStatusLabels[current.summary.xeroQuoteStatus] ?? current.summary.xeroQuoteStatus;
+  const hasPrimaryAction =
+    allowed.has("MARK_ACCEPTED") ||
+    (allowed.has("CREATE_JOB") && !jobSubmitted) ||
+    (allowed.has("PREPARE_INVOICE") && !invoiceSubmitted) ||
+    allowed.has("MARK_SENT");
+  const noteStatus = action.busy
+    ? "Saving…"
+    : dirty
+      ? "Unsaved changes"
+      : justSaved
+        ? "Changes saved."
+        : "";
   return (
     <>
       <button type="button" className="text-button" onClick={back}>
         {backLabel}
       </button>
 
-      <header className="detail-header">
-        <h1 id="job-detail-heading" tabIndex={-1}>
-          {current.summary.quoteNumber}
-        </h1>
-        <p className="supporting">
-          {entity.displayName} · {customer}
-        </p>
-        <div className="badge-row">
-          <span className="badge">{stageLabels[current.summary.stage]}</span>
-          <span className="badge">
-            Quote{" "}
-            {(
-              quoteStatusLabels[current.summary.xeroQuoteStatus] ?? current.summary.xeroQuoteStatus
-            ).toLowerCase()}
-          </span>
+      <header className="job-header">
+        <div className="job-title">
+          <p className="supporting">{entity.displayName}</p>
+          <h1 id="job-detail-heading" tabIndex={-1}>
+            {current.summary.quoteNumber}
+          </h1>
+          <p>{customer}</p>
+        </div>
+        {hasPrimaryAction ? (
+          <section className="header-actions" aria-label="Next action">
+            {allowed.has("MARK_ACCEPTED") ? (
+              <button
+                type="button"
+                className="primary"
+                disabled={action.busy || dirty}
+                onClick={() => {
+                  setReason("");
+                  setDialog("accept");
+                }}
+              >
+                Accept quote in Xero
+              </button>
+            ) : null}
+            {allowed.has("CREATE_JOB") && !jobSubmitted ? (
+              <button
+                type="button"
+                className="primary"
+                onClick={() => {
+                  if (dirty && !window.confirm("Discard unsaved changes before creating a job?"))
+                    return;
+                  setNotes(current.notes ?? "");
+                  setDate(current.summary.followUpDate ?? "");
+                  setRetryOperationId(undefined);
+                  setJobFormOpen(true);
+                }}
+              >
+                Create vWork job
+              </button>
+            ) : null}
+            {allowed.has("PREPARE_INVOICE") && !invoiceSubmitted ? (
+              <button
+                type="button"
+                className="primary"
+                disabled={action.busy || dirty}
+                onClick={() => setInvoiceReview(true)}
+              >
+                Prepare invoice
+              </button>
+            ) : null}
+            {allowed.has("MARK_SENT") ? (
+              <button
+                type="button"
+                className="primary"
+                disabled={action.busy || dirty}
+                onClick={() => setConfirmSent(true)}
+              >
+                Mark invoice as sent
+              </button>
+            ) : null}
+          </section>
+        ) : null}
+      </header>
+
+      <dl className="status-strip" aria-label="Job summary">
+        <div>
+          <dt>Stage</dt>
+          <dd>{stageLabels[current.summary.stage]}</dd>
+        </div>
+        <div>
+          <dt>Xero quote</dt>
+          <dd>{quoteStatus}</dd>
+        </div>
+        <div>
+          <dt>Owner</dt>
+          <dd>{owner ?? "Not assigned"}</dd>
+        </div>
+        <div>
+          <dt>Follow-up</dt>
+          <dd>{followUp ? formatDate(followUp) : "Not set"}</dd>
+        </div>
+        <div>
+          <dt>Total</dt>
+          <dd className="money">{total}</dd>
+        </div>
+        <div>
+          <dt>Job ID</dt>
+          <dd>{current.summary.jobId || "Not recorded"}</dd>
+        </div>
+      </dl>
+
+      {current.summary.flags.length ? (
+        <div className="badge-row" aria-label="Data checks">
           {current.summary.flags.map((flag) => (
             <span key={flag} className="badge warning">
               {flagLabel(flag)}
             </span>
           ))}
-          {attention.length ? <span className="badge warning">Needs attention</span> : null}
         </div>
-        <dl className="detail-metadata detail-figures">
-          <div>
-            <dt>Total</dt>
-            <dd className="money">{total}</dd>
-          </div>
-          <div>
-            <dt>Job ID</dt>
-            <dd>{current.summary.jobId || "Not recorded"}</dd>
-          </div>
-          <div>
-            <dt>Owner</dt>
-            <dd>{current.summary.owner?.displayName ?? "Not assigned"}</dd>
-          </div>
-        </dl>
-      </header>
+      ) : null}
 
       {message ? (
         <p role="status" className="notice success">
@@ -340,20 +424,15 @@ function DetailContent({
       ) : null}
       {action.error && !dialog && !confirmSent ? <Failure error={action.error} /> : null}
 
-      {attention.includes("INVOICE_MULTIPLE_MATCHES") ? (
-        <p role="status" className="notice warning">
-          Multiple Xero invoices match this job. Review them in Xero before continuing.
-        </p>
-      ) : null}
-      {attention.includes("OPERATION_UNKNOWN") ? (
-        <p role="alert" className="notice warning">
-          A write to Xero needs review. Check the quote or invoice in Xero before trying again.
-        </p>
-      ) : null}
-      {current.summary.stage === "QUOTED" && attention.includes("OPERATION_FAILED") ? (
-        <p role="status" className="notice warning">
-          The last acceptance in Xero did not apply. Review the quote, then try again.
-        </p>
+      {attention.length ? (
+        <section className="attention-panel" aria-labelledby="job-attention-title">
+          <h2 id="job-attention-title">Needs attention</h2>
+          <ul>
+            {attention.map((code) => (
+              <li key={code}>{attentionLabel(code, current.summary.stage)}</li>
+            ))}
+          </ul>
+        </section>
       ) : null}
       {current.operations
         .filter(
@@ -393,72 +472,23 @@ function DetailContent({
           </section>
         ))}
 
-      <section className="action-row" aria-label="Next action">
-        {allowed.has("MARK_ACCEPTED") ? (
-          <button
-            type="button"
-            className="primary"
-            disabled={action.busy || dirty}
-            onClick={() => {
-              setReason("");
-              setDialog("accept");
-            }}
-          >
-            Accept quote in Xero
-          </button>
-        ) : null}
-        {allowed.has("CREATE_JOB") && !jobSubmitted ? (
-          <button
-            type="button"
-            className="primary"
-            onClick={() => {
-              if (dirty && !window.confirm("Discard unsaved changes before creating a job?"))
-                return;
-              setNotes(current.notes ?? "");
-              setDate(current.summary.followUpDate ?? "");
-              setRetryOperationId(undefined);
-              setJobFormOpen(true);
-            }}
-          >
-            Create vWork job
-          </button>
-        ) : null}
-        {allowed.has("PREPARE_INVOICE") && !invoiceSubmitted ? (
-          <button
-            type="button"
-            className="primary"
-            disabled={action.busy || dirty}
-            onClick={() => setInvoiceReview(true)}
-          >
-            Prepare invoice
-          </button>
-        ) : null}
-        {allowed.has("MARK_SENT") ? (
-          <button
-            type="button"
-            className="primary"
-            disabled={action.busy || dirty}
-            onClick={() => setConfirmSent(true)}
-          >
-            Mark invoice as sent
-          </button>
-        ) : null}
-      </section>
-
-      <div className="detail-grid">
-        <div className="detail-main">
+      <div className="job-layout">
+        <div className="job-main">
           <section className="card" aria-labelledby="job-notes-title">
-            <h2 id="job-notes-title">Notes and follow-up</h2>
+            <h2 id="job-notes-title">Follow-up and notes</h2>
             {allowed.has("EDIT_NOTES") ? (
               <form onSubmit={save} className="detail-form">
                 <div className="field">
                   <label htmlFor="job-follow-up">Follow-up date</label>
                   <input
                     id="job-follow-up"
-                    className="field-date"
+                    className="date-compact"
                     type="date"
                     value={date}
-                    onChange={(event) => setDate(event.target.value)}
+                    onChange={(event) => {
+                      setDate(event.target.value);
+                      setJustSaved(false);
+                    }}
                   />
                   <p className="supporting">Optional. Clear the date to remove the follow-up.</p>
                 </div>
@@ -466,55 +496,38 @@ function DetailContent({
                   <label htmlFor="job-notes">Notes</label>
                   <textarea
                     id="job-notes"
-                    rows={5}
+                    rows={6}
                     maxLength={4000}
+                    aria-describedby="job-notes-count"
                     value={notes}
-                    onChange={(event) => setNotes(event.target.value)}
+                    onChange={(event) => {
+                      setNotes(event.target.value);
+                      setJustSaved(false);
+                    }}
                   />
-                  <p className="supporting">{notes.length} of 4,000 characters</p>
+                  <p id="job-notes-count" className="supporting">
+                    {notes.length} of 4,000 characters
+                  </p>
                 </div>
-                <div className="action-row">
-                  <button type="submit" className="primary" disabled={!dirty || action.busy}>
-                    {action.busy ? "Saving…" : "Save changes"}
-                  </button>
-                  {dirty ? <span className="supporting">Unsaved changes</span> : null}
+                <div className="form-footer">
+                  <div className="form-actions">
+                    <button type="submit" className="primary" disabled={!dirty || action.busy}>
+                      {action.busy ? "Saving…" : "Save changes"}
+                    </button>
+                    <button type="button" disabled={!dirty || action.busy} onClick={discardNotes}>
+                      Discard changes
+                    </button>
+                  </div>
+                  <p role="status" className="supporting form-status">
+                    {noteStatus}
+                  </p>
                 </div>
               </form>
             ) : (
               <>
-                <p>Follow-up: {formatDate(current.summary.followUpDate)}</p>
+                <p>Follow-up: {followUp ? formatDate(followUp) : "Not set"}</p>
                 <p>{current.notes || "No notes recorded"}</p>
               </>
-            )}
-          </section>
-
-          <section className="card" aria-labelledby="job-invoice-title">
-            <h2 id="job-invoice-title">Invoice</h2>
-            {current.invoice?.invoiceId ? (
-              <dl className="detail-metadata">
-                <div>
-                  <dt>Invoice number</dt>
-                  <dd>{current.invoice.invoiceNumber || "Not recorded"}</dd>
-                </div>
-                <div>
-                  <dt>Status</dt>
-                  <dd>{current.invoice.status || "Not recorded"}</dd>
-                </div>
-                <div>
-                  <dt>Total</dt>
-                  <dd className="money">{current.invoice.total ?? "Not recorded"}</dd>
-                </div>
-                <div>
-                  <dt>Amount due</dt>
-                  <dd className="money">{current.invoice.amountDue ?? "Not recorded"}</dd>
-                </div>
-                <div>
-                  <dt>Due date</dt>
-                  <dd>{formatDate(current.invoice.dueDate)}</dd>
-                </div>
-              </dl>
-            ) : (
-              <p className="supporting">No invoice linked yet.</p>
             )}
           </section>
 
@@ -537,15 +550,46 @@ function DetailContent({
           </section>
         </div>
 
-        {allowed.has("CLOSE_LOST") || allowed.has("NO_INVOICE_NEEDED") ? (
-          <aside className="detail-aside" aria-labelledby="job-other-title">
-            <section className="card">
-              <h2 id="job-other-title">Other actions</h2>
-              <p className="supporting">These close the job. Each needs a reason.</p>
+        <aside className="job-side">
+          <section className="card" aria-labelledby="job-invoice-title">
+            <h2 id="job-invoice-title">Invoice</h2>
+            {current.invoice?.invoiceId ? (
+              <dl className="compact-list">
+                <div>
+                  <dt>Number</dt>
+                  <dd>{current.invoice.invoiceNumber || "Not recorded"}</dd>
+                </div>
+                <div>
+                  <dt>Status</dt>
+                  <dd>{current.invoice.status || "Not recorded"}</dd>
+                </div>
+                <div>
+                  <dt>Total</dt>
+                  <dd className="money">{current.invoice.total ?? "Not recorded"}</dd>
+                </div>
+                <div>
+                  <dt>Amount due</dt>
+                  <dd className="money">{current.invoice.amountDue ?? "Not recorded"}</dd>
+                </div>
+                <div>
+                  <dt>Due date</dt>
+                  <dd>{formatDate(current.invoice.dueDate)}</dd>
+                </div>
+              </dl>
+            ) : (
+              <p className="supporting">No invoice is linked to this job yet.</p>
+            )}
+          </section>
+
+          {allowed.has("CLOSE_LOST") || allowed.has("NO_INVOICE_NEEDED") ? (
+            <section className="card" aria-labelledby="job-close-title">
+              <h2 id="job-close-title">Close this job</h2>
+              <p className="supporting">Closing needs a reason.</p>
               <div className="stack-actions">
                 {allowed.has("CLOSE_LOST") ? (
                   <button
                     type="button"
+                    className="danger"
                     disabled={action.busy || dirty}
                     onClick={() => {
                       setReason("");
@@ -571,8 +615,8 @@ function DetailContent({
                 ) : null}
               </div>
             </section>
-          </aside>
-        ) : null}
+          ) : null}
+        </aside>
       </div>
 
       {invoiceReview ? (

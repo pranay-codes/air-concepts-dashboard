@@ -931,12 +931,50 @@ button.danger {
   padding-left: 20px;
 }
 
-/* Job detail: header, two-column layout and form field spacing. */
-.detail-header h1 {
-  margin-bottom: var(--space-2);
+/* Job detail: compact header, status strip, attention panel and two-column layout. */
+.job-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
 }
-.detail-header .supporting {
-  margin-bottom: var(--space-3);
+.job-title h1 {
+  margin: 0 0 var(--space-1);
+}
+.job-title p {
+  margin: 0;
+}
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.status-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: var(--space-3) var(--space-4);
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-card);
+}
+.status-strip > div {
+  min-width: 0;
+}
+.status-strip dt {
+  font-size: var(--font-small);
+  color: var(--secondary);
+}
+.status-strip dd {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.status-strip .money {
+  text-align: left;
 }
 .badge-row {
   display: flex;
@@ -944,31 +982,41 @@ button.danger {
   gap: var(--space-2);
   margin-bottom: var(--space-4);
 }
-.detail-figures {
-  margin-top: var(--space-4);
+.attention-panel {
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--warning-surface);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-card);
 }
-.detail-grid {
+.attention-panel h2 {
+  font-size: 1rem;
+  margin: 0 0 var(--space-2);
+  color: var(--warning);
+}
+.attention-panel ul {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+.job-layout {
   display: grid;
-  gap: var(--space-6);
+  gap: var(--space-4);
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
 }
-.detail-main {
+.job-main,
+.job-side {
   display: grid;
-  gap: var(--space-6);
+  gap: var(--space-4);
   min-width: 0;
 }
-.detail-main > .card,
-.detail-aside > .card {
+.job-layout .card {
   margin: 0;
+  padding: var(--space-4);
 }
-.detail-main h2,
-.detail-aside h2 {
-  font-size: var(--font-section);
+.job-layout .card h2 {
+  font-size: 1.125rem;
   margin-bottom: var(--space-3);
-}
-.detail-aside {
-  min-width: 0;
 }
 .detail-form .field {
   display: grid;
@@ -978,17 +1026,51 @@ button.danger {
 .detail-form label {
   font-weight: 600;
 }
-.field-date {
-  width: min(100%, 11rem);
-}
 .detail-form textarea {
   width: min(100%, 40rem);
   min-height: 7rem;
+  resize: vertical;
+}
+.form-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.form-status {
+  margin: 0;
+}
+.compact-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+}
+.compact-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.compact-list dt {
+  color: var(--secondary);
+}
+.compact-list dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 .stack-actions {
   display: grid;
   gap: var(--space-2);
   justify-items: start;
+}
+.stack-actions button {
+  width: 100%;
 }
 .activity-list {
   display: grid;
@@ -996,8 +1078,15 @@ button.danger {
   margin: 0;
   padding-left: 1.25rem;
 }
+button.danger {
+  color: var(--error);
+  border-color: var(--error);
+}
+button.danger:hover:not(:disabled) {
+  background: var(--error-surface);
+}
 @media (width >= 75rem) {
-  .detail-grid {
-    grid-template-columns: minmax(0, 1fr) 16rem;
+  .job-layout {
+    grid-template-columns: minmax(0, 1fr) 18rem;
   }
 }
