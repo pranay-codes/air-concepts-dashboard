@@ -1,6 +1,7 @@
 package com.airconcepts.dashboard.workitems;
 
 import com.airconcepts.dashboard.security.CurrentUser;
+import com.airconcepts.dashboard.workitems.operations.QuoteAcceptService;
 import java.time.LocalDate;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -11,7 +12,15 @@ import org.springframework.transaction.annotation.Transactional;
 public class WorkItemActions {
   private final WorkItemService writes;
   private final WorkItemReadService reads;
-  public WorkItemActions(WorkItemService writes, WorkItemReadService reads) { this.writes = writes; this.reads = reads; }
+  private final QuoteAcceptService quoteAccept;
+  public WorkItemActions(WorkItemService writes, WorkItemReadService reads, QuoteAcceptService quoteAccept) {
+    this.writes = writes; this.reads = reads; this.quoteAccept = quoteAccept;
+  }
+  /** Not transactional: the Xero call happens between the service's own reservation and completion transactions. */
+  public WorkItemReadService.Detail acceptQuote(CurrentUser user, UUID entity, UUID item, int version) {
+    quoteAccept.submit(user, entity, item, version);
+    return reads.get(user, entity, item);
+  }
 
   @Transactional
   public WorkItemReadService.Detail edit(CurrentUser user, UUID entity, UUID item, int version,

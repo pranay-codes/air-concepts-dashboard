@@ -57,6 +57,17 @@ class WorkItemPolicyTest {
         WorkItemStage.CLOSED, false, false)).isFalse();
   }
 
+  @Test void gl08_onlyFinanceCanAcceptASentQuoteAndOnlyWhileQuoted() {
+    assertThat(WorkItemPolicy.allowed(WorkItemAction.MARK_ACCEPTED, Role.FINANCIAL_ADMIN, true, false, false,
+        WorkItemStage.QUOTED, false, false)).isTrue();
+    assertThat(WorkItemPolicy.allowed(WorkItemAction.MARK_ACCEPTED, Role.DIRECTOR, true, false, false,
+        WorkItemStage.QUOTED, false, false)).isTrue();
+    assertThat(WorkItemPolicy.allowed(WorkItemAction.MARK_ACCEPTED, Role.STANDARD_USER, true, true, true,
+        WorkItemStage.QUOTED, false, false)).isFalse();
+    assertThat(WorkItemPolicy.allowed(WorkItemAction.MARK_ACCEPTED, Role.FINANCIAL_ADMIN, true, false, false,
+        WorkItemStage.TO_SCHEDULE, false, false)).isFalse();
+  }
+
   @Test void gl05_onlyFinanceCanCloseAQuotedItemAsLost() {
     assertThat(WorkItemPolicy.allowed(WorkItemAction.CLOSE_LOST, Role.FINANCIAL_ADMIN, true, false, false,
         WorkItemStage.QUOTED, false, false)).isTrue();

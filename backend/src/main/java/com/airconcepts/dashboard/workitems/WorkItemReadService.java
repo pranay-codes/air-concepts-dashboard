@@ -7,6 +7,7 @@ import com.airconcepts.dashboard.web.ApiFailure;
 import com.airconcepts.dashboard.workitems.operations.ExternalOperationRepository;
 import com.airconcepts.dashboard.workitems.operations.OperationState;
 import com.airconcepts.dashboard.workitems.operations.InvoiceGateway;
+import com.airconcepts.dashboard.workitems.operations.QuoteAcceptGateway;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -51,10 +52,12 @@ public class WorkItemReadService {
   private final JdbcTemplate jdbc;
   private final Clock clock;
   private final InvoiceGateway invoiceGateway;
-  public WorkItemReadService(JdbcTemplate jdbc, Clock clock) { this(jdbc,clock,null); }
+  private final QuoteAcceptGateway quoteAcceptGateway;
+  public WorkItemReadService(JdbcTemplate jdbc, Clock clock) { this(jdbc,clock,null,null); }
+  public WorkItemReadService(JdbcTemplate jdbc, Clock clock, InvoiceGateway invoiceGateway) { this(jdbc,clock,invoiceGateway,null); }
   @org.springframework.beans.factory.annotation.Autowired
-  public WorkItemReadService(JdbcTemplate jdbc, Clock clock, InvoiceGateway invoiceGateway) {
-    this.jdbc = jdbc; this.clock = clock; this.invoiceGateway=invoiceGateway;
+  public WorkItemReadService(JdbcTemplate jdbc, Clock clock, InvoiceGateway invoiceGateway, QuoteAcceptGateway quoteAcceptGateway) {
+    this.jdbc = jdbc; this.clock = clock; this.invoiceGateway=invoiceGateway; this.quoteAcceptGateway=quoteAcceptGateway;
   }
 
   @Transactional
@@ -98,6 +101,10 @@ public class WorkItemReadService {
     if (invoiceGateway!=null && invoiceGateway.available() && !loaded.invoiceOperation() && !loaded.blockingOperation()
         && WorkItemPolicy.allowed(WorkItemAction.PREPARE_INVOICE,user.role(),true,false,false,data.summary().stage(),
             data.vwork().jobId()!=null,data.invoice().invoiceId()!=null)) allowed.add(WorkItemAction.PREPARE_INVOICE);
+    if (quoteAcceptGateway!=null && quoteAcceptGateway.available() && !loaded.blockingOperation()
+        && "SENT".equals(data.summary().xeroQuoteStatus())
+        && WorkItemPolicy.allowed(WorkItemAction.MARK_ACCEPTED,user.role(),true,false,false,data.summary().stage(),
+            data.vwork().jobId()!=null,data.invoice().invoiceId()!=null)) allowed.add(WorkItemAction.MARK_ACCEPTED);
     var events = jdbc.query("""
         select ev.*,actor.display_name actor_name from public.work_item_events ev
         left join public.staff_users actor on actor.id=ev.actor_id

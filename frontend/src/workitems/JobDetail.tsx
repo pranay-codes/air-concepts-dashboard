@@ -12,6 +12,20 @@ import { InvoiceReviewDialog } from "./InvoiceReviewDialog";
 import type { WorkItemDetail } from "./contracts";
 import { eventLabel, flagLabel, stageLabels } from "./stageText";
 
+const quoteStatusLabels: Record<string, string> = {
+  DRAFT: "Draft",
+  SENT: "Sent",
+  ACCEPTED: "Accepted",
+  DECLINED: "Declined",
+  INVOICED: "Invoiced",
+  DELETED: "Deleted",
+};
+
+/** Outcomes where Xero may already have changed: the page must not offer another write until reviewed. */
+const holdCodes = new Set(["EXTERNAL_OUTCOME_UNKNOWN", "QUOTE_ACCEPT_RECORD_FAILED"]);
+
+type Dialog = "accept" | "close-lost" | "no-invoice-needed" | null;
+
 export function JobDetail({
   api,
   entity,
@@ -110,7 +124,7 @@ function DetailContent({
   const current = saved && saved.summary.version >= value.summary.version ? saved : value;
   const [notes, setNotes] = useState(current.notes ?? "");
   const [date, setDate] = useState(current.summary.followUpDate ?? "");
-  const [dialog, setDialog] = useState<"close-lost" | "no-invoice-needed" | null>(null);
+  const [dialog, setDialog] = useState<Dialog>(null);
   const [reason, setReason] = useState("");
   const [reasonError, setReasonError] = useState(false);
   const [confirmSent, setConfirmSent] = useState(false);
@@ -123,6 +137,9 @@ function DetailContent({
   const [jobSubmitted, setJobSubmitted] = useState(false);
   const action = useAction(`${entity.id}:${itemId}`);
   const dirty = notes !== (current.notes ?? "") || date !== (current.summary.followUpDate ?? "");
+  const customer = current.summary.customerName || "Customer not recorded";
+  const total = formatMoney(current.summary.quoteTotal, current.summary.currency);
+  const holdAccept = action.error instanceof ApiError && holdCodes.has(action.error.code);
   useEffect(() => {
     const target =
       (focusFollowUp ? document.getElementById("job-follow-up") : null) ??
@@ -141,6 +158,11 @@ function DetailContent({
   function failure(error: unknown) {
     if (isAccessFailure(error)) onAccessDenied();
     if (error instanceof ApiError && error.code === "WORK_ITEM_CHANGED") {
+      setSaved(null);
+      onReload();
+    }
+    if (error instanceof ApiError && holdCodes.has(error.code)) {
+      // Show the held state in place of the stale view; the server, not the page, decides what happens next.
       setSaved(null);
       onReload();
     }
@@ -172,12 +194,12 @@ function DetailContent({
   }
   async function close(event: FormEvent) {
     event.preventDefault();
+    if (dialog === null || dialog === "accept") return;
     if (!reason.trim() || reason.length > 500) {
       setReasonError(true);
       document.getElementById("job-close-reason")?.focus();
       return;
     }
-    if (!dialog) return;
     const result = await action.run(
       (signal) =>
         api.closeWorkItem(
@@ -194,6 +216,19 @@ function DetailContent({
       setDialog(null);
       onChanged();
       setMessage("Job closed.");
+      requestAnimationFrame(() => document.getElementById("job-detail-heading")?.focus());
+    }
+  }
+  async function acceptQuote() {
+    const result = await action.run(
+      (signal) => api.markQuoteAccepted(entity.id, itemId, current.summary.version, signal),
+      failure,
+    );
+    if (result) {
+      setSaved(result);
+      setDialog(null);
+      setMessage("Quote accepted in Xero. The job is now To schedule.");
+      onChanged();
       requestAnimationFrame(() => document.getElementById("job-detail-heading")?.focus());
     }
   }
@@ -253,31 +288,71 @@ function DetailContent({
         }}
       />
     );
+  const attention = current.summary.attention;
   return (
     <>
-      <button type="button" onClick={back}>
+      <button type="button" className="text-button" onClick={back}>
         {backLabel}
       </button>
-      <h1 id="job-detail-heading" tabIndex={-1}>
-        {current.summary.quoteNumber}
-      </h1>
-      <p>
-        {entity.displayName} · {current.summary.customerName || "Customer not recorded"}
-      </p>
-      <p>Job ID: {current.summary.jobId || "Not recorded"}</p>
-      <p>
-        Stage: {stageLabels[current.summary.stage]} · Quote: {current.summary.xeroQuoteStatus}
-      </p>
-      <p>Total: {formatMoney(current.summary.quoteTotal, current.summary.currency)}</p>
-      {current.summary.flags.map((flag) => (
-        <span key={flag} className="badge warning">
-          {flagLabel(flag)}
-        </span>
-      ))}
-      {current.summary.attention.length ? <p className="badge warning">Needs attention</p> : null}
-      {current.summary.attention.includes("INVOICE_MULTIPLE_MATCHES") ? (
-        <p role="status">
+
+      <header className="detail-header">
+        <h1 id="job-detail-heading" tabIndex={-1}>
+          {current.summary.quoteNumber}
+        </h1>
+        <p className="supporting">
+          {entity.displayName} · {customer}
+        </p>
+        <div className="badge-row">
+          <span className="badge">{stageLabels[current.summary.stage]}</span>
+          <span className="badge">
+            Quote{" "}
+            {(
+              quoteStatusLabels[current.summary.xeroQuoteStatus] ?? current.summary.xeroQuoteStatus
+            ).toLowerCase()}
+          </span>
+          {current.summary.flags.map((flag) => (
+            <span key={flag} className="badge warning">
+              {flagLabel(flag)}
+            </span>
+          ))}
+          {attention.length ? <span className="badge warning">Needs attention</span> : null}
+        </div>
+        <dl className="detail-metadata detail-figures">
+          <div>
+            <dt>Total</dt>
+            <dd className="money">{total}</dd>
+          </div>
+          <div>
+            <dt>Job ID</dt>
+            <dd>{current.summary.jobId || "Not recorded"}</dd>
+          </div>
+          <div>
+            <dt>Owner</dt>
+            <dd>{current.summary.owner?.displayName ?? "Not assigned"}</dd>
+          </div>
+        </dl>
+      </header>
+
+      {message ? (
+        <p role="status" className="notice success">
+          {message}
+        </p>
+      ) : null}
+      {action.error && !dialog && !confirmSent ? <Failure error={action.error} /> : null}
+
+      {attention.includes("INVOICE_MULTIPLE_MATCHES") ? (
+        <p role="status" className="notice warning">
           Multiple Xero invoices match this job. Review them in Xero before continuing.
+        </p>
+      ) : null}
+      {attention.includes("OPERATION_UNKNOWN") ? (
+        <p role="alert" className="notice warning">
+          A write to Xero needs review. Check the quote or invoice in Xero before trying again.
+        </p>
+      ) : null}
+      {current.summary.stage === "QUOTED" && attention.includes("OPERATION_FAILED") ? (
+        <p role="status" className="notice warning">
+          The last acceptance in Xero did not apply. Review the quote, then try again.
         </p>
       ) : null}
       {current.operations
@@ -285,7 +360,7 @@ function DetailContent({
           (operation) => operation.kind === "VWORK_CREATE_JOB" && operation.status === "UNKNOWN",
         )
         .map((operation) => (
-          <section key={operation.id} aria-label="Unconfirmed vWork job">
+          <section key={operation.id} aria-label="Unconfirmed vWork job" className="notice warning">
             <p>
               The vWork job creation outcome is unconfirmed. Check for the job before trying again.
             </p>
@@ -303,7 +378,7 @@ function DetailContent({
       {current.operations
         .filter((operation) => operation.allowRetry)
         .map((operation) => (
-          <section key={operation.id} aria-label="Failed vWork job">
+          <section key={operation.id} aria-label="Failed vWork job" className="notice warning">
             <p>The previous job creation failed. Review the details before trying again.</p>
             <button
               type="button"
@@ -317,122 +392,189 @@ function DetailContent({
             </button>
           </section>
         ))}
-      {allowed.has("CREATE_JOB") && !jobSubmitted ? (
-        <button
-          type="button"
-          onClick={() => {
-            if (dirty && !window.confirm("Discard unsaved changes before creating a job?")) return;
-            setNotes(current.notes ?? "");
-            setDate(current.summary.followUpDate ?? "");
-            setRetryOperationId(undefined);
-            setJobFormOpen(true);
-          }}
-        >
-          Create vWork job
-        </button>
-      ) : null}
-      {message ? <p role="status">{message}</p> : null}
-      {action.error && !dialog && !confirmSent ? <Failure error={action.error} /> : null}
-      <h3>Invoice</h3>
-      {current.invoice?.invoiceId ? (
-        <dl>
-          <dt>Invoice number</dt>
-          <dd>{current.invoice.invoiceNumber || "Not recorded"}</dd>
-          <dt>Status</dt>
-          <dd>{current.invoice.status || "Not recorded"}</dd>
-          <dt>Total</dt>
-          <dd>{current.invoice.total ?? "Not recorded"}</dd>
-          <dt>Amount due</dt>
-          <dd>{current.invoice.amountDue ?? "Not recorded"}</dd>
-          <dt>Due date</dt>
-          <dd>{formatDate(current.invoice.dueDate)}</dd>
-        </dl>
-      ) : (
-        <p>No invoice linked.</p>
-      )}
-      {allowed.has("MARK_SENT") ? (
-        <button type="button" disabled={action.busy || dirty} onClick={() => setConfirmSent(true)}>
-          Mark invoice as sent
-        </button>
-      ) : null}
-      {allowed.has("PREPARE_INVOICE") && !invoiceSubmitted ? (
-        <button
-          type="button"
-          disabled={action.busy || dirty}
-          onClick={() => setInvoiceReview(true)}
-        >
-          Prepare invoice
-        </button>
-      ) : null}
-      <h3>Notes and follow-up</h3>
-      {allowed.has("EDIT_NOTES") ? (
-        <form onSubmit={save}>
-          <label>
-            Follow-up date
-            <input
-              id="job-follow-up"
-              type="date"
-              value={date}
-              onChange={(event) => setDate(event.target.value)}
-            />
-          </label>
-          <label>
-            Notes
-            <textarea
-              value={notes}
-              maxLength={4000}
-              onChange={(event) => setNotes(event.target.value)}
-            />
-          </label>
-          <button type="submit" disabled={!dirty || action.busy}>
-            {action.busy ? "Saving…" : "Save changes"}
+
+      <section className="action-row" aria-label="Next action">
+        {allowed.has("MARK_ACCEPTED") ? (
+          <button
+            type="button"
+            className="primary"
+            disabled={action.busy || dirty}
+            onClick={() => {
+              setReason("");
+              setDialog("accept");
+            }}
+          >
+            Accept quote in Xero
           </button>
-        </form>
-      ) : (
-        <>
-          <p>Follow-up: {formatDate(current.summary.followUpDate)}</p>
-          <p>{current.notes || "No notes recorded"}</p>
-        </>
-      )}
-      {allowed.has("CLOSE_LOST") ? (
-        <button
-          type="button"
-          disabled={action.busy || dirty}
-          onClick={() => {
-            setReason("");
-            setReasonError(false);
-            setDialog("close-lost");
-          }}
-        >
-          Close as lost
-        </button>
-      ) : null}
-      {allowed.has("NO_INVOICE_NEEDED") ? (
-        <button
-          type="button"
-          disabled={action.busy || dirty}
-          onClick={() => {
-            setReason("");
-            setReasonError(false);
-            setDialog("no-invoice-needed");
-          }}
-        >
-          No invoice needed
-        </button>
-      ) : null}
-      <h3>Activity</h3>
-      {current.events.length ? (
-        <ol>
-          {current.events.map((event) => (
-            <li key={event.id}>
-              {eventLabel(event.eventType ?? "")} · {event.actor?.displayName ?? "System"} ·{" "}
-              {formatFetchTime(event.at)}
-            </li>
-          ))}
-        </ol>
-      ) : (
-        <p>No activity recorded.</p>
-      )}
+        ) : null}
+        {allowed.has("CREATE_JOB") && !jobSubmitted ? (
+          <button
+            type="button"
+            className="primary"
+            onClick={() => {
+              if (dirty && !window.confirm("Discard unsaved changes before creating a job?"))
+                return;
+              setNotes(current.notes ?? "");
+              setDate(current.summary.followUpDate ?? "");
+              setRetryOperationId(undefined);
+              setJobFormOpen(true);
+            }}
+          >
+            Create vWork job
+          </button>
+        ) : null}
+        {allowed.has("PREPARE_INVOICE") && !invoiceSubmitted ? (
+          <button
+            type="button"
+            className="primary"
+            disabled={action.busy || dirty}
+            onClick={() => setInvoiceReview(true)}
+          >
+            Prepare invoice
+          </button>
+        ) : null}
+        {allowed.has("MARK_SENT") ? (
+          <button
+            type="button"
+            className="primary"
+            disabled={action.busy || dirty}
+            onClick={() => setConfirmSent(true)}
+          >
+            Mark invoice as sent
+          </button>
+        ) : null}
+      </section>
+
+      <div className="detail-grid">
+        <div className="detail-main">
+          <section className="card" aria-labelledby="job-notes-title">
+            <h2 id="job-notes-title">Notes and follow-up</h2>
+            {allowed.has("EDIT_NOTES") ? (
+              <form onSubmit={save} className="detail-form">
+                <div className="field">
+                  <label htmlFor="job-follow-up">Follow-up date</label>
+                  <input
+                    id="job-follow-up"
+                    className="field-date"
+                    type="date"
+                    value={date}
+                    onChange={(event) => setDate(event.target.value)}
+                  />
+                  <p className="supporting">Optional. Clear the date to remove the follow-up.</p>
+                </div>
+                <div className="field">
+                  <label htmlFor="job-notes">Notes</label>
+                  <textarea
+                    id="job-notes"
+                    rows={5}
+                    maxLength={4000}
+                    value={notes}
+                    onChange={(event) => setNotes(event.target.value)}
+                  />
+                  <p className="supporting">{notes.length} of 4,000 characters</p>
+                </div>
+                <div className="action-row">
+                  <button type="submit" className="primary" disabled={!dirty || action.busy}>
+                    {action.busy ? "Saving…" : "Save changes"}
+                  </button>
+                  {dirty ? <span className="supporting">Unsaved changes</span> : null}
+                </div>
+              </form>
+            ) : (
+              <>
+                <p>Follow-up: {formatDate(current.summary.followUpDate)}</p>
+                <p>{current.notes || "No notes recorded"}</p>
+              </>
+            )}
+          </section>
+
+          <section className="card" aria-labelledby="job-invoice-title">
+            <h2 id="job-invoice-title">Invoice</h2>
+            {current.invoice?.invoiceId ? (
+              <dl className="detail-metadata">
+                <div>
+                  <dt>Invoice number</dt>
+                  <dd>{current.invoice.invoiceNumber || "Not recorded"}</dd>
+                </div>
+                <div>
+                  <dt>Status</dt>
+                  <dd>{current.invoice.status || "Not recorded"}</dd>
+                </div>
+                <div>
+                  <dt>Total</dt>
+                  <dd className="money">{current.invoice.total ?? "Not recorded"}</dd>
+                </div>
+                <div>
+                  <dt>Amount due</dt>
+                  <dd className="money">{current.invoice.amountDue ?? "Not recorded"}</dd>
+                </div>
+                <div>
+                  <dt>Due date</dt>
+                  <dd>{formatDate(current.invoice.dueDate)}</dd>
+                </div>
+              </dl>
+            ) : (
+              <p className="supporting">No invoice linked yet.</p>
+            )}
+          </section>
+
+          <section className="card" aria-labelledby="job-activity-title">
+            <h2 id="job-activity-title">Activity</h2>
+            {current.events.length ? (
+              <ol className="activity-list">
+                {current.events.map((event) => (
+                  <li key={event.id}>
+                    <span>{eventLabel(event.eventType ?? "")}</span>{" "}
+                    <span className="supporting">
+                      · {event.actor?.displayName ?? "System"} · {formatFetchTime(event.at)}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="supporting">No activity recorded.</p>
+            )}
+          </section>
+        </div>
+
+        {allowed.has("CLOSE_LOST") || allowed.has("NO_INVOICE_NEEDED") ? (
+          <aside className="detail-aside" aria-labelledby="job-other-title">
+            <section className="card">
+              <h2 id="job-other-title">Other actions</h2>
+              <p className="supporting">These close the job. Each needs a reason.</p>
+              <div className="stack-actions">
+                {allowed.has("CLOSE_LOST") ? (
+                  <button
+                    type="button"
+                    disabled={action.busy || dirty}
+                    onClick={() => {
+                      setReason("");
+                      setReasonError(false);
+                      setDialog("close-lost");
+                    }}
+                  >
+                    Close as lost
+                  </button>
+                ) : null}
+                {allowed.has("NO_INVOICE_NEEDED") ? (
+                  <button
+                    type="button"
+                    disabled={action.busy || dirty}
+                    onClick={() => {
+                      setReason("");
+                      setReasonError(false);
+                      setDialog("no-invoice-needed");
+                    }}
+                  >
+                    No invoice needed
+                  </button>
+                ) : null}
+              </div>
+            </section>
+          </aside>
+        ) : null}
+      </div>
+
       {invoiceReview ? (
         <InvoiceReviewDialog
           api={api}
@@ -471,7 +613,59 @@ function DetailContent({
           </button>
         </Modal>
       ) : null}
-      {dialog ? (
+      {dialog === "accept" ? (
+        <Modal
+          title="Accept quote in Xero"
+          onClose={() => {
+            if (!action.busy) setDialog(null);
+          }}
+        >
+          {action.error ? <Failure error={action.error} /> : null}
+          <dl className="detail-metadata">
+            <div>
+              <dt>Organisation</dt>
+              <dd>{entity.displayName}</dd>
+            </div>
+            <div>
+              <dt>Quote</dt>
+              <dd>{current.summary.quoteNumber}</dd>
+            </div>
+            <div>
+              <dt>Customer</dt>
+              <dd>{customer}</dd>
+            </div>
+            <div>
+              <dt>Total</dt>
+              <dd className="money">{total}</dd>
+            </div>
+          </dl>
+          <p>
+            Xero will show this quote as accepted. The job moves to To schedule, and its owner
+            becomes the Service Manager.
+          </p>
+          <p className="supporting">
+            If Xero&apos;s outcome cannot be confirmed, the job is held for review and is not
+            retried automatically.
+          </p>
+          <button
+            type="button"
+            className="primary"
+            disabled={action.busy || holdAccept}
+            onClick={() => void acceptQuote()}
+          >
+            {action.busy ? "Accepting…" : "Accept in Xero"}
+          </button>
+          <button
+            type="button"
+            data-autofocus
+            disabled={action.busy}
+            onClick={() => setDialog(null)}
+          >
+            Cancel
+          </button>
+        </Modal>
+      ) : null}
+      {dialog === "close-lost" || dialog === "no-invoice-needed" ? (
         <Modal
           title={dialog === "close-lost" ? "Close as lost" : "No invoice needed"}
           onClose={() => {

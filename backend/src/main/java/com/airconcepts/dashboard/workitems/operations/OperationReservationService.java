@@ -31,7 +31,9 @@ public class OperationReservationService {
   @Transactional
   public Reservation retry(CurrentUser user, UUID entity, UUID itemId, int version,
       ExternalOperationRepository.Kind kind, UUID previous, String lookup, String fingerprint) {
-    if (previous == null || kind != ExternalOperationRepository.Kind.VWORK_CREATE_JOB)
+    boolean retryable = kind == ExternalOperationRepository.Kind.VWORK_CREATE_JOB
+        || kind == ExternalOperationRepository.Kind.XERO_ACCEPT_QUOTE;
+    if (previous == null || !retryable)
       throw failure(HttpStatus.BAD_REQUEST,"OPERATION_INVALID","Choose an operation to retry.");
     return reserveAttempt(user,entity,itemId,version,kind,previous,lookup,fingerprint);
   }
@@ -55,6 +57,9 @@ public class OperationReservationService {
     } else if (kind == ExternalOperationRepository.Kind.XERO_CREATE_INVOICE) {
       if (role != Role.DIRECTOR && role != Role.FINANCIAL_ADMIN) throw new AccessDeniedException("Finance access is required.");
       if (item.stage() != WorkItemStage.TO_INVOICE || context.invoiceId() != null) throw stage();
+    } else if (kind == ExternalOperationRepository.Kind.XERO_ACCEPT_QUOTE) {
+      if (role != Role.DIRECTOR && role != Role.FINANCIAL_ADMIN) throw new AccessDeniedException("Finance access is required.");
+      if (item.stage() != WorkItemStage.QUOTED || !"SENT".equals(operations.quoteStatus(entity, itemId).orElse(null))) throw stage();
     } else {
       // Report attachment has a different policy and is not wired until its own workflow is implemented.
       throw stage();
