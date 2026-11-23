@@ -70,4 +70,20 @@ class VworkMirrorServiceTest {
             failure -> assertThat(failure.code()).isEqualTo("VWORK_SYNC_OPERATION_IN_PROGRESS"));
     verify(repository, never()).update(any(), any(), any(), any(), any(), anyInt(), any(), any());
   }
+  @Test void gl_status_03_scheduledVerifiedJobLinksFromQuoted() {
+    var quoted = new StageMachine.State(WorkItemStage.QUOTED, owner, null, null, false, false, Set.of());
+    when(repository.lock(entity, item, "revision")).thenReturn(Optional.of(item(quoted, null)));
+    when(repository.templateBelongsTo(entity, "template-a")).thenReturn(true);
+    when(repository.update(eq(entity), eq(item), any(), any(), any(), anyInt(), any(), any())).thenReturn(1);
+    service.apply(entity, item, "revision", job(VworkClient.Status.ASSIGNED, "Worker", now, null));
+    verify(repository).update(eq(entity), eq(item), any(), argThat(s -> s.stage()==WorkItemStage.SCHEDULED && s.jobLinked()),
+        eq(quoted), eq(1), eq(now), isNull());
+  }
+  @Test void gl_status_01_jobChangesRemainTrackedAfterInvoicingWithoutRegressingTheStage() {
+    var invoiced = new StageMachine.State(WorkItemStage.INVOICED, owner, null, null, true, true, Set.of());
+    when(repository.lock(entity, item, "revision")).thenReturn(Optional.of(item(invoiced, "mock-1")));
+    when(repository.update(eq(entity), eq(item), any(), any(), any(), anyInt(), any(), any())).thenReturn(1);
+    service.apply(entity, item, "revision", job(VworkClient.Status.COMPLETED, "Worker", now.minusSeconds(60), now));
+    verify(repository).update(eq(entity), eq(item), any(), eq(invoiced), eq(invoiced), eq(1), eq(now), isNull());
+  }
 }

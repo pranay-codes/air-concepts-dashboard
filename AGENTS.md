@@ -1,6 +1,8 @@
 # Air Concepts Financial Admin Dashboard: Agent Rules
 
 ## Learned Rules
+- For out-of-order job tracking, proceed without a vWork Test account and use official vWork documentation; record account-specific behaviour as unverified (human instruction, 23 November 2026).
+- For out-of-order job tracking, use official Xero documentation to guide testing; distinguish documentation-based tests from account-specific verification (human instruction, 23 November 2026).
 - For Quote-to-Invoice, do not set up or run PostgreSQL locally; use CI for database verification (human instruction, 19 November 2026).
 - For the Phase 1 client-delivery release, create only the requested tag and release notes; do not use Superpowers (human instruction, 12 November 2026).
 - For UC4, work without Docker: run no Docker commands or container-backed tests locally; use unit/mock/HTTP tests and report disposable-PostgreSQL coverage as not run (human reiterated 10 November 2026).

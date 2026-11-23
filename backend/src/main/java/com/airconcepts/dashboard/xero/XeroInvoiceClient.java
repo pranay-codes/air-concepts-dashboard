@@ -29,7 +29,7 @@ public class XeroInvoiceClient {
   @JsonIgnoreProperties(ignoreUnknown = true)
   private record Pagination(Integer page, Integer pageSize, Integer pageCount, Long itemCount) {}
   @JsonIgnoreProperties(ignoreUnknown = true)
-  private record Contact(@JsonProperty("Name") String name) {}
+  private record Contact(@JsonProperty("Name") String name, @JsonProperty("ContactID") UUID id) {}
   @JsonIgnoreProperties(ignoreUnknown = true)
   private record InvoiceBody(@JsonProperty("InvoiceID") UUID id, @JsonProperty("Type") InvoiceType type,
       @JsonProperty("InvoiceNumber") String number, @JsonProperty("Reference") String reference,
@@ -114,10 +114,14 @@ public class XeroInvoiceClient {
 
   /** Minimal linked-invoice observation; a sent flag is not proof of every Xero send path. */
   public record WorkflowInvoice(UUID id, String number, InvoiceStatus status, BigDecimal total,
-      BigDecimal amountDue, LocalDate dueDate, Boolean sentToContact, String reference) {
+      BigDecimal amountDue, LocalDate dueDate, Boolean sentToContact, String reference, UUID contactId) {
     public WorkflowInvoice(UUID id, String number, InvoiceStatus status, BigDecimal total,
         BigDecimal amountDue, LocalDate dueDate, Boolean sentToContact) {
-      this(id,number,status,total,amountDue,dueDate,sentToContact,null);
+      this(id,number,status,total,amountDue,dueDate,sentToContact,null,null);
+    }
+    public WorkflowInvoice(UUID id, String number, InvoiceStatus status, BigDecimal total,
+        BigDecimal amountDue, LocalDate dueDate, Boolean sentToContact, String reference) {
+      this(id,number,status,total,amountDue,dueDate,sentToContact,reference,null);
     }
   }
 
@@ -130,7 +134,8 @@ public class XeroInvoiceClient {
     var invoice = body.invoices().getFirst();
     if (invoice == null || !id.equals(invoice.id()) || invoice.type() != InvoiceType.ACCREC || invoice.status() == null) throw malformed();
     return new WorkflowInvoice(invoice.id(),invoice.number(),invoice.status(),invoice.total(),invoice.amountDue(),
-        date(invoice.dueString() != null ? invoice.dueString() : invoice.due(), true),invoice.sentToContact(),invoice.reference());
+        date(invoice.dueString() != null ? invoice.dueString() : invoice.due(), true),invoice.sentToContact(),invoice.reference(),
+        invoice.contact()==null ? null : invoice.contact().id());
   }
 
   private InvoiceViews.Summary summary(InvoiceBody i, InvoiceType type) {

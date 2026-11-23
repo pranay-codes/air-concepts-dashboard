@@ -731,6 +731,91 @@ class QuoteMirrorRepositoryTest {
     });
   }
 
+  @Test void gl_status_02_earlyInvoiceCandidateAndLinkAreScopedToTheEntity() {
+    transaction.executeWithoutResult(tx -> {
+      var entity=entity(); var mapping=mapping(entity); var other=entity(); var otherMapping=mapping(other);
+      var item=UUID.randomUUID(); var otherItem=UUID.randomUUID(); var invoice=UUID.randomUUID(); var manager=staff("STANDARD_USER");
+      jdbc.update("insert into public.green_line_entity_settings(entity_id,enabled,service_manager_id) values (?,true,?),(?,true,null)",entity,manager,other);
+      jdbc.update("insert into public.work_items(id,entity_id,xero_tenant_id,xero_quote_id,quote_number,job_id,xero_quote_status,stage) values (?,?,?,?,'Q-1','J-1','ACCEPTED','TO_SCHEDULE'),(?,?,?,?,'Q-2','J-2','ACCEPTED','TO_SCHEDULE')",
+          item,entity,mapping.tenantId(),UUID.randomUUID(),otherItem,other,otherMapping.tenantId(),UUID.randomUUID());
+      jdbc.execute("set local role service_role");
+      var repository=new InvoiceMirrorRepository(jdbc);
+      assertThat(repository.unlinked(entity)).isEmpty();
+      var candidates=repository.unlinkedAllOpen(entity);
+      assertThat(candidates).extracting(InvoiceMirrorRepository.Unlinked::itemId).containsExactly(item);
+      var mirror=new InvoiceMirrorService(repository,new QuoteMirrorRepository(jdbc),Clock.fixed(NOW,ZoneOffset.UTC));
+      mirror.link(mapping,candidates.getFirst(),new com.airconcepts.dashboard.xero.XeroInvoiceClient.WorkflowInvoice(invoice,"INV-1",
+          com.airconcepts.dashboard.invoices.InvoiceStatus.AUTHORISED,BigDecimal.TEN,BigDecimal.TEN,null,true,"J-1 / Q-1"),true);
+      assertThat(jdbc.queryForObject("select stage from public.work_items where id=?",String.class,item)).isEqualTo("INVOICED");
+      assertThat(jdbc.queryForObject("select xero_invoice_id from public.work_items where id=?",UUID.class,otherItem)).isNull();
+      jdbc.update("update public.work_items set vwork_job_id='synthetic-gl-status',vwork_status='ASSIGNED',technician_name='Synthetic',scheduled_start=? where id=?",
+          java.sql.Timestamp.from(NOW),item);
+      mirror.apply(mapping,item,new com.airconcepts.dashboard.xero.XeroInvoiceClient.WorkflowInvoice(invoice,"INV-1",
+          com.airconcepts.dashboard.invoices.InvoiceStatus.VOIDED,BigDecimal.TEN,BigDecimal.TEN,null,false,"J-1 / Q-1"),true);
+      assertThat(jdbc.queryForObject("select stage from public.work_items where id=?",String.class,item)).isEqualTo("SCHEDULED");
+      assertThat(jdbc.queryForObject("select owner_id from public.work_items where id=?",UUID.class,item)).isEqualTo(manager);
+      tx.setRollbackOnly();
+    });
+  }
+
+  @Test void gl_status_03_extraJobCandidatesStayWithinTheirEntity() {
+    transaction.executeWithoutResult(tx -> {
+      var entity=entity(); var mapping=mapping(entity); var other=entity(); var otherMapping=mapping(other);
+      var item=UUID.randomUUID(); var otherItem=UUID.randomUUID();
+      jdbc.update("insert into public.green_line_entity_settings(entity_id,enabled) values (?,true),(?,true)",entity,other);
+      jdbc.update("insert into public.work_items(id,entity_id,xero_tenant_id,xero_quote_id,quote_number,job_id,xero_quote_status,stage) values (?,?,?,?,'Q-1','J-1','SENT','QUOTED'),(?,?,?,?,'Q-2','J-2','SENT','QUOTED')",
+          item,entity,mapping.tenantId(),UUID.randomUUID(),otherItem,other,otherMapping.tenantId(),UUID.randomUUID());
+      jdbc.execute("set local role service_role");
+      var repository=new VworkMirrorRepository(jdbc);
+      assertThat(repository.candidates(entity)).isEmpty();
+      assertThat(repository.additionalTrackingCandidates(entity)).extracting(VworkMirrorRepository.Candidate::id).containsExactly(item);
+      tx.setRollbackOnly();
+    });
+  }
+
+  @Test void gl_status_04_sharedReferencesAreFlaggedWithinTheCorrectTenant() {
+    transaction.executeWithoutResult(tx -> {
+      var entity=entity(); var mapping=mapping(entity); var other=entity(); var otherMapping=mapping(other);
+      var item=UUID.randomUUID(); var otherItem=UUID.randomUUID(); var duplicate=UUID.randomUUID();
+      jdbc.update("insert into public.work_items(id,entity_id,xero_tenant_id,xero_quote_id,quote_number,job_id,xero_quote_status,stage) values (?,?,?,?,'Q-1','J-1','SENT','QUOTED'),(?,?,?,?,'Q-2','J-1','SENT','QUOTED')",
+          item,entity,mapping.tenantId(),UUID.randomUUID(),otherItem,other,otherMapping.tenantId(),UUID.randomUUID());
+      jdbc.execute("set local role service_role");
+      var repository=new InvoiceMirrorRepository(jdbc);
+      var candidate=new InvoiceMirrorRepository.Unlinked(item,"J-1","Q-1");
+      assertThat(repository.conflictingReferences(mapping,candidate)).isFalse();
+      jdbc.update("insert into public.work_items(id,entity_id,xero_tenant_id,xero_quote_id,quote_number,job_id,xero_quote_status,stage) values (?,?,?,?,'Q-3','J-1','SENT','QUOTED')",
+          duplicate,entity,mapping.tenantId(),UUID.randomUUID());
+      assertThat(repository.conflictingReferences(mapping,candidate)).isTrue();
+      var invoiceId=UUID.randomUUID();
+      var multi=new com.airconcepts.dashboard.xero.XeroInvoiceClient.WorkflowInvoice(invoiceId,"INV-1",
+          com.airconcepts.dashboard.invoices.InvoiceStatus.AUTHORISED,BigDecimal.TEN,BigDecimal.TEN,null,true,"Q-1 / Q-3");
+      assertThat(repository.invoiceConflictsWithOtherWorkItems(mapping,candidate,multi)).isTrue();
+      var unique=new com.airconcepts.dashboard.xero.XeroInvoiceClient.WorkflowInvoice(invoiceId,"INV-1",
+          com.airconcepts.dashboard.invoices.InvoiceStatus.AUTHORISED,BigDecimal.TEN,BigDecimal.TEN,null,true,"Q-1");
+      assertThat(repository.invoiceConflictsWithOtherWorkItems(mapping,candidate,unique)).isFalse();
+      tx.setRollbackOnly();
+    });
+  }
+
+  @Test void gl_status_01_invoiceLookupBatchesAdvanceWithEachSyncRun() {
+    transaction.executeWithoutResult(tx -> {
+      var entity=entity(); var mapping=mapping(entity);
+      jdbc.update("insert into public.green_line_entity_settings(entity_id,enabled) values (?,true)",entity);
+      for (int i=0;i<21;i++) jdbc.update("insert into public.work_items(id,entity_id,xero_tenant_id,xero_quote_id,quote_number,xero_quote_status,stage) values (?,?,?,?,?,'SENT','QUOTED')",
+          UUID.randomUUID(),entity,mapping.tenantId(),UUID.randomUUID(),"Q-"+i);
+      jdbc.update("insert into public.green_line_sync_runs(id,entity_id,system,trigger,started_at,status) values (?,?,'XERO','SCHEDULED',now(),'RUNNING')",UUID.randomUUID(),entity);
+      jdbc.execute("set local role service_role");
+      var repository=new InvoiceMirrorRepository(jdbc);
+      var first=repository.unlinkedAllOpen(entity);
+      jdbc.update("insert into public.green_line_sync_runs(id,entity_id,system,trigger,started_at,status) values (?,?,'XERO','SCHEDULED',now(),'RUNNING')",UUID.randomUUID(),entity);
+      var second=repository.unlinkedAllOpen(entity);
+      assertThat(first).hasSize(20);
+      assertThat(second).hasSize(1);
+      assertThat(first).doesNotContainAnyElementsOf(second);
+      tx.setRollbackOnly();
+    });
+  }
+
   private static UUID entity() {
     var id = UUID.randomUUID();
     jdbc.update("insert into public.entities(id,code,display_name) values (?,?,?)", id, "test-" + id, "Synthetic entity");

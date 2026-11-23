@@ -21,3 +21,7 @@ GL-T04: which vWork capabilities support job linking, creation and completion? O
 ## Decision and verification required
 
 Before live linking or creation, obtain sanitised Test-account evidence that job read and search return a stable template identity, that its entity mapping is trustworthy, and that the selected template cannot include prices. Also verify each enabled endpoint, errors, limits and fields. If proof is unavailable, retain the manual workflow without unsafe automatic association. No requests or response samples were collected.
+
+## Documentation update, 23 November 2026
+
+The human instructed implementation from documentation without a vWork Test account. The [v5 Jobs reference](https://apidocs.vworkapp.com/v5-jobs/jobs-and-3rd-party-ids) says a supplied third-party ID must be unique; it does not establish that this account populates it with a dashboard Job ID or that it identifies an entity. The [job status reference](https://apidocs.vworkapp.com/v5-jobs/jobs-and-status) documents `assigned`, `canceled` and `completed` among the supported statuses. The [v5 Jobs overview](https://apidocs.vworkapp.com/v5-jobs) warns that underlying data can change between pages. These are documentation findings, not observations from an account. Automatic linking for the live shared account remains disabled until trustworthy entity ownership can be established.

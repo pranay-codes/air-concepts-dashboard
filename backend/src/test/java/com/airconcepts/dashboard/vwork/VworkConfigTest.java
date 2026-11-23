@@ -21,4 +21,8 @@ class VworkConfigTest {
     context.withPropertyValues("dashboard.vwork.mode=live")
         .run(application -> assertThat(application.getBean(VworkClient.class)).isInstanceOf(VworkLiveClient.class));
   }
+  @Test void explicitlySelectedMockRemainsAvailableInHostedProfile() {
+    context.withPropertyValues("dashboard.vwork.mode=mock", "spring.profiles.active=hosted")
+        .run(application -> assertThat(application.getBean(VworkClient.class)).isInstanceOf(MockVworkClient.class));
+  }
 }

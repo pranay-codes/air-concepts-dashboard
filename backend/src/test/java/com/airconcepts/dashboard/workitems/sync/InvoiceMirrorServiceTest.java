@@ -81,4 +81,30 @@ class InvoiceMirrorServiceTest {
     verify(invoices).link(eq(mapping),eq(candidate),any(),argThat(s -> s.invoiceLinked()
         && s.stage()==WorkItemStage.INVOICE_DRAFTED && !s.attention().contains("QUOTE_INVOICED_IN_XERO")),eq(4),any(),any());
   }
+  @Test void gl_status_02_manualSentInvoiceLinksBeforeScheduling() {
+    var candidate=new InvoiceMirrorRepository.Unlinked(item,"J-1","Q-1");
+    when(quotes.lockConfig(entity)).thenReturn(Optional.of(new QuoteMirrorRepository.Config(false,30,2,settings)));
+    when(quotes.lockMapping(mapping)).thenReturn(true);
+    var state=new StageMachine.State(WorkItemStage.TO_SCHEDULE,null,null,null,false,false,Set.of());
+    when(invoices.lock(mapping,item)).thenReturn(Optional.of(new InvoiceMirrorRepository.Stored(4,null,state)));
+    when(invoices.referenceMatches(mapping,candidate)).thenReturn(true);
+    when(invoices.link(eq(mapping),eq(candidate),any(),any(),eq(4),any(),any())).thenReturn(1);
+    service.link(mapping,candidate,invoice(InvoiceStatus.AUTHORISED,"40"),true);
+    verify(invoices).link(eq(mapping),eq(candidate),any(),argThat(s -> s.invoiceLinked() && s.stage()==WorkItemStage.INVOICED),eq(4),any(),any());
+  }
+  @Test void gl_status_01_voidingAnEarlySentInvoiceRestoresTheObservedJobStage() {
+    setup(WorkItemStage.INVOICED);
+    when(invoices.stageAfterVoid(mapping,item)).thenReturn(WorkItemStage.SCHEDULED);
+    service.apply(mapping,item,invoice(InvoiceStatus.VOIDED,"0"),false);
+    verify(invoices).update(eq(mapping),eq(item),any(),argThat(s -> s.stage()==WorkItemStage.SCHEDULED
+        && !s.invoiceLinked() && s.attention().contains("INVOICE_VOIDED")),eq(4),any(),any(),any());
+  }
+  @Test void gl_status_01_previouslyPaidInvoiceReopensWhenXeroReportsAnOutstandingBalance() {
+    setup(WorkItemStage.INVOICED);
+    var state=new StageMachine.State(WorkItemStage.CLOSED,null,"PAID",null,true,true,Set.of());
+    when(invoices.lock(mapping,item)).thenReturn(Optional.of(new InvoiceMirrorRepository.Stored(4,invoice,state)));
+    service.apply(mapping,item,invoice(InvoiceStatus.AUTHORISED,"40"),true);
+    verify(invoices).update(eq(mapping),eq(item),any(),argThat(s -> s.stage()==WorkItemStage.INVOICED
+        && s.closeReason()==null && s.invoiceLinked()),eq(4),any(),any(),any());
+  }
 }

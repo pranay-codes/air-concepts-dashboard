@@ -70,6 +70,19 @@ class GreenLineSyncServiceTest {
     verify(repository).fail(entity,run,"QUOTE_SYNC_COMPLETENESS_UNVERIFIED",null,now);
     verify(repository,never()).succeed(any(),any(),any(),any(),any());
   }
+  @Test void gl_status_01_partialInvoiceFailureDoesNotPreventQuoteRefresh() {
+    var invoices=mock(InvoiceSync.class);
+    var connected=new GreenLineSyncService(repository,sync,connections,entities,Clock.fixed(now,ZoneOffset.UTC),null,null,invoices);
+    when(repository.begin(entity,"MANUAL",actor,now)).thenReturn(run);
+    when(connections.authorisedAccess(user,entity)).thenReturn(access);
+    when(invoices.run(eq(entity),any())).thenThrow(new ApiFailure(HttpStatus.CONFLICT,"INVOICE_SYNC_PARTIAL","Some invoices need review."));
+    when(sync.run(eq(entity),any(),isNull())).thenReturn(new QuoteSync.Result(1,1,0,0,0,0,true));
+    assertThatThrownBy(() -> connected.runManual(user,entity)).isInstanceOfSatisfying(ApiFailure.class,
+        failure -> assertThat(failure.code()).isEqualTo("INVOICE_SYNC_PARTIAL"));
+    verify(sync).run(eq(entity),any(),isNull());
+    verify(repository).fail(entity,run,"INVOICE_SYNC_PARTIAL",null,now);
+    verify(repository,never()).succeed(any(),any(),any(),any(),any());
+  }
 
   @Test void gl25_unexpectedErrorsAreRedactedAndRecorded() {
     when(repository.begin(entity, "MANUAL", actor, now)).thenReturn(run);

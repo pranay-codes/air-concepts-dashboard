@@ -17,6 +17,15 @@ class VworkSyncTest {
   private final VworkCredential credential = new VworkCredential("synthetic");
   private final VworkConnectionService.Access access = new VworkConnectionService.Access("revision", credential, client, true);
 
+  @Test void gl_status_03_additionalTrackingRequiresVerifiedSearch() {
+    new VworkSync(repository, mirror).run(entity, () -> access);
+    verify(repository).additionalTrackingCandidates(entity);
+    reset(repository);
+    var unverified = new VworkConnectionService.Access("revision", credential, client, false);
+    new VworkSync(repository, mirror).run(entity, () -> unverified);
+    verify(repository, never()).additionalTrackingCandidates(entity);
+  }
+
   @Test void gl14_gl15_gl16_deterministicMockLinksSchedulesAndCompletes() {
     var job = client.create(credential, new VworkClient.NewJob("J-1", "template-a", "Synthetic job", List.of(new VworkClient.ScopeLine("Work", "1"))));
     when(repository.candidates(entity)).thenReturn(List.of(new VworkMirrorRepository.Candidate(item, "J-1", null)));

@@ -27,7 +27,7 @@ public class VworkMirrorService {
     if (job.id() == null || job.id().isBlank() || job.id().length() > 120 || job.status() == null) throw invalid();
     var item = repository.lock(entity, itemId, revision).orElseThrow(VworkMirrorService::changed);
     var before = item.state();
-    if (before.stage() != WorkItemStage.TO_SCHEDULE && before.stage() != WorkItemStage.SCHEDULED) throw changed();
+    if (before.stage() == WorkItemStage.CLOSED) throw changed();
     var linked = before;
     boolean newLink = item.jobId() == null;
     if (newLink) {

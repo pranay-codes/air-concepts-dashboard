@@ -3,6 +3,7 @@ package com.airconcepts.dashboard.workitems.sync;
 import com.airconcepts.dashboard.vwork.*;
 import com.airconcepts.dashboard.web.ApiFailure;
 import java.util.Objects;
+import java.util.ArrayList;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.springframework.http.HttpStatus;
@@ -20,7 +21,9 @@ public class VworkSync {
   public Result run(UUID entity, Supplier<VworkConnectionService.Access> resolve) {
     var original = requireAccess(resolve.get(), null);
     int observed = 0, linked = 0, ignored = 0;
-    for (var item : repository.candidates(entity)) {
+    var candidates = new ArrayList<>(repository.candidates(entity));
+    if (original.searchVerified()) candidates.addAll(repository.additionalTrackingCandidates(entity));
+    for (var item : candidates) {
       var current = requireAccess(resolve.get(), original);
       if (item.jobId() != null) {
         var job = current.provider().job(current.credential(), item.jobId());

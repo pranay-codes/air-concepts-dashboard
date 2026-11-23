@@ -70,7 +70,8 @@ public class QuoteMirrorService {
     }
     var stored = old.get();
     if (stored.quote().updatedAt() != null && quote.updatedAt().isBefore(stored.quote().updatedAt())) return Outcome.STALE;
-    var transition = StageMachine.apply(stored.state(), new StageMachine.QuoteObserved(status), config.get().owners());
+    var previous = stored.quote().status() == null ? null : StageMachine.QuoteStatus.valueOf(stored.quote().status().name());
+    var transition = StageMachine.apply(stored.state(), new StageMachine.QuoteObserved(status, previous), config.get().owners());
     if (transition.event() == null && sameMirror(stored.quote(), quote)) return Outcome.UNCHANGED;
     // A changed quote can alter the reference, stage or source data used by an in-flight write.
     // Fail this run rather than advancing its watermark or silently changing reconciliation inputs.
