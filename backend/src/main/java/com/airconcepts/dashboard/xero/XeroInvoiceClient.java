@@ -3,11 +3,13 @@ package com.airconcepts.dashboard.xero;
 import com.airconcepts.dashboard.invoices.*;
 import com.airconcepts.dashboard.time.BusinessTime;
 import com.airconcepts.dashboard.web.ProviderFailure;
+import com.airconcepts.dashboard.web.ApiFailure;
 import com.fasterxml.jackson.annotation.*;
 import java.math.BigDecimal;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 import org.springframework.http.*;
 import org.springframework.web.client.*;
@@ -17,6 +19,10 @@ public class XeroInvoiceClient {
   private final RestClient api;
   private final Clock clock;
   private final XeroForecastClient.Pacer pacer;
+  private static final int DAILY_RESERVE = 150;
+  private static final Duration BUDGET_RECHECK = Duration.ofMinutes(15);
+  private final Map<UUID, DailyBudget> dailyBudgets = new ConcurrentHashMap<>();
+  private static final class DailyBudget { Integer remaining; Instant checkedAt; }
   private static final Pattern XERO_DATE = Pattern.compile("/Date\\((-?\\d+)(?:[+-]\\d{4})?\\)/");
 
   public XeroInvoiceClient(RestClient api, Clock clock) { this(api, clock, tenant -> {}); }
@@ -61,6 +67,9 @@ public class XeroInvoiceClient {
 
   /** SearchTerm is documented to search invoice number and reference; callers filter references locally. */
   public InvoiceViews.Page searchReference(TenantAccess access, String term, int page) {
+    return searchReference(access,term,page,false);
+  }
+  public InvoiceViews.Page searchReference(TenantAccess access, String term, int page, boolean reserveDailyBudget) {
     if (term == null || term.isBlank() || term.length() > 200 || term.chars().anyMatch(Character::isISOControl) || page < 1)
       throw new IllegalArgumentException("A printable search term and positive page are required");
     XeroScopes.require(access.grantedScopes(), XeroScopes.QUOTES_READ);
@@ -68,7 +77,7 @@ public class XeroInvoiceClient {
     var body = call(api.get().uri(b -> b.path("/api.xro/2.0/Invoices")
         .queryParam("where", "{where}").queryParam("SearchTerm", "{term}")
         .queryParam("page", page).queryParam("pageSize", 100)
-        .build(Map.of("where", "Type==\"ACCREC\"", "term", term))), access);
+        .build(Map.of("where", "Type==\"ACCREC\"", "term", term))), access, reserveDailyBudget);
     return checkedPage(body, InvoiceType.ACCREC, page, 100);
   }
 
@@ -126,10 +135,13 @@ public class XeroInvoiceClient {
   }
 
   public WorkflowInvoice workflowInvoice(TenantAccess access, UUID id) {
+    return workflowInvoice(access,id,false);
+  }
+  public WorkflowInvoice workflowInvoice(TenantAccess access, UUID id, boolean reserveDailyBudget) {
     Objects.requireNonNull(id);
     XeroScopes.require(access.grantedScopes(), XeroScopes.QUOTES_READ);
     pacer.await(access.tenantId());
-    var body = call(api.get().uri("/api.xro/2.0/Invoices/{id}", id), access);
+    var body = call(api.get().uri("/api.xro/2.0/Invoices/{id}", id), access, reserveDailyBudget);
     if (body.invoices().size() != 1) throw malformed();
     var invoice = body.invoices().getFirst();
     if (invoice == null || !id.equals(invoice.id()) || invoice.type() != InvoiceType.ACCREC || invoice.status() == null) throw malformed();
@@ -154,6 +166,32 @@ public class XeroInvoiceClient {
           .retrieve().body(Envelope.class), clock);
       if (body == null || body.invoices() == null) throw malformed();
       return body;
+  }
+  private Envelope call(RestClient.RequestHeadersSpec<?> request, TenantAccess access, boolean reserveDailyBudget) {
+    if (!reserveDailyBudget) return call(request,access);
+    var budget=dailyBudgets.computeIfAbsent(access.tenantId(),ignored -> new DailyBudget());
+    synchronized (budget) {
+      if (budget.checkedAt!=null && clock.instant().isBefore(budget.checkedAt.plus(BUDGET_RECHECK))) {
+        if (budget.remaining==null) throw budgetFailure("XERO_DAILY_BUDGET_UNAVAILABLE");
+        if (budget.remaining<=DAILY_RESERVE) throw budgetFailure("XERO_DAILY_BUDGET_RESERVED");
+      }
+      var response=XeroReadErrors.call(() -> request.header(HttpHeaders.AUTHORIZATION,"Bearer " + access.accessToken())
+          .header("xero-tenant-id",access.tenantId().toString()).accept(MediaType.APPLICATION_JSON)
+          .retrieve().toEntity(Envelope.class),clock);
+      budget.checkedAt=clock.instant();
+      try {
+        String value=response.getHeaders().getFirst("X-DayLimit-Remaining");
+        budget.remaining=value==null ? null : Integer.valueOf(value);
+        if (budget.remaining!=null && budget.remaining<0) budget.remaining=null;
+      } catch (NumberFormatException invalid) { budget.remaining=null; }
+      if (budget.remaining==null) throw budgetFailure("XERO_DAILY_BUDGET_UNAVAILABLE");
+      var body=response.getBody();
+      if (body==null || body.invoices()==null) throw malformed();
+      return body;
+    }
+  }
+  private static ApiFailure budgetFailure(String code) {
+    return new ApiFailure(HttpStatus.TOO_MANY_REQUESTS,code,"Xero's daily request budget needs attention. Retry later.");
   }
 
   private static LocalDate date(String value, boolean optional) {
