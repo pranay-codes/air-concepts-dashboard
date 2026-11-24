@@ -31,7 +31,8 @@ public final class StageMachine {
   public record QuoteObserved(QuoteStatus status, QuoteStatus previousStatus) implements Event {
     public QuoteObserved(QuoteStatus status) { this(status, null); }
   }
-  public record JobObserved(boolean hasTechnician, boolean hasStart, boolean completed, boolean cancelled) implements Event {}
+  /** vWork facts. assigned = Job scheduled; started = Work in progress (includes paused); completed = Job completed. */
+  public record JobObserved(boolean assigned, boolean started, boolean completed, boolean cancelled) implements Event {}
   public record InvoiceObserved(InvoiceStatus status, boolean sent, BigDecimal amountDue, WorkItemStage stageAfterVoid) implements Event {
     public InvoiceObserved(InvoiceStatus status, boolean sent, BigDecimal amountDue) { this(status, sent, amountDue, null); }
   }
@@ -66,7 +67,7 @@ public final class StageMachine {
       }
       case INVOICED -> {
         if (context.firstSync()) return Optional.empty();
-        created = withAttention(handOff(initial, WorkItemStage.TO_INVOICE, settings.defaultOwnerId(),
+        created = withAttention(handOff(initial, WorkItemStage.JOB_COMPLETED, settings.defaultOwnerId(),
             settings.defaultOwnerActive(), "NO_DEFAULT_OWNER").state(), "QUOTE_INVOICED_IN_XERO");
       }
       case DELETED -> { return Optional.empty(); }
@@ -100,7 +101,7 @@ public final class StageMachine {
         case DECLINED -> close(s, "LOST", "Declined in Xero", "STAGE_CHANGED");
         case DELETED -> close(s, "LOST", "Deleted in Xero", "STAGE_CHANGED");
         case INVOICED -> {
-          Result handoff = handOff(s, WorkItemStage.TO_INVOICE, settings.defaultOwnerId(),
+          Result handoff = handOff(s, WorkItemStage.JOB_COMPLETED, settings.defaultOwnerId(),
               settings.defaultOwnerActive(), "NO_DEFAULT_OWNER");
           yield new Result(withAttention(handoff.state(), "QUOTE_INVOICED_IN_XERO"), "STAGE_CHANGED");
         }
@@ -115,35 +116,35 @@ public final class StageMachine {
     return unchanged(s);
   }
 
+  /** The provider's state is the truth, so a later observation can move a job back as well as forward. */
   private static Result job(State s, JobObserved event, Settings settings) {
-    if (s.stage() != WorkItemStage.QUOTED && s.stage() != WorkItemStage.TO_SCHEDULE && s.stage() != WorkItemStage.SCHEDULED) return unchanged(s);
+    if (!inJobStage(s.stage())) return unchanged(s);
     if (!s.jobLinked()) throw new IllegalArgumentException("A job must be linked before observation");
     if (event.cancelled()) return attention(s, "VWORK_JOB_CANCELLED");
-    if (event.completed()) return handOff(s, WorkItemStage.TO_INVOICE, settings.defaultOwnerId(),
+    if (event.completed()) return handOff(s, WorkItemStage.JOB_COMPLETED, settings.defaultOwnerId(),
         settings.defaultOwnerActive(), "NO_DEFAULT_OWNER");
-    WorkItemStage next = event.hasTechnician() && event.hasStart() ? WorkItemStage.SCHEDULED
+    WorkItemStage next = event.started() ? WorkItemStage.WORK_IN_PROGRESS
+        : event.assigned() ? WorkItemStage.SCHEDULED
         : s.stage() == WorkItemStage.QUOTED ? WorkItemStage.QUOTED : WorkItemStage.TO_SCHEDULE;
     if (s.stage() == next) return unchanged(s);
-    if (s.stage() == WorkItemStage.QUOTED && next == WorkItemStage.SCHEDULED)
+    if (s.stage() == WorkItemStage.QUOTED && (next == WorkItemStage.SCHEDULED || next == WorkItemStage.WORK_IN_PROGRESS))
       return handOff(s, next, settings.serviceManagerId(), settings.serviceManagerActive(), "NO_SERVICE_MANAGER");
     return new Result(copy(s, next, s.ownerId(), s.closeReason(), s.closingNote(), s.jobLinked(), s.invoiceLinked(), s.attention()), "STAGE_CHANGED");
   }
 
   private static Result invoice(State s, InvoiceObserved event, Settings settings) {
     InvoiceStatus status = Objects.requireNonNull(event.status(), "invoice status");
-    if (s.stage() != WorkItemStage.CLOSED && s.stage() != WorkItemStage.QUOTED && s.stage() != WorkItemStage.TO_SCHEDULE
-        && s.stage() != WorkItemStage.SCHEDULED && s.stage() != WorkItemStage.TO_INVOICE && s.stage() != WorkItemStage.INVOICE_DRAFTED
+    if (s.stage() != WorkItemStage.CLOSED && !inJobStage(s.stage()) && s.stage() != WorkItemStage.JOB_COMPLETED
         && s.stage() != WorkItemStage.INVOICED) return unchanged(s);
     if (status == InvoiceStatus.VOIDED || status == InvoiceStatus.DELETED) {
       if (!s.invoiceLinked()) return unchanged(s);
-      WorkItemStage afterVoid = (s.stage() == WorkItemStage.QUOTED || s.stage() == WorkItemStage.TO_SCHEDULE
-          || s.stage() == WorkItemStage.SCHEDULED) ? s.stage()
-          : event.stageAfterVoid() != null ? event.stageAfterVoid() : WorkItemStage.TO_INVOICE;
-      if (afterVoid != WorkItemStage.QUOTED && afterVoid != WorkItemStage.TO_SCHEDULE
-          && afterVoid != WorkItemStage.SCHEDULED && afterVoid != WorkItemStage.TO_INVOICE)
+      WorkItemStage afterVoid = inJobStage(s.stage()) ? s.stage()
+          : event.stageAfterVoid() != null ? event.stageAfterVoid() : WorkItemStage.JOB_COMPLETED;
+      if (!inJobStage(afterVoid) && afterVoid != WorkItemStage.JOB_COMPLETED)
         throw new IllegalArgumentException("Invalid stage after void");
       State unlinked = copy(s, afterVoid, s.ownerId(), null, null, s.jobLinked(), false, s.attention());
-      if (afterVoid != s.stage() && (afterVoid == WorkItemStage.TO_SCHEDULE || afterVoid == WorkItemStage.SCHEDULED))
+      if (afterVoid != s.stage() && (afterVoid == WorkItemStage.TO_SCHEDULE || afterVoid == WorkItemStage.SCHEDULED
+          || afterVoid == WorkItemStage.WORK_IN_PROGRESS))
         unlinked = handOff(unlinked, afterVoid, settings.serviceManagerId(), settings.serviceManagerActive(), "NO_SERVICE_MANAGER").state();
       return new Result(withAttention(unlinked, "INVOICE_VOIDED"), "INVOICE_UNLINKED");
     }
@@ -156,29 +157,24 @@ public final class StageMachine {
     if (s.stage() == WorkItemStage.CLOSED) {
       if (status != InvoiceStatus.AUTHORISED || event.amountDue() == null || event.amountDue().signum() <= 0)
         return unchanged(s);
-      WorkItemStage reopened = event.sent() ? WorkItemStage.INVOICED : WorkItemStage.INVOICE_DRAFTED;
+      WorkItemStage reopened = event.sent() ? WorkItemStage.INVOICED : WorkItemStage.JOB_COMPLETED;
       return new Result(copy(s, reopened, s.ownerId(), null, null, s.jobLinked(), true, s.attention()), "STAGE_CHANGED");
     }
+    // A draft or unsent invoice links to the item but keeps it at Job completed; only a sent, authorised invoice moves it on.
     WorkItemStage next = s.stage();
-    if (s.stage() == WorkItemStage.TO_INVOICE
-        && (status == InvoiceStatus.DRAFT || status == InvoiceStatus.SUBMITTED
-        || (status == InvoiceStatus.AUTHORISED && !event.sent()))) {
-      next = WorkItemStage.INVOICE_DRAFTED;
-    } else if (s.stage() != WorkItemStage.INVOICED
-        && status == InvoiceStatus.AUTHORISED && event.sent()) {
+    if (s.stage() != WorkItemStage.INVOICED && status == InvoiceStatus.AUTHORISED && event.sent()) {
       next = WorkItemStage.INVOICED;
     }
     boolean newlyLinked = !s.invoiceLinked();
     State result = copy(s, next, s.ownerId(), null, null, s.jobLinked(), true, s.attention());
-    if (next == WorkItemStage.INVOICED && (s.stage() == WorkItemStage.QUOTED
-        || s.stage() == WorkItemStage.TO_SCHEDULE || s.stage() == WorkItemStage.SCHEDULED))
+    if (next == WorkItemStage.INVOICED && inJobStage(s.stage()))
       result = handOff(result, next, settings.defaultOwnerId(), settings.defaultOwnerActive(), "NO_DEFAULT_OWNER").state();
-    if (next != s.stage()) return new Result(result, next == WorkItemStage.INVOICE_DRAFTED ? "INVOICE_LINKED" : "STAGE_CHANGED");
+    if (next != s.stage()) return new Result(result, "STAGE_CHANGED");
     return newlyLinked ? new Result(result, "INVOICE_LINKED") : unchanged(s);
   }
 
   private static Result noInvoice(State s, String reason) {
-    if (s.stage() != WorkItemStage.TO_INVOICE || s.invoiceLinked() || reason == null
+    if (s.stage() != WorkItemStage.JOB_COMPLETED || s.invoiceLinked() || reason == null
         || reason.isBlank() || reason.length() > 500) throw new IllegalArgumentException("No-invoice action is not valid");
     return close(s, "NO_INVOICE_NEEDED", reason, "CLOSED_NO_INVOICE");
   }
@@ -197,7 +193,7 @@ public final class StageMachine {
   }
 
   private static Result markSent(State s, MarkSent event) {
-    if (s.stage() != WorkItemStage.INVOICE_DRAFTED || !s.invoiceLinked()
+    if (s.stage() != WorkItemStage.JOB_COMPLETED || !s.invoiceLinked()
         || !event.fallbackEnabled() || !event.invoiceAuthorised()) {
       throw new IllegalArgumentException("Invoice cannot be marked sent in this state");
     }
@@ -231,6 +227,12 @@ public final class StageMachine {
   }
 
   private static Result unchanged(State s) { return new Result(s, null); }
+
+  /** Stages in which vWork job progress is tracked. */
+  private static boolean inJobStage(WorkItemStage stage) {
+    return stage == WorkItemStage.QUOTED || stage == WorkItemStage.TO_SCHEDULE
+        || stage == WorkItemStage.SCHEDULED || stage == WorkItemStage.WORK_IN_PROGRESS;
+  }
 
   private static State copy(State s, WorkItemStage stage, UUID owner, String reason, String note,
       boolean job, boolean invoice, Set<String> attention) {

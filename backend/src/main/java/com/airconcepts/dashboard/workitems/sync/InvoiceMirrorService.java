@@ -44,7 +44,7 @@ public class InvoiceMirrorService {
         && Objects.equals(item.dueDate(),invoice.dueDate())) return;
     if (quotes.hasUnresolvedOperation(mapping.entityId(),itemId))
       throw new ApiFailure(HttpStatus.CONFLICT,"INVOICE_SYNC_OPERATION_IN_PROGRESS","Resolve the existing operation before syncing this invoice.");
-    LocalDate late=(next.stage()==WorkItemStage.TO_INVOICE || next.stage()==WorkItemStage.INVOICE_DRAFTED)
+    LocalDate late=(next.stage()==WorkItemStage.JOB_COMPLETED || next.stage()==WorkItemStage.JOB_COMPLETED)
         ? workingDays.addWorkingDays(BusinessTime.dateOf(now),settings.threshold()) : null;
     if (invoices.update(mapping,itemId,invoice,next,item.version(),now,late,item.state())!=1) throw changed();
     if (result.event()!=null) invoices.audit(mapping,itemId,invoice,item,next,result.event());
@@ -70,7 +70,7 @@ public class InvoiceMirrorService {
     var after=result.state();
     var next=new StageMachine.State(after.stage(),after.ownerId(),after.closeReason(),after.closingNote(),after.jobLinked(),after.invoiceLinked(),codes);
     var now=clock.instant();
-    var late=next.stage()==WorkItemStage.TO_INVOICE || next.stage()==WorkItemStage.INVOICE_DRAFTED
+    var late=next.stage()==WorkItemStage.JOB_COMPLETED || next.stage()==WorkItemStage.JOB_COMPLETED
         ? workingDays.addWorkingDays(BusinessTime.dateOf(now),settings.threshold()) : null;
     try { if (invoices.link(mapping,candidate,invoice,next,item.version(),now,late)!=1) throw changed(); }
     catch (DuplicateKeyException duplicate) { throw changed(); }

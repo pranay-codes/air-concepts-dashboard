@@ -15,8 +15,8 @@ public final class WorkItemPolicy {
       case CLOSE_LOST -> stage == WorkItemStage.QUOTED && finance;
       case CREATE_JOB -> stage == WorkItemStage.TO_SCHEDULE && !hasJob
           && (role == Role.DIRECTOR || serviceManager);
-      case PREPARE_INVOICE, NO_INVOICE_NEEDED -> stage == WorkItemStage.TO_INVOICE && !hasInvoice && finance;
-      case MARK_SENT -> stage == WorkItemStage.INVOICE_DRAFTED && hasInvoice && finance;
+      case PREPARE_INVOICE, NO_INVOICE_NEEDED -> stage == WorkItemStage.JOB_COMPLETED && !hasInvoice && finance;
+      case MARK_SENT -> stage == WorkItemStage.JOB_COMPLETED && hasInvoice && finance;
       case MARK_ACCEPTED -> stage == WorkItemStage.QUOTED && !hasJob && !hasInvoice && finance;
     };
   }

@@ -23,7 +23,16 @@ class CreateJobServiceTest {
   private final VworkConnectionService.Access access=new VworkConnectionService.Access("revision",credential,client,true);
   private final VworkClient.NewJob request=new VworkClient.NewJob("J-1","template-a","Synthetic work",List.of(new VworkClient.ScopeLine("Install", "1")),
       "Synthetic customer","Alex","555123","Example Street","");
-  private final CreateJobService service=new CreateJobService(reservation,completion,outcomes,connections);
+  private final UUID contact=UUID.fromString("6f1d2a3b-0000-4000-8000-000000000001");
+  /** Every test starts with the work item's Xero contact stored; individual tests override it when needed. */
+  private final org.springframework.jdbc.core.JdbcTemplate jdbc=contactOn(mock(org.springframework.jdbc.core.JdbcTemplate.class));
+  private final VworkClient.NewJob sent=request.withCustomerThirdPartyId(contact.toString());
+  private final CreateJobService service=new CreateJobService(reservation,completion,outcomes,connections,jdbc,false);
+
+  private org.springframework.jdbc.core.JdbcTemplate contactOn(org.springframework.jdbc.core.JdbcTemplate lookup) {
+    doReturn(List.of(contact)).when(lookup).query(anyString(), any(org.springframework.jdbc.core.RowMapper.class), any(), any());
+    return lookup;
+  }
 
   private void setup() {
     when(connections.systemAccess()).thenReturn(access);
@@ -39,7 +48,7 @@ class CreateJobServiceTest {
     var order=inOrder(reservation,client,completion);
     order.verify(reservation).reserve(eq(user),eq(entity),eq(item),eq(4),eq("revision"),eq("template-a"),eq("J-1"),anyString());
     order.verify(client).findByReference(credential,"J-1");
-    order.verify(client).create(credential,request);
+    order.verify(client).create(credential,sent);
     order.verify(completion).complete(eq(entity),eq(item),eq(operation),eq("revision"),any(),eq(OperationState.Result.CREATED));
   }
   @Test void gl14_existingJobIsLinkedWithoutAnotherCreate() {
@@ -59,7 +68,7 @@ class CreateJobServiceTest {
     var order=inOrder(reservation,client);
     order.verify(reservation).retry(eq(user),eq(entity),eq(item),eq(4),eq("revision"),eq("template-a"),eq("J-1"),anyString(),eq(previous));
     order.verify(client).findByReference(credential,"J-1");
-    order.verify(client).create(credential,request);
+    order.verify(client).create(credential,sent);
   }
   @Test void gl22_unconfirmedWriteIsUnknownAndNeverAutomaticallyRetried() {
     setup();
@@ -89,6 +98,26 @@ class CreateJobServiceTest {
         failure -> assertThat(failure.code()).isEqualTo("VWORK_CAPABILITY_UNVERIFIED"));
     verifyNoInteractions(reservation,completion,outcomes,live);
   }
+  @Test void gl26_enabledLiveCreationSendsOnlyTheStoredXeroContact() {
+    setup();
+    var live=mock(VworkClient.class);
+    var created=new VworkClient.Job("123","J-1",null,"template-a",VworkClient.Status.UNASSIGNED,null,null,null);
+    when(live.create(eq(credential),any())).thenReturn(created);
+    when(connections.systemAccess()).thenReturn(new VworkConnectionService.Access("revision",credential,live,false));
+    var enabled=new CreateJobService(reservation,completion,outcomes,connections,jdbc,true);
+    assertThat(enabled.submit(user,entity,item,4,request).outcome()).isEqualTo(OperationState.Result.CREATED);
+    verify(live).create(credential,sent);
+    verify(completion).complete(eq(entity),eq(item),eq(operation),eq("revision"),eq(created),eq(OperationState.Result.CREATED));
+  }
+  @Test void gl26_liveCreationRefusesWhenTheWorkItemHasNoXeroContact() {
+    doReturn(List.of()).when(jdbc).query(anyString(), any(org.springframework.jdbc.core.RowMapper.class), any(), any());
+    var live=mock(VworkClient.class);
+    when(connections.systemAccess()).thenReturn(new VworkConnectionService.Access("revision",credential,live,false));
+    var enabled=new CreateJobService(reservation,completion,outcomes,connections,jdbc,true);
+    assertThatThrownBy(() -> enabled.submit(user,entity,item,4,request)).isInstanceOfSatisfying(ApiFailure.class,
+        failure -> assertThat(failure.code()).isEqualTo("VWORK_CUSTOMER_UNLINKED"));
+    verifyNoInteractions(reservation,completion,live);
+  }
   @Test void gl13_mockCreationRunsThroughRealReservationAndConfirmationServices() {
     var mirror=mock(com.airconcepts.dashboard.workitems.sync.VworkMirrorRepository.class);
     var items=mock(com.airconcepts.dashboard.workitems.WorkItemRepository.class);
@@ -113,7 +142,7 @@ class CreateJobServiceTest {
     when(connections.systemAccess()).thenReturn(access);
     var realReservation=new VworkJobReservation(mirror,new OperationReservationService(items,ops));
     var realCompletion=new VworkOperationCompletion(mirror,ops);
-    var realService=new CreateJobService(realReservation,realCompletion,new OperationOutcomeService(items,ops),connections);
+    var realService=new CreateJobService(realReservation,realCompletion,new OperationOutcomeService(items,ops),connections,jdbc,false);
     var result=realService.submit(user,entity,item,4,request);
     assertThat(result.outcome()).isEqualTo(OperationState.Result.CREATED);
     verify(ops).insert(eq(result.operationId()),eq(entity),eq(item),eq(ExternalOperationRepository.Kind.VWORK_CREATE_JOB),eq(1),eq("J-1"),anyString(),eq(actor));

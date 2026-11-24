@@ -78,7 +78,7 @@ public class WorkItemRepository {
     return jdbc.update("""
         update public.work_items set stage='CLOSED',close_reason='NO_INVOICE_NEEDED',closing_note=?,
           stage_entered_at=now(),late_after=null,version=version+1,updated_at=now()
-        where entity_id=? and id=? and stage='TO_INVOICE' and version=? and xero_invoice_id is null
+        where entity_id=? and id=? and stage='JOB_COMPLETED' and version=? and xero_invoice_id is null
           and not exists (select 1 from public.external_operations op where op.entity_id=work_items.entity_id
             and op.work_item_id=work_items.id and (op.status in ('PENDING','UNKNOWN')
               or (op.kind='XERO_CREATE_INVOICE' and op.status='SUCCEEDED')))
@@ -88,7 +88,7 @@ public class WorkItemRepository {
   public int markSent(UUID entity, UUID id, int version) {
     return jdbc.update("""
         update public.work_items set stage='INVOICED',stage_entered_at=now(),late_after=null,version=version+1,updated_at=now()
-        where entity_id=? and id=? and version=? and stage='INVOICE_DRAFTED' and xero_invoice_id is not null
+        where entity_id=? and id=? and version=? and stage='JOB_COMPLETED' and xero_invoice_id is not null
           and invoice_status='AUTHORISED' and not exists (select 1 from public.external_operations op
             where op.entity_id=work_items.entity_id and op.work_item_id=work_items.id and op.status in ('PENDING','UNKNOWN'))
         """,entity,id,version);
@@ -96,7 +96,7 @@ public class WorkItemRepository {
   public void auditMarkSent(UUID entity, UUID item, UUID actor) {
     jdbc.update("""
         insert into public.work_item_events(entity_id,work_item_id,actor_id,source,event_type,from_stage,to_stage)
-        values (?,?,?,'USER','MARKED_SENT','INVOICE_DRAFTED','INVOICED')
+        values (?,?,?,'USER','MARKED_SENT','JOB_COMPLETED','INVOICED')
         """,entity,item,actor);
   }
 
@@ -125,7 +125,7 @@ public class WorkItemRepository {
   public void auditNoInvoice(UUID entity, UUID item, UUID actor, String reason) {
     jdbc.update("""
         insert into public.work_item_events(entity_id,work_item_id,actor_id,source,event_type,from_stage,to_stage,after)
-        values (?,?,?,'USER','CLOSED_NO_INVOICE','TO_INVOICE','CLOSED',jsonb_build_object('reason',cast(? as text)))
+        values (?,?,?,'USER','CLOSED_NO_INVOICE','JOB_COMPLETED','CLOSED',jsonb_build_object('reason',cast(? as text)))
         """, entity, item, actor, reason);
   }
 }

@@ -31,7 +31,7 @@ public class InvoiceDraftContext {
     var role=items.lockActor(actor).orElseThrow(() -> new AccessDeniedException("Active user access is required."));
     if (role!=Role.DIRECTOR && role!=Role.FINANCIAL_ADMIN) throw new AccessDeniedException("Finance access is required.");
     var item=items.lockItem(entity,id).orElseThrow(InvoiceDraftContext::unavailable);
-    if (item.stage()!=WorkItemStage.TO_INVOICE || operations.context(entity,id).invoiceId()!=null
+    if (item.stage()!=WorkItemStage.JOB_COMPLETED || operations.context(entity,id).invoiceId()!=null
         || items.hasBlockingOperation(entity,id) || operations.latest(entity,id,ExternalOperationRepository.Kind.XERO_CREATE_INVOICE).isPresent()) throw changed();
     return jdbc.query("""
         select w.xero_quote_id,w.quote_number,w.job_id,c.tenant_id,c.grant_id,c.tenant_name

@@ -56,7 +56,7 @@ public class OperationReservationService {
       if (item.stage() != WorkItemStage.TO_SCHEDULE || context.jobId() != null) throw stage();
     } else if (kind == ExternalOperationRepository.Kind.XERO_CREATE_INVOICE) {
       if (role != Role.DIRECTOR && role != Role.FINANCIAL_ADMIN) throw new AccessDeniedException("Finance access is required.");
-      if (item.stage() != WorkItemStage.TO_INVOICE || context.invoiceId() != null) throw stage();
+      if (item.stage() != WorkItemStage.JOB_COMPLETED || context.invoiceId() != null) throw stage();
     } else if (kind == ExternalOperationRepository.Kind.XERO_ACCEPT_QUOTE) {
       if (role != Role.DIRECTOR && role != Role.FINANCIAL_ADMIN) throw new AccessDeniedException("Finance access is required.");
       if (item.stage() != WorkItemStage.QUOTED || !"SENT".equals(operations.quoteStatus(entity, itemId).orElse(null))) throw stage();

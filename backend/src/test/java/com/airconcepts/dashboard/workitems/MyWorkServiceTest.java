@@ -36,6 +36,6 @@ class MyWorkServiceTest {
     assertThat(MyWorkService.classify(item(WorkItemStage.TO_SCHEDULE, null, null, null, null, alert, true), actor, Role.STANDARD_USER, today)).isEqualTo(MyWorkService.Bucket.ATTENTION);
     assertThat(MyWorkService.classify(item(WorkItemStage.TO_SCHEDULE, other, null, null, null, alert, true), actor, Role.STANDARD_USER, today)).isEqualTo(MyWorkService.Bucket.IGNORE);
     assertThat(MyWorkService.classify(item(WorkItemStage.CLOSED, actor, null, null, null, alert, false), actor, Role.DIRECTOR, today)).isEqualTo(MyWorkService.Bucket.IGNORE);
-    assertThat(MyWorkService.classify(item(WorkItemStage.TO_INVOICE, other, null, null, null, Set.of(), false), actor, Role.STANDARD_USER, today)).isEqualTo(MyWorkService.Bucket.IGNORE);
+    assertThat(MyWorkService.classify(item(WorkItemStage.JOB_COMPLETED, other, null, null, null, Set.of(), false), actor, Role.STANDARD_USER, today)).isEqualTo(MyWorkService.Bucket.IGNORE);
   }
 }

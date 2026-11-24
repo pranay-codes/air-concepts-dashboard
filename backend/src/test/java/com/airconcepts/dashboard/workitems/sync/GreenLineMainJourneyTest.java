@@ -67,7 +67,9 @@ class GreenLineMainJourneyTest {
     when(jobReservation.reserve(eq(user),eq(entity),eq(item),eq(0),eq("revision"),eq("template-a"),eq("J-1"),anyString()))
         .thenReturn(new OperationReservationService.Reservation(jobOperation,1));
     var outcomes=mock(OperationOutcomeService.class);
-    var jobService=new CreateJobService(jobReservation,new VworkOperationCompletion(jobs,operations),outcomes,vworkConnections);
+    var contactLookup=mock(org.springframework.jdbc.core.JdbcTemplate.class);
+    doReturn(List.of(UUID.randomUUID())).when(contactLookup).query(anyString(),any(org.springframework.jdbc.core.RowMapper.class),any(),any());
+    var jobService=new CreateJobService(jobReservation,new VworkOperationCompletion(jobs,operations),outcomes,vworkConnections,contactLookup,false);
     var jobRequest=new VworkClient.NewJob("J-1","template-a","Work",List.of(new VworkClient.ScopeLine("Install","1")),
         "Customer","Alex","555123","Example Street","");
     assertThat(jobService.submit(user,entity,item,0,jobRequest).outcome()).isEqualTo(OperationState.Result.CREATED);
@@ -77,7 +79,7 @@ class GreenLineMainJourneyTest {
     assertThat(state.get().stage()).isEqualTo(WorkItemStage.SCHEDULED);
     vwork.complete(jobId.get(),now.plusSeconds(3600));
     mirror.apply(entity,item,"revision",vwork.job(credential,jobId.get()));
-    assertThat(state.get().stage()).isEqualTo(WorkItemStage.TO_INVOICE);
+    assertThat(state.get().stage()).isEqualTo(WorkItemStage.JOB_COMPLETED);
 
     var context=new InvoiceDraftContext.Context(quote,"Q-1","J-1",4,tenant,grant,"Example Xero");
     var draft=DraftInvoice.fromQuote(quoteData,"J-1",LocalDate.of(2026,11,21));
@@ -103,7 +105,7 @@ class GreenLineMainJourneyTest {
     var invoiceCompletion=new InvoiceOperationCompletion(mappings,invoices,operations,clock);
     var prepare=new PrepareInvoiceService(drafts,reservation,invoiceCompletion,outcomes,connections,new MockInvoiceGateway());
     assertThat(prepare.submit(user,entity,item,4,draft.fingerprint()).outcome()).isEqualTo(OperationState.Result.CREATED);
-    assertThat(state.get().stage()).isEqualTo(WorkItemStage.INVOICE_DRAFTED);
+    assertThat(state.get().stage()).isEqualTo(WorkItemStage.JOB_COMPLETED);
     assertThat(invoiceId.get()).isNotNull();
     verify(operations).complete(entity,item,invoiceOperation,OperationState.Result.CREATED,invoiceId.get().toString());
   }

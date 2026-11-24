@@ -27,7 +27,7 @@ public class InvoiceMirrorRepository {
   public List<Candidate> candidates(UUID entity) {
     return jdbc.query("""
         select id,xero_invoice_id from public.work_items where entity_id=? and xero_invoice_id is not null
-          and stage in ('QUOTED','TO_SCHEDULE','SCHEDULED','TO_INVOICE','INVOICE_DRAFTED','INVOICED') order by stage_entered_at,id
+          and stage in ('QUOTED','TO_SCHEDULE','SCHEDULED','WORK_IN_PROGRESS','JOB_COMPLETED','INVOICED') order by stage_entered_at,id
         """, (r,n) -> new Candidate(r.getObject(1,UUID.class),r.getObject(2,UUID.class)),entity);
   }
   public List<Candidate> paidCandidates(UUID entity) {
@@ -39,7 +39,7 @@ public class InvoiceMirrorRepository {
   public List<Unlinked> unlinked(UUID entity) {
     return jdbc.query("""
         select id,job_id,quote_number,xero_contact_id from public.work_items where entity_id=? and xero_invoice_id is null
-          and stage='TO_INVOICE' order by stage_entered_at,id limit 20
+          and stage='JOB_COMPLETED' order by stage_entered_at,id limit 20
         """, (r,n) -> new Unlinked(r.getObject(1,UUID.class),r.getString(2),r.getString(3),r.getObject(4,UUID.class)),entity);
   }
   public List<Unlinked> unlinkedAllOpen(UUID entity) {
@@ -48,7 +48,7 @@ public class InvoiceMirrorRepository {
           select w.id,w.job_id,w.quote_number,w.xero_contact_id from public.work_items w
           join public.xero_entity_connections c on c.entity_id=w.entity_id and c.tenant_id=w.xero_tenant_id
           where w.entity_id=? and w.xero_invoice_id is null
-            and w.stage in ('QUOTED','TO_SCHEDULE','SCHEDULED','TO_INVOICE','INVOICE_DRAFTED','INVOICED')
+            and w.stage in ('QUOTED','TO_SCHEDULE','SCHEDULED','WORK_IN_PROGRESS','JOB_COMPLETED','INVOICED')
         )
         select id,job_id,quote_number,xero_contact_id from candidates order by id limit 5
         offset (greatest(0,(select count(*) from public.green_line_sync_runs where entity_id=? and system='XERO')-1)
@@ -82,7 +82,7 @@ public class InvoiceMirrorRepository {
   public boolean referenceMatches(QuoteMirrorService.Mapping mapping, Unlinked candidate) {
     return Boolean.TRUE.equals(jdbc.queryForObject("""
         select exists(select 1 from public.work_items where entity_id=? and id=? and xero_tenant_id=?
-          and stage in ('QUOTED','TO_SCHEDULE','SCHEDULED','TO_INVOICE','INVOICE_DRAFTED','INVOICED') and xero_invoice_id is null
+          and stage in ('QUOTED','TO_SCHEDULE','SCHEDULED','WORK_IN_PROGRESS','JOB_COMPLETED','INVOICED') and xero_invoice_id is null
           and job_id is not distinct from ? and quote_number=? and (cast(? as uuid) is null or xero_contact_id=?))
         """,Boolean.class,mapping.entityId(),candidate.itemId(),mapping.tenantId(),candidate.jobId(),candidate.quoteNumber(),candidate.contactId(),candidate.contactId()));
   }
@@ -105,13 +105,13 @@ public class InvoiceMirrorRepository {
         select w.vwork_job_id,w.vwork_status,w.technician_name,w.scheduled_start,
           (select e.from_stage from public.work_item_events e where e.entity_id=w.entity_id
             and e.work_item_id=w.id and e.to_stage in ('INVOICED','CLOSED')
-            and e.from_stage in ('QUOTED','TO_SCHEDULE','SCHEDULED','TO_INVOICE','INVOICE_DRAFTED')
+            and e.from_stage in ('QUOTED','TO_SCHEDULE','SCHEDULED','WORK_IN_PROGRESS','JOB_COMPLETED')
             order by e.id desc limit 1) as previous_stage
         from public.work_items w where w.entity_id=? and w.id=? and w.xero_tenant_id=?
         """, (r,n) -> {
       if (r.getString("vwork_job_id") != null && r.getString("vwork_status") != null) {
         String status=r.getString("vwork_status");
-        if ("COMPLETED".equals(status)) return WorkItemStage.TO_INVOICE;
+        if ("COMPLETED".equals(status)) return WorkItemStage.JOB_COMPLETED;
         if (!"CANCELED".equals(status) && r.getString("technician_name") != null
             && !r.getString("technician_name").isBlank() && r.getTimestamp("scheduled_start") != null)
           return WorkItemStage.SCHEDULED;
@@ -120,8 +120,8 @@ public class InvoiceMirrorRepository {
       String previous=r.getString("previous_stage");
       if ("QUOTED".equals(previous)) return WorkItemStage.QUOTED;
       if ("TO_SCHEDULE".equals(previous)) return WorkItemStage.TO_SCHEDULE;
-      return WorkItemStage.TO_INVOICE;
-    },mapping.entityId(),item,mapping.tenantId()).stream().findFirst().orElse(WorkItemStage.TO_INVOICE);
+      return WorkItemStage.JOB_COMPLETED;
+    },mapping.entityId(),item,mapping.tenantId()).stream().findFirst().orElse(WorkItemStage.JOB_COMPLETED);
   }
   public int update(QuoteMirrorService.Mapping mapping, UUID item, XeroInvoiceClient.WorkflowInvoice invoice,
       StageMachine.State next, int version, Instant now, LocalDate lateAfter, StageMachine.State before) {
@@ -146,7 +146,7 @@ public class InvoiceMirrorRepository {
           invoice_amount_due=?,invoice_due_date=?,stage=?,owner_id=?,close_reason=?,closing_note=?,attention_codes=string_to_array(?,','),
           stage_entered_at=case when stage<>? then ? else stage_entered_at end,
           late_after=case when stage<>? then ? else late_after end,version=version+1,updated_at=now()
-        where entity_id=? and id=? and xero_tenant_id=? and version=? and xero_invoice_id is null and stage in ('QUOTED','TO_SCHEDULE','SCHEDULED','TO_INVOICE','INVOICE_DRAFTED','INVOICED')
+        where entity_id=? and id=? and xero_tenant_id=? and version=? and xero_invoice_id is null and stage in ('QUOTED','TO_SCHEDULE','SCHEDULED','WORK_IN_PROGRESS','JOB_COMPLETED','INVOICED')
           and job_id is not distinct from ? and quote_number=?
         """,invoice.id(),invoice.number(),invoice.status().name(),invoice.sentToContact(),invoice.total(),invoice.amountDue(),
         invoice.dueDate(),next.stage().name(),next.ownerId(),next.closeReason(),next.closingNote(),String.join(",",next.attention().stream().sorted().toList()),
@@ -156,7 +156,7 @@ public class InvoiceMirrorRepository {
   public int markMultiple(QuoteMirrorService.Mapping mapping, Unlinked candidate, int version) {
     return jdbc.update("""
         update public.work_items set attention_codes=array_append(attention_codes,'INVOICE_MULTIPLE_MATCHES'),version=version+1,updated_at=now()
-        where entity_id=? and id=? and xero_tenant_id=? and version=? and stage in ('QUOTED','TO_SCHEDULE','SCHEDULED','TO_INVOICE','INVOICE_DRAFTED','INVOICED') and xero_invoice_id is null
+        where entity_id=? and id=? and xero_tenant_id=? and version=? and stage in ('QUOTED','TO_SCHEDULE','SCHEDULED','WORK_IN_PROGRESS','JOB_COMPLETED','INVOICED') and xero_invoice_id is null
           and job_id is not distinct from ? and quote_number=? and not ('INVOICE_MULTIPLE_MATCHES'=any(attention_codes))
         """,mapping.entityId(),candidate.itemId(),mapping.tenantId(),version,candidate.jobId(),candidate.quoteNumber());
   }

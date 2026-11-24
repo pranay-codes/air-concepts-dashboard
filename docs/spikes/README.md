@@ -9,6 +9,7 @@
 | Question | Status | Note |
 |---|---|---|
 | Green-line vWork API and template identity | partial (documentation only) | [gl-vwork-api.md](gl-vwork-api.md) |
+| Green-line vWork job creation from accepted quotes, price-free templates and third-party ID | partial (implemented, disabled by flag; documentation only) | [gl-vwork-job-create.md](gl-vwork-job-create.md) |
 | Green-line Xero quote and contact reads | partial (documentation only) | [gl-xero-quotes-contacts.md](gl-xero-quotes-contacts.md) |
 | Green-line Xero invoice writes and attachments | partial (documentation only) | [gl-xero-invoice-write.md](gl-xero-invoice-write.md) |
 | Xero quote send, invoice recipient override and invoice attachments | not started | |

@@ -79,7 +79,7 @@ class VworkSyncTest {
     var linked = new com.airconcepts.dashboard.workitems.StageMachine.State(stage, manager, null, null, true, false, Set.of());
     var scheduled = new com.airconcepts.dashboard.workitems.StageMachine.State(com.airconcepts.dashboard.workitems.WorkItemStage.SCHEDULED,
         manager, null, null, true, false, Set.of());
-    var ready = new com.airconcepts.dashboard.workitems.StageMachine.State(com.airconcepts.dashboard.workitems.WorkItemStage.TO_INVOICE,
+    var ready = new com.airconcepts.dashboard.workitems.StageMachine.State(com.airconcepts.dashboard.workitems.WorkItemStage.JOB_COMPLETED,
         owner, null, null, true, false, Set.of());
     var job = client.create(credential, new VworkClient.NewJob("J-1", "template-a", "Synthetic", List.of(new VworkClient.ScopeLine("Work", "1"))));
     var at = Instant.parse("2026-11-20T00:00:00Z");

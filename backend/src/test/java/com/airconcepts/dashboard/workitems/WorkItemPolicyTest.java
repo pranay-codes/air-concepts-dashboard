@@ -24,7 +24,7 @@ class WorkItemPolicyTest {
           .isEqualTo(stage == WorkItemStage.TO_SCHEDULE && !linked && actor.maySchedule());
       for (var action : new WorkItemAction[]{WorkItemAction.PREPARE_INVOICE, WorkItemAction.NO_INVOICE_NEEDED})
         assertThat(WorkItemPolicy.allowed(action, actor.role(), true, actor.owner(), actor.manager(), stage, linked, linked))
-            .isEqualTo(stage == WorkItemStage.TO_INVOICE && !linked && actor.finance());
+            .isEqualTo(stage == WorkItemStage.JOB_COMPLETED && !linked && actor.finance());
       for (var action : WorkItemAction.values())
         assertThat(WorkItemPolicy.allowed(action, actor.role(), false, actor.owner(), actor.manager(), stage, linked, linked)).isFalse();
     }
@@ -41,11 +41,11 @@ class WorkItemPolicyTest {
 
   @Test void gl09_invoiceActionsRequireFinanceRoleAndNoExistingInvoice() {
     assertThat(WorkItemPolicy.allowed(WorkItemAction.PREPARE_INVOICE, Role.FINANCIAL_ADMIN, true, false, false,
-        WorkItemStage.TO_INVOICE, true, false)).isTrue();
+        WorkItemStage.JOB_COMPLETED, true, false)).isTrue();
     assertThat(WorkItemPolicy.allowed(WorkItemAction.PREPARE_INVOICE, Role.STANDARD_USER, true, true, true,
-        WorkItemStage.TO_INVOICE, true, false)).isFalse();
+        WorkItemStage.JOB_COMPLETED, true, false)).isFalse();
     assertThat(WorkItemPolicy.allowed(WorkItemAction.NO_INVOICE_NEEDED, Role.DIRECTOR, true, false, false,
-        WorkItemStage.TO_INVOICE, true, true)).isFalse();
+        WorkItemStage.JOB_COMPLETED, true, true)).isFalse();
   }
 
   @Test void gl04_ownerCanEditOpenItemButInactiveUserAndClosedItemCannot() {

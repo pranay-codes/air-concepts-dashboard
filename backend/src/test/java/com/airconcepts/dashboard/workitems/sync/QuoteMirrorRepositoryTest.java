@@ -221,9 +221,9 @@ class QuoteMirrorRepositoryTest {
       var matching = UUID.randomUUID(); var unknown = UUID.randomUUID(); var other = UUID.randomUUID();
       jdbc.update("""
           insert into public.work_items(id,entity_id,xero_tenant_id,xero_quote_id,quote_number,xero_quote_status,stage,stage_entered_at)
-          values (?,?,?,?,'Q-1','ACCEPTED','TO_INVOICE','2026-11-18T00:00:00Z'),
-                 (?,?,null,?,'Q-2','ACCEPTED','TO_INVOICE','2026-11-18T00:00:00Z'),
-                 (?,?,?,?,'Q-3','ACCEPTED','TO_INVOICE','2026-11-18T00:00:00Z')
+          values (?,?,?,?,'Q-1','ACCEPTED','JOB_COMPLETED','2026-11-18T00:00:00Z'),
+                 (?,?,null,?,'Q-2','ACCEPTED','JOB_COMPLETED','2026-11-18T00:00:00Z'),
+                 (?,?,?,?,'Q-3','ACCEPTED','JOB_COMPLETED','2026-11-18T00:00:00Z')
           """, matching, entity, mapping.tenantId(), UUID.randomUUID(), unknown, entity, UUID.randomUUID(),
           other, entity, UUID.randomUUID(), UUID.randomUUID());
       jdbc.execute("set local role service_role");
@@ -252,7 +252,7 @@ class QuoteMirrorRepositoryTest {
       jdbc.update("insert into public.green_line_entity_settings(entity_id,enabled) values (?,true)", entity);
       jdbc.update("""
           insert into public.work_items(id,entity_id,xero_quote_id,quote_number,xero_quote_status,stage,xero_invoice_id)
-          values (?,?,?,'Q-1','ACCEPTED','TO_INVOICE',?)
+          values (?,?,?,'Q-1','ACCEPTED','JOB_COMPLETED',?)
           """, id, entity, UUID.randomUUID(), UUID.randomUUID());
       jdbc.update("update public.work_items set xero_tenant_id=? where entity_id=?", mapping.tenantId(), entity);
       jdbc.execute("set local role service_role");
@@ -536,7 +536,7 @@ class QuoteMirrorRepositoryTest {
       var entity=entity(); var mapping=mapping(entity); var item=UUID.randomUUID(); var invoice=UUID.randomUUID();
       jdbc.update("insert into public.green_line_entity_settings(entity_id,enabled) values (?,true)",entity);
       jdbc.update("insert into public.work_items(id,entity_id,xero_tenant_id,xero_quote_id,quote_number,job_id,xero_quote_status,stage,attention_codes) "
-          + "values (?,?,?,?,'Q-1','J-1','INVOICED','TO_INVOICE',array['QUOTE_INVOICED_IN_XERO'])",
+          + "values (?,?,?,?,'Q-1','J-1','INVOICED','JOB_COMPLETED',array['QUOTE_INVOICED_IN_XERO'])",
           item,entity,mapping.tenantId(),UUID.randomUUID());
       jdbc.execute("set local role service_role");
       var repository=new InvoiceMirrorRepository(jdbc);
@@ -545,7 +545,7 @@ class QuoteMirrorRepositoryTest {
       mirror.link(mapping,candidate,new com.airconcepts.dashboard.xero.XeroInvoiceClient.WorkflowInvoice(invoice,"INV-1",
           com.airconcepts.dashboard.invoices.InvoiceStatus.DRAFT,new java.math.BigDecimal("100"),new java.math.BigDecimal("100"),null,false,"J-1 / Q-1"),false);
       assertThat(jdbc.queryForObject("select xero_invoice_id from public.work_items where id=?",UUID.class,item)).isEqualTo(invoice);
-      assertThat(jdbc.queryForObject("select stage from public.work_items where id=?",String.class,item)).isEqualTo("INVOICE_DRAFTED");
+      assertThat(jdbc.queryForObject("select stage from public.work_items where id=?",String.class,item)).isEqualTo("JOB_COMPLETED");
       assertThat(jdbc.queryForObject("select 'QUOTE_INVOICED_IN_XERO'=any(attention_codes) from public.work_items where id=?",Boolean.class,item)).isFalse();
       tx.setRollbackOnly();
     });
@@ -556,7 +556,7 @@ class QuoteMirrorRepositoryTest {
       var entity=entity(); var mapping=mapping(entity); var actor=staff("FINANCIAL_ADMIN"); var item=UUID.randomUUID();
       jdbc.update("insert into public.green_line_entity_settings(entity_id,enabled) values (?,true)",entity);
       jdbc.update("insert into public.work_items(id,entity_id,xero_tenant_id,xero_quote_id,quote_number,xero_quote_status,stage,xero_invoice_id,invoice_status) "
-          + "values (?,?,?,?,'Q-1','ACCEPTED','INVOICE_DRAFTED',?,'AUTHORISED')",item,entity,mapping.tenantId(),UUID.randomUUID(),UUID.randomUUID());
+          + "values (?,?,?,?,'Q-1','ACCEPTED','JOB_COMPLETED',?,'AUTHORISED')",item,entity,mapping.tenantId(),UUID.randomUUID(),UUID.randomUUID());
       jdbc.execute("set local role service_role");
       var service=new WorkItemService(new WorkItemRepository(jdbc));
       service.markSent(new CurrentUser(actor.toString(),Role.FINANCIAL_ADMIN),entity,item,0);
@@ -572,7 +572,7 @@ class QuoteMirrorRepositoryTest {
       var item=UUID.randomUUID(); var quote=UUID.randomUUID();
       jdbc.update("insert into public.green_line_entity_settings(entity_id,enabled) values (?,true)",entity);
       jdbc.update("insert into public.work_items(id,entity_id,xero_tenant_id,xero_quote_id,quote_number,job_id,xero_quote_status,stage) "
-          + "values (?,?,?,?,'Q-1','J-1','ACCEPTED','TO_INVOICE')",item,entity,mapping.tenantId(),quote);
+          + "values (?,?,?,?,'Q-1','J-1','ACCEPTED','JOB_COMPLETED')",item,entity,mapping.tenantId(),quote);
       jdbc.execute("set local role service_role");
       var context=new com.airconcepts.dashboard.workitems.operations.InvoiceDraftContext(new WorkItemRepository(jdbc),
           new com.airconcepts.dashboard.workitems.operations.ExternalOperationRepository(jdbc),jdbc);
@@ -597,7 +597,7 @@ class QuoteMirrorRepositoryTest {
       var item=UUID.randomUUID(); var quote=UUID.randomUUID(); var invoice=UUID.randomUUID();
       jdbc.update("insert into public.green_line_entity_settings(entity_id,enabled) values (?,true)",entity);
       jdbc.update("insert into public.work_items(id,entity_id,xero_tenant_id,xero_quote_id,quote_number,job_id,xero_quote_status,stage) "
-          + "values (?,?,?,?,'Q-1','J-1','ACCEPTED','TO_INVOICE')",item,entity,mapping.tenantId(),quote);
+          + "values (?,?,?,?,'Q-1','J-1','ACCEPTED','JOB_COMPLETED')",item,entity,mapping.tenantId(),quote);
       jdbc.execute("set local role service_role");
       var items=new WorkItemRepository(jdbc);
       var operations=new com.airconcepts.dashboard.workitems.operations.ExternalOperationRepository(jdbc);
@@ -611,7 +611,7 @@ class QuoteMirrorRepositoryTest {
       new com.airconcepts.dashboard.workitems.operations.InvoiceOperationCompletion(new QuoteMirrorRepository(jdbc),new InvoiceMirrorRepository(jdbc),operations,
           Clock.fixed(NOW,ZoneOffset.UTC)).complete(entity,item,context,reservation.id(),observed,
           com.airconcepts.dashboard.workitems.operations.OperationState.Result.CREATED);
-      assertThat(jdbc.queryForObject("select stage from public.work_items where id=?",String.class,item)).isEqualTo("INVOICE_DRAFTED");
+      assertThat(jdbc.queryForObject("select stage from public.work_items where id=?",String.class,item)).isEqualTo("JOB_COMPLETED");
       assertThat(jdbc.queryForObject("select xero_invoice_id from public.work_items where id=?",UUID.class,item)).isEqualTo(invoice);
       assertThat(jdbc.queryForObject("select status from public.external_operations where id=?",String.class,reservation.id())).isEqualTo("SUCCEEDED");
       tx.setRollbackOnly();
@@ -666,7 +666,7 @@ class QuoteMirrorRepositoryTest {
       mirror.apply(entity, item, revision, new com.airconcepts.dashboard.vwork.VworkClient.Job("mock-1", "J-1", "test-template", null,
           com.airconcepts.dashboard.vwork.VworkClient.Status.COMPLETED, "Synthetic worker", NOW, NOW));
       var row = jdbc.queryForMap("select stage,owner_id,completed_at from public.work_items where id=?", item);
-      assertThat(row.get("stage")).isEqualTo("TO_INVOICE");
+      assertThat(row.get("stage")).isEqualTo("JOB_COMPLETED");
       assertThat(row.get("owner_id")).isEqualTo(owner);
       assertThat(row.get("completed_at")).isNotNull();
       assertThat(jdbc.queryForObject("select count(*) from public.work_item_events where work_item_id=? and source='VWORK_SYNC'", Integer.class, item)).isEqualTo(3);

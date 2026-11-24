@@ -10,10 +10,15 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
-/** Mock-only job creation. Each external call happens outside the reservation/completion transactions. */
+/**
+ * Job creation. Each external call happens outside the reservation/completion transactions. The live provider is
+ * only used when dashboard.vwork.job-creation-enabled is set, which must stay off until vWork is verified on Test.
+ */
 @Service
 public class CreateJobService {
   @io.swagger.v3.oas.annotations.media.Schema(name = "CreateJobResult", requiredProperties = {"operationId", "outcome"})
@@ -22,9 +27,13 @@ public class CreateJobService {
   private final VworkOperationCompletion completion;
   private final OperationOutcomeService outcomes;
   private final VworkConnectionService connections;
+  private final JdbcTemplate jdbc;
+  private final boolean jobCreationEnabled;
   public CreateJobService(VworkJobReservation reservations, VworkOperationCompletion completion,
-      OperationOutcomeService outcomes, VworkConnectionService connections) {
+      OperationOutcomeService outcomes, VworkConnectionService connections, JdbcTemplate jdbc,
+      @Value("${dashboard.vwork.job-creation-enabled:false}") boolean jobCreationEnabled) {
     this.reservations = reservations; this.completion = completion; this.outcomes = outcomes; this.connections = connections;
+    this.jdbc = jdbc; this.jobCreationEnabled = jobCreationEnabled;
   }
 
   public Result submit(CurrentUser user, UUID entity, UUID item, int version, VworkClient.NewJob request) {
@@ -38,8 +47,11 @@ public class CreateJobService {
     user.requireRole(Role.DIRECTOR, Role.FINANCIAL_ADMIN, Role.STANDARD_USER);
     validate(request, version);
     var access = connections.systemAccess();
-    if (!(access.provider() instanceof MockVworkClient) || !access.searchVerified())
+    boolean allowed = access.provider() instanceof MockVworkClient ? access.searchVerified() : jobCreationEnabled;
+    if (!allowed)
       throw new ApiFailure(HttpStatus.CONFLICT, "VWORK_CAPABILITY_UNVERIFIED", "Job creation is unavailable until vWork templates are verified.");
+    // The Xero contact comes from the stored work item, never from the browser.
+    request = request.withCustomerThirdPartyId(xeroContact(entity, item));
     var operation = (previous == null
         ? reservations.reserve(user, entity, item, version, access.revision(), request.templateId(), request.reference(), fingerprint(request))
         : reservations.retry(user, entity, item, version, access.revision(), request.templateId(), request.reference(), fingerprint(request), previous)).id();
@@ -83,6 +95,15 @@ public class CreateJobService {
     }
   }
 
+  private String xeroContact(UUID entity, UUID item) {
+    var contacts = jdbc.query("select xero_contact_id from public.work_items where entity_id=? and id=?",
+        (row, index) -> row.getObject("xero_contact_id", UUID.class), entity, item);
+    var contact = contacts.isEmpty() ? null : contacts.getFirst();
+    if (contact == null) throw new ApiFailure(HttpStatus.CONFLICT, "VWORK_CUSTOMER_UNLINKED",
+        "This quote has no Xero contact, so the job cannot be linked to a customer.");
+    return contact.toString();
+  }
+
   private VworkConnectionService.Access sameConnection(VworkConnectionService.Access expected) {
     var actual = connections.systemAccess();
     if (actual == null || !expected.revision().equals(actual.revision()) || expected.provider() != actual.provider())
@@ -111,6 +132,7 @@ public class CreateJobService {
       part(digest, request.reference()); part(digest, request.templateId()); part(digest, request.description());
       part(digest, request.customer()); part(digest, request.contactPerson()); part(digest, request.phone());
       part(digest, request.siteAddress()); part(digest, request.notes() == null ? "" : request.notes());
+      part(digest, request.customerThirdPartyId() == null ? "" : request.customerThirdPartyId());
       digest.update(ByteBuffer.allocate(4).putInt(request.scope().size()).array());
       for (var line : request.scope()) { part(digest, line.description()); part(digest, line.quantity()); }
       return HexFormat.of().formatHex(digest.digest());

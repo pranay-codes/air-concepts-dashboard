@@ -5,7 +5,8 @@ for (const width of [390, 1440]) {
   test(`GL main flow from quote to test invoice at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await greenLane(page, "DIRECTOR");
-    let stage: "QUOTED" | "TO_SCHEDULE" | "SCHEDULED" | "TO_INVOICE" | "INVOICE_DRAFTED" = "QUOTED";
+    let stage: "QUOTED" | "TO_SCHEDULE" | "SCHEDULED" | "JOB_COMPLETED" = "QUOTED";
+    let invoiceDrafted = false;
     let invoiceSubmitted: unknown;
     const summary = () => ({
       id: JOB_A,
@@ -22,24 +23,25 @@ for (const width of [390, 1440]) {
       stageEnteredAt: "2026-11-19T00:00:00Z",
       daysInStage: 1,
       late: false,
-      nextAction: {
-        QUOTED: "FOLLOW_UP",
-        TO_SCHEDULE: "CREATE_JOB",
-        SCHEDULED: "AWAIT_COMPLETION",
-        TO_INVOICE: "PREPARE_INVOICE",
-        INVOICE_DRAFTED: "REVIEW_AND_SEND",
-      }[stage],
+      nextAction:
+        stage === "JOB_COMPLETED"
+          ? invoiceDrafted
+            ? "REVIEW_AND_SEND"
+            : "PREPARE_INVOICE"
+          : { QUOTED: "FOLLOW_UP", TO_SCHEDULE: "CREATE_JOB", SCHEDULED: "AWAIT_COMPLETION" }[
+              stage
+            ],
       flags: [],
       attention: [],
-      version: { QUOTED: 0, TO_SCHEDULE: 1, SCHEDULED: 2, TO_INVOICE: 3, INVOICE_DRAFTED: 4 }[
-        stage
-      ],
+      version:
+        { QUOTED: 0, TO_SCHEDULE: 1, SCHEDULED: 2, JOB_COMPLETED: 3 }[stage] +
+        (invoiceDrafted ? 1 : 0),
     });
     await page.route(`**/api/v1/entities/${ENTITY_A}/green-line/sync`, async (route) => {
       if (route.request().method() === "OPTIONS") return route.fallback();
       if (route.request().method() === "POST") {
         if (stage === "QUOTED") stage = "TO_SCHEDULE";
-        else if (stage === "SCHEDULED") stage = "TO_INVOICE";
+        else if (stage === "SCHEDULED") stage = "JOB_COMPLETED";
       }
       await route.fulfill({
         headers: { "Access-Control-Allow-Origin": "*" },
@@ -107,7 +109,7 @@ for (const width of [390, 1440]) {
         });
       if (path.endsWith("/invoice")) {
         invoiceSubmitted = route.request().postDataJSON();
-        stage = "INVOICE_DRAFTED";
+        invoiceDrafted = true;
         return route.fulfill({
           headers,
           json: { operationId: "00000000-0000-4000-8000-000000000198", outcome: "CREATED" },
@@ -118,21 +120,20 @@ for (const width of [390, 1440]) {
         json: {
           summary: summary(),
           vwork: stage === "QUOTED" || stage === "TO_SCHEDULE" ? {} : { jobId: "mock-000001" },
-          invoice:
-            stage === "INVOICE_DRAFTED"
-              ? {
-                  invoiceId: "00000000-0000-4000-8000-000000000197",
-                  invoiceNumber: "MOCK-000001",
-                  status: "DRAFT",
-                }
-              : {},
+          invoice: invoiceDrafted
+            ? {
+                invoiceId: "00000000-0000-4000-8000-000000000197",
+                invoiceNumber: "MOCK-000001",
+                status: "DRAFT",
+              }
+            : {},
           links: {},
           events: [],
           operations: [],
           allowedActions:
             stage === "TO_SCHEDULE"
               ? ["CREATE_JOB"]
-              : stage === "TO_INVOICE"
+              : stage === "JOB_COMPLETED" && !invoiceDrafted
                 ? ["PREPARE_INVOICE"]
                 : [],
         },
