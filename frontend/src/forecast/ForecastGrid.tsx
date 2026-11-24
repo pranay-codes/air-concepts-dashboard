@@ -1,10 +1,11 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { DashboardApi } from "../api/dashboard";
 import { isAccessFailure } from "../api/client";
 import { useResource } from "../api/useResource";
 import { useAction } from "../api/useAction";
 import { Failure, Loading } from "../ui/Feedback";
-import { formatMoney } from "../ui/format";
+import { formatDecimal } from "../ui/format";
+import { decimal } from "./contracts";
 import { currentMonth } from "./ForecastHeader";
 import { monthName, signClass } from "./ForecastTable";
 
@@ -17,8 +18,8 @@ export function ForecastGrid(props: {
   entityId: string;
   subject: string;
   revision: number;
-  onOpening(month: string, opening: string | null, source: string | null, carried: boolean): void;
   onAccessDenied(): void;
+  onChanged(): void;
 }) {
   const { api, entityId, onAccessDenied } = props;
   const [start, setStart] = useState(() => stepMonth(currentMonth(), -1));
@@ -88,8 +89,8 @@ export function ForecastGrid(props: {
         Current and past forecasts are preserved. Creating a forecast refreshes the next six months
         from the latest synced Xero data. Rows are grouped by contact name; contacts with the same
         name appear together. Balances reflect only the invoices and bills shown here. A dash means
-        no amount for that contact in a saved month. An entered opening overrides the carried
-        balance.
+        no amount for that contact, or a month that has not been created. An entered opening
+        overrides the carried balance.
       </p>
       {success ? (
         <p role="status">
@@ -117,20 +118,10 @@ export function ForecastGrid(props: {
             <caption>Invoice and bill forecast · NZD</caption>
             <thead>
               <tr>
-                <th scope="col">Contact</th>
+                <th scope="col" aria-label="Forecast rows" />
                 {resource.data.months.map((month) => (
                   <th scope="col" key={month.month}>
                     {monthName(month.month)}
-                    {!month.available ? <span className="supporting"> · Not created</span> : null}
-                    {month.generatedAt ? (
-                      <span className="supporting">
-                        {" "}
-                        · Saved{" "}
-                        {new Date(month.generatedAt).toLocaleDateString("en-NZ", {
-                          timeZone: "Pacific/Auckland",
-                        })}
-                      </span>
-                    ) : null}
                   </th>
                 ))}
               </tr>
@@ -140,29 +131,15 @@ export function ForecastGrid(props: {
                 <th scope="row">Opening balance</th>
                 {resource.data.months.map((month) => (
                   <td className="money" key={month.month}>
-                    <span className={signClass(month.opening)}>
-                      {month.opening === null ? "Not recorded" : formatMoney(month.opening, "NZD")}
-                    </span>{" "}
-                    <button
-                      type="button"
-                      aria-label={`Edit opening balance for ${monthName(month.month)}`}
-                      onClick={() =>
-                        props.onOpening(
-                          month.month,
-                          month.opening,
-                          month.openingNote,
-                          month.openingSource === "CARRIED_FORWARD",
-                        )
-                      }
-                    >
-                      Edit
-                    </button>
-                    {month.openingSource ? (
-                      <span className="supporting">
-                        {" "}
-                        {month.openingSource === "ENTERED" ? "Entered" : "Carried forward"}
-                      </span>
-                    ) : null}
+                    <OpeningCell
+                      key={`${props.subject}:${entityId}:${month.month}`}
+                      api={api}
+                      entityId={entityId}
+                      subject={props.subject}
+                      month={month}
+                      onSaved={props.onChanged}
+                      onAccessDenied={onAccessDenied}
+                    />
                   </td>
                 ))}
               </tr>
@@ -174,10 +151,10 @@ export function ForecastGrid(props: {
                 {resource.data.months.map((month) => (
                   <td className={`money ${signClass(month.closing) ?? ""}`} key={month.month}>
                     {!month.available
-                      ? "Not created"
+                      ? "\u2014"
                       : month.closing === null
                         ? "Not recorded"
-                        : formatMoney(month.closing, "NZD")}
+                        : formatDecimal(month.closing, 2)}
                   </td>
                 ))}
               </tr>
@@ -186,6 +163,117 @@ export function ForecastGrid(props: {
         </div>
       ) : null}
     </section>
+  );
+}
+function OpeningCell(props: {
+  api: DashboardApi;
+  entityId: string;
+  subject: string;
+  month: import("../api/dashboard").ForecastGrid["months"][number];
+  onSaved(): void;
+  onAccessDenied(): void;
+}) {
+  const { month } = props;
+  const editButton = useRef<HTMLButtonElement>(null);
+  const [editing, setEditing] = useState(false);
+  const [amount, setAmount] = useState(month.opening ?? "");
+  const [error, setError] = useState("");
+  const action = useAction(`${props.subject}:${props.entityId}:${month.month}:grid-opening`);
+  if (!editing)
+    return (
+      <>
+        <span className={signClass(month.opening)}>
+          {month.opening === null ? "Not recorded" : formatDecimal(month.opening, 2)}
+        </span>{" "}
+        <button
+          type="button"
+          ref={editButton}
+          className="compact-button"
+          aria-label={`Edit opening balance for ${monthName(month.month)}`}
+          onClick={() => {
+            setAmount(month.opening ?? "");
+            setError("");
+            setEditing(true);
+          }}
+        >
+          Edit
+        </button>
+      </>
+    );
+  return (
+    <form
+      className="forecast-grid-opening"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const value = decimal(amount);
+        if (value === null) {
+          setError("Enter a cash balance with at most two decimal places.");
+          return;
+        }
+        if (month.openingSource === "CARRIED_FORWARD" && value === decimal(month.opening ?? ""))
+          return;
+        setError("");
+        void action
+          .run(
+            (signal) =>
+              props.api.saveForecastOpening(
+                props.entityId,
+                month.month,
+                value,
+                month.openingNote ?? "",
+                signal,
+              ),
+            (failure) => {
+              if (isAccessFailure(failure)) props.onAccessDenied();
+            },
+          )
+          .then((result) => {
+            if (result) {
+              setEditing(false);
+              props.onSaved();
+              requestAnimationFrame(() => editButton.current?.focus());
+            }
+          });
+      }}
+    >
+      <input
+        autoFocus
+        inputMode="decimal"
+        aria-label={`Opening balance for ${monthName(month.month)}`}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? `opening-error-${month.month}` : undefined}
+        value={amount}
+        onChange={(event) => setAmount(event.target.value)}
+      />
+      <button
+        className="compact-button"
+        type="submit"
+        disabled={
+          action.busy ||
+          (month.openingSource === "CARRIED_FORWARD" &&
+            decimal(amount) === decimal(month.opening ?? ""))
+        }
+      >
+        {action.busy ? "Saving..." : "Save"}
+      </button>
+      <button
+        className="compact-button"
+        type="button"
+        disabled={action.busy}
+        onClick={() => {
+          setEditing(false);
+          requestAnimationFrame(() => editButton.current?.focus());
+        }}
+      >
+        Cancel
+      </button>
+      {error ? (
+        <p id={`opening-error-${month.month}`} role="alert">
+          {error}
+        </p>
+      ) : null}
+      {action.error ? <Failure error={action.error} /> : null}
+    </form>
   );
 }
 function FragmentRows({
@@ -214,9 +302,9 @@ function FragmentRows({
             {grid.months.map((month) => (
               <td className="money" key={month.month}>
                 {!month.available
-                  ? "Not created"
+                  ? "\u2014"
                   : row.amounts[month.month]
-                    ? formatMoney(row.amounts[month.month], "NZD")
+                    ? formatDecimal(row.amounts[month.month], 2)
                     : "—"}
               </td>
             ))}
@@ -229,7 +317,7 @@ function FragmentRows({
           const total = direction === "IN" ? month.moneyIn : month.moneyOut;
           return (
             <td className="money" key={month.month}>
-              {total === null ? "Not created" : formatMoney(total, "NZD")}
+              {total === null ? "\u2014" : formatDecimal(total, 2)}
             </td>
           );
         })}

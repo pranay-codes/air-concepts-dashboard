@@ -15,11 +15,9 @@ test("FR-UC04-04 grid opening edit refreshes the saved amount", async ({ page })
     .getByRole("button", { name: /^Edit opening balance for / })
     .first()
     .click();
-  await expect(
-    page.getByRole("button", { name: "Save opening balance", exact: true }),
-  ).toBeDisabled();
-  await page.getByLabel("Opening cash balance (NZD)").fill("500.00");
-  await page.getByRole("button", { name: "Save opening balance", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await grid.getByRole("textbox", { name: /^Opening balance for / }).fill("500.00");
+  await grid.getByRole("button", { name: "Save", exact: true }).click();
   await expect.poll(() => state.opening.get(ENTITY_A)).toBe("500.00");
   await expect(grid.getByText(/500\.00/).first()).toBeVisible();
   await expect(grid.getByText(/615\.00/).first()).toBeVisible();

@@ -574,3 +574,13 @@
   min-width: 8rem;
   text-align: right;
 }
+
+.forecast-grid-opening {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+.forecast-grid-opening input {
+  width: 8rem;
+}

@@ -258,11 +258,8 @@ function EntityForecast(props: Props & { entity: Entity }) {
                   entityId={entity.id}
                   subject={props.profile.subject}
                   revision={revision}
-                  onOpening={(month, opening, source, carried) => {
-                    setOpeningMonth({ month, opening, source, carried, fromGrid: true });
-                    setDialog("opening");
-                  }}
                   onAccessDenied={onAccessDenied}
+                  onChanged={changed}
                 />
                 <details open>
                   <summary>Financial year summary</summary>
