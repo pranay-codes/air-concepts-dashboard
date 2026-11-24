@@ -2024,7 +2024,7 @@
           "required" : false,
           "schema" : {
             "type" : "string",
-            "enum" : [ "QUOTED", "TO_SCHEDULE", "SCHEDULED", "WORK_IN_PROGRESS", "JOB_COMPLETED", "INVOICED", "CLOSED" ]
+            "enum" : [ "QUOTED", "TO_SCHEDULE", "SCHEDULED", "WORK_IN_PROGRESS", "JOB_COMPLETED", "INVOICE_CREATED", "INVOICED", "CLOSED" ]
           }
         }, {
           "name" : "xeroStatus",
@@ -3646,7 +3646,7 @@
           },
           "stage" : {
             "type" : "string",
-            "enum" : [ "QUOTED", "TO_SCHEDULE", "SCHEDULED", "WORK_IN_PROGRESS", "JOB_COMPLETED", "INVOICED", "CLOSED" ]
+            "enum" : [ "QUOTED", "TO_SCHEDULE", "SCHEDULED", "WORK_IN_PROGRESS", "JOB_COMPLETED", "INVOICE_CREATED", "INVOICED", "CLOSED" ]
           },
           "closeReason" : {
             "type" : "string"

@@ -5,7 +5,8 @@ for (const width of [390, 1440]) {
   test(`GL main flow from quote to test invoice at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await greenLane(page, "DIRECTOR");
-    let stage: "QUOTED" | "TO_SCHEDULE" | "SCHEDULED" | "JOB_COMPLETED" = "QUOTED";
+    let stage: "QUOTED" | "TO_SCHEDULE" | "SCHEDULED" | "JOB_COMPLETED" | "INVOICE_CREATED" =
+      "QUOTED";
     let invoiceDrafted = false;
     let invoiceSubmitted: unknown;
     const summary = () => ({
@@ -23,19 +24,18 @@ for (const width of [390, 1440]) {
       stageEnteredAt: "2026-11-19T00:00:00Z",
       daysInStage: 1,
       late: false,
-      nextAction:
-        stage === "JOB_COMPLETED"
-          ? invoiceDrafted
-            ? "REVIEW_AND_SEND"
-            : "PREPARE_INVOICE"
-          : { QUOTED: "FOLLOW_UP", TO_SCHEDULE: "CREATE_JOB", SCHEDULED: "AWAIT_COMPLETION" }[
-              stage
-            ],
+      nextAction: {
+        QUOTED: "FOLLOW_UP",
+        TO_SCHEDULE: "CREATE_JOB",
+        SCHEDULED: "AWAIT_COMPLETION",
+        JOB_COMPLETED: "PREPARE_INVOICE",
+        INVOICE_CREATED: "REVIEW_AND_SEND",
+      }[stage],
       flags: [],
       attention: [],
-      version:
-        { QUOTED: 0, TO_SCHEDULE: 1, SCHEDULED: 2, JOB_COMPLETED: 3 }[stage] +
-        (invoiceDrafted ? 1 : 0),
+      version: { QUOTED: 0, TO_SCHEDULE: 1, SCHEDULED: 2, JOB_COMPLETED: 3, INVOICE_CREATED: 4 }[
+        stage
+      ],
     });
     await page.route(`**/api/v1/entities/${ENTITY_A}/green-line/sync`, async (route) => {
       if (route.request().method() === "OPTIONS") return route.fallback();
@@ -110,6 +110,7 @@ for (const width of [390, 1440]) {
       if (path.endsWith("/invoice")) {
         invoiceSubmitted = route.request().postDataJSON();
         invoiceDrafted = true;
+        stage = "INVOICE_CREATED";
         return route.fulfill({
           headers,
           json: { operationId: "00000000-0000-4000-8000-000000000198", outcome: "CREATED" },

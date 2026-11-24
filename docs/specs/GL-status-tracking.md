@@ -27,3 +27,14 @@ Approved by the human in conversation on 24 November 2026. Where this amendment 
 - **Invoice matching (GL-STATUS-02):** matching of Xero invoices to open work items runs at all times, including before the job is complete. There is no configuration switch. A draft invoice links without changing the stage. A sent, authorised invoice moves the item to Invoiced.
 
 The existing provider spikes are partial: `docs/spikes/gl-xero-quotes-contacts.md` does not confirm quote pagination completeness; `docs/spikes/gl-xero-invoice-write.md` does not confirm account-specific invoice matching or sent semantics; `docs/spikes/gl-vwork-api.md` does not establish a trustworthy vWork job-to-entity identity. These must not be treated as verified by synthetic tests. The exact stage precedence for other simultaneously conflicting events remains to be defined from observable provider states and the user's decisions.
+
+## Amendment, 24 November 2026 (Invoice created stage)
+
+Approved by the human in conversation on 24 November 2026 ("let's do option A").
+
+- **Stage set (GL-STATUS-08):** Quoted, To schedule, Job scheduled, Work in progress, Job completed, **Invoice created**, Invoiced, and Closed. Stage is the single source of truth for where an item is; there is no separate invoice-status column.
+- **Invoice created:** a Xero invoice that exists but has not been sent (draft, or authorised and not sent) moves the item to Invoice created, whatever the job stage. Invoice created takes precedence over the job stage, as Invoiced already did.
+- **Invoiced:** only a sent, authorised invoice moves the item to Invoiced, regardless of vWork progress (GL-STATUS-02, unchanged).
+- **Job progress while Invoice created:** vWork progress continues to be recorded on the item, but it does not change the stage.
+- **Voiding:** a voided invoice returns the item to the job stage the caller derives from vWork and the quote. Without that, an item invoiced before its job finished returns to To schedule.
+- **Migration:** `20261124020000_gl_invoice_created_stage.sql` replaces the stage constraint and remaps existing items at Job completed with a linked invoice to Invoice created.

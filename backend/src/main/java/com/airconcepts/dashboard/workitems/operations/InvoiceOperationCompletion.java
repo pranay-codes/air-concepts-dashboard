@@ -52,7 +52,7 @@ public class InvoiceOperationCompletion {
     attention.remove("QUOTE_INVOICED_IN_XERO"); attention.remove("INVOICE_MULTIPLE_MATCHES");
     var next=new StageMachine.State(after.stage(),after.ownerId(),after.closeReason(),after.closingNote(),after.jobLinked(),after.invoiceLinked(),attention);
     var now=clock.instant();
-    var late=next.stage()==WorkItemStage.JOB_COMPLETED || next.stage()==WorkItemStage.JOB_COMPLETED
+    var late=next.stage().awaitsFinance()
         ? workingDays.addWorkingDays(BusinessTime.dateOf(now),config.threshold()) : null;
     try {
       if (invoices.link(mapping,candidate,invoice,next,item.version(),now,late)!=1) throw changed();

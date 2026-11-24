@@ -142,7 +142,7 @@ class WorkItemServiceTest {
   @Test void gl21_financeCanConfirmAuthorisedInvoiceWasSent() {
     when(repository.lockActor(actor)).thenReturn(Optional.of(Role.FINANCIAL_ADMIN));
     when(repository.lockItem(entity,item)).thenReturn(Optional.of(new WorkItemRepository.Item(
-        item,entity,WorkItemStage.JOB_COMPLETED,actor,null,null,2)));
+        item,entity,WorkItemStage.INVOICE_CREATED,actor,null,null,2)));
     when(repository.markSent(entity,item,2)).thenReturn(1);
     assertThat(service.markSent(user,entity,item,2).stage()).isEqualTo(WorkItemStage.INVOICED);
     verify(repository).auditMarkSent(entity,item,actor);

@@ -1212,7 +1212,7 @@ export interface components {
             quoteTotal?: string;
             currency?: string;
             /** @enum {string} */
-            stage?: "QUOTED" | "TO_SCHEDULE" | "SCHEDULED" | "WORK_IN_PROGRESS" | "JOB_COMPLETED" | "INVOICED" | "CLOSED";
+            stage?: "QUOTED" | "TO_SCHEDULE" | "SCHEDULED" | "WORK_IN_PROGRESS" | "JOB_COMPLETED" | "INVOICE_CREATED" | "INVOICED" | "CLOSED";
             closeReason?: string;
             owner?: components["schemas"]["StaffRef"];
             /** Format: date */
@@ -2997,7 +2997,7 @@ export interface operations {
         parameters: {
             query?: {
                 entityId?: string;
-                stage?: "QUOTED" | "TO_SCHEDULE" | "SCHEDULED" | "WORK_IN_PROGRESS" | "JOB_COMPLETED" | "INVOICED" | "CLOSED";
+                stage?: "QUOTED" | "TO_SCHEDULE" | "SCHEDULED" | "WORK_IN_PROGRESS" | "JOB_COMPLETED" | "INVOICE_CREATED" | "INVOICED" | "CLOSED";
                 xeroStatus?: "DRAFT" | "SENT" | "ACCEPTED" | "DECLINED" | "DELETED" | "INVOICED";
                 ownerId?: string;
                 followUpDueBy?: string;
