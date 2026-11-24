@@ -67,7 +67,13 @@ function EntityForecast(props: Props & { entity: Entity }) {
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const monthOpener = useRef<HTMLElement | null>(null);
   const [dialog, setDialog] = useState<"opening" | "export" | null>(null);
-  const [openingMonth, setOpeningMonth] = useState<ForecastMonth | null>(null);
+  const [openingMonth, setOpeningMonth] = useState<{
+    month: string;
+    opening: string | null;
+    source?: string | null;
+    fromGrid?: boolean;
+    carried?: boolean;
+  } | null>(null);
   const [document, setDocument] = useState<{ id: string; mode: AdjustmentMode } | null>(null);
   const [review, setReview] = useState<ForecastMonth | null>(null);
   const [revision, setRevision] = useState(0);
@@ -251,6 +257,11 @@ function EntityForecast(props: Props & { entity: Entity }) {
                   api={api}
                   entityId={entity.id}
                   subject={props.profile.subject}
+                  revision={revision}
+                  onOpening={(month, opening, source, carried) => {
+                    setOpeningMonth({ month, opening, source, carried, fromGrid: true });
+                    setDialog("opening");
+                  }}
                   onAccessDenied={onAccessDenied}
                 />
                 <details open>
@@ -352,10 +363,14 @@ function EntityForecast(props: Props & { entity: Entity }) {
           month={openingMonth.month}
           initial={openingMonth.opening}
           source={
-            openingMonth.month === resource.data.financialYearStart
-              ? resource.data.openingBalanceSource
-              : null
+            openingMonth.fromGrid
+              ? openingMonth.source
+              : openingMonth.month === resource.data.financialYearStart
+                ? resource.data.openingBalanceSource
+                : null
           }
+          requireChange={openingMonth.fromGrid}
+          requireAmountChange={openingMonth.carried}
           onClose={() => {
             setDialog(null);
             setOpeningMonth(null);

@@ -13,8 +13,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ForecastGridService {
-  @io.swagger.v3.oas.annotations.media.Schema(requiredProperties={"month","available","generatedAt"})
-  public record Month(String month,boolean available,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"},format="date-time") Instant generatedAt) {}
+  @io.swagger.v3.oas.annotations.media.Schema(requiredProperties={"month","available","generatedAt","moneyIn","moneyOut","opening","closing","openingSource","openingNote"})
+  public record Month(String month,boolean available,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"},format="date-time") Instant generatedAt,
+      @io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String moneyIn,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String moneyOut,
+      @io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String opening,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String closing,
+      @io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String openingSource,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String openingNote) {}
   @io.swagger.v3.oas.annotations.media.Schema(requiredProperties={"direction","contact","amounts"})
   public record Row(@io.swagger.v3.oas.annotations.media.Schema(allowableValues={"IN","OUT"}) String direction,String contact,Map<String,String> amounts) {}
   @io.swagger.v3.oas.annotations.media.Schema(requiredProperties={"entityId","months","rows"})
@@ -22,22 +25,27 @@ public class ForecastGridService {
   @io.swagger.v3.oas.annotations.media.Schema(requiredProperties={"created","refreshed","preserved","omittedCurrentItems","changedProtectedSchedules"})
   public record Generation(List<String> created,List<String> refreshed,List<String> preserved,int omittedCurrentItems,int changedProtectedSchedules) {}
   private final ForecastAccess access; private final ForecastDatasetLoader loader; private final ForecastGridRepository store;
-  private final ForecastMonthRepository legacy; private final ForecastCalendar calendar;
-  public ForecastGridService(ForecastAccess access,ForecastDatasetLoader loader,ForecastGridRepository store,ForecastMonthRepository legacy,ForecastCalendar calendar){this.access=access;this.loader=loader;this.store=store;this.legacy=legacy;this.calendar=calendar;}
+  private final ForecastMonthRepository legacy; private final ForecastCalendar calendar; private final ForecastAssumptionRepository assumptions;
+  public ForecastGridService(ForecastAccess access,ForecastDatasetLoader loader,ForecastGridRepository store,ForecastMonthRepository legacy,ForecastCalendar calendar,ForecastAssumptionRepository assumptions){this.access=access;this.loader=loader;this.store=store;this.legacy=legacy;this.calendar=calendar;this.assumptions=assumptions;}
 
   @Transactional(readOnly=true,isolation=org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
   public Grid grid(CurrentUser user,UUID id,String startValue,int count){
     access.requireRead(user,id); var start=ForecastMonths.parse(startValue);
     if(count<1||count>24) throw ForecastValidation.invalid("monthCount","Choose between 1 and 24 months.");
-    var end=start.plusMonths(count-1); var timestamps=store.months(id,start,end); var old=legacy.generated(id); var oldLines=legacy.lines(id,start,end);
-    var all=new ArrayList<>(store.lines(id,start,end));
+    var end=start.plusMonths(count-1);var records=assumptions.openingAnchors(id);var anchors=ForecastResolver.anchorValues(records);
+    var chainStart=anchors.keySet().stream().filter(m->!m.isAfter(start)).max(Comparator.naturalOrder()).orElse(start);
+    var timestamps=store.months(id,chainStart,end); var old=legacy.generated(id); var oldLines=legacy.lines(id,chainStart,end);
+    var all=new ArrayList<>(store.lines(id,chainStart,end));
     for(var entry:oldLines.entrySet()) if(!timestamps.containsKey(entry.getKey())) for(var c:entry.getValue()) if("DOCUMENT".equals(c.source())) all.add(new ForecastGridRepository.Line(c.bucket(),c.sourceId(),c.splitSequence(),c.direction(),c.label()==null?"Unknown contact":c.label(),c.amount()));
-    List<Month> months=new ArrayList<>(); for(int i=0;i<count;i++){var m=start.plusMonths(i);var ts=timestamps.get(m);var prior=old.get(m);months.add(new Month(m.toString(),ts!=null||prior!=null,ts!=null?ts:prior==null?null:prior.generatedAt()));}
+    var available=new HashSet<>(timestamps.keySet());available.addAll(old.keySet());
+    var balances=ForecastGridBalances.calculate(chainStart,end,available,all,anchors);
+    List<Month> months=new ArrayList<>(); for(int i=0;i<count;i++){var m=start.plusMonths(i);var ts=timestamps.get(m);var prior=old.get(m);var b=balances.get(m);var anchor=records.get(m);months.add(new Month(m.toString(),ts!=null||prior!=null,ts!=null?ts:prior==null?null:prior.generatedAt(),decimal(b.moneyIn()),decimal(b.moneyOut()),decimal(b.opening()),decimal(b.closing()),anchor!=null?"ENTERED":b.opening()!=null?"CARRIED_FORWARD":null,anchor==null?null:anchor.source()));}
     Map<String,Map<String,BigDecimal>> groups=new TreeMap<>();
-    for(var line:all){String key=line.direction()+"\u0000"+line.contact();groups.computeIfAbsent(key,k->new TreeMap<>()).merge(line.month().toString(),line.amount(),BigDecimal::add);}
+    for(var line:all) if(!line.month().isBefore(start)){String key=line.direction()+"\u0000"+line.contact();groups.computeIfAbsent(key,k->new TreeMap<>()).merge(line.month().toString(),line.amount(),BigDecimal::add);}
     List<Row> rows=new ArrayList<>();groups.forEach((key,amounts)->{var parts=key.split("\u0000",2);Map<String,String> values=new TreeMap<>();amounts.forEach((m,amount)->values.put(m,amount.toPlainString()));rows.add(new Row(parts[0],parts[1],values));});
     return new Grid(id,List.copyOf(months),List.copyOf(rows));
   }
+  private static String decimal(BigDecimal amount){return amount==null?null:amount.toPlainString();}
 
   @Transactional
   public Generation generate(CurrentUser user,UUID id){

@@ -1732,6 +1732,12 @@ export interface components {
             available: boolean;
             /** Format: date-time */
             generatedAt: string | null;
+            moneyIn: string | null;
+            moneyOut: string | null;
+            opening: string | null;
+            closing: string | null;
+            openingSource: string | null;
+            openingNote: string | null;
         };
         Row: {
             /** @enum {string} */

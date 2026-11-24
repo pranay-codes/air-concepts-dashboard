@@ -10,6 +10,8 @@ export function OpeningBalanceForm(
     month: string;
     initial?: string | null;
     source?: string | null;
+    requireChange?: boolean;
+    requireAmountChange?: boolean;
     onClose(): void;
   },
 ) {
@@ -31,6 +33,8 @@ export function OpeningBalanceForm(
         className="forecast-form"
         onSubmit={async (event) => {
           event.preventDefault();
+          if (props.requireChange && !dirty) return;
+          if (props.requireAmountChange && decimal(amount) === decimal(props.initial ?? "")) return;
           const value = decimal(amount);
           if (value === null) {
             setError("Enter a cash balance with at most two decimal places.");
@@ -81,7 +85,14 @@ export function OpeningBalanceForm(
         ) : null}
         {action.error ? <Failure error={action.error} /> : null}
         <div className="forecast-actions">
-          <button disabled={action.busy} type="submit">
+          <button
+            disabled={
+              action.busy ||
+              (props.requireChange && !dirty) ||
+              (props.requireAmountChange && decimal(amount) === decimal(props.initial ?? ""))
+            }
+            type="submit"
+          >
             {action.busy ? "Saving…" : "Save opening balance"}
           </button>
           <button type="button" onClick={close}>

@@ -5015,9 +5015,27 @@
           "generatedAt" : {
             "type" : [ "string", "null" ],
             "format" : "date-time"
+          },
+          "moneyIn" : {
+            "type" : [ "string", "null" ]
+          },
+          "moneyOut" : {
+            "type" : [ "string", "null" ]
+          },
+          "opening" : {
+            "type" : [ "string", "null" ]
+          },
+          "closing" : {
+            "type" : [ "string", "null" ]
+          },
+          "openingSource" : {
+            "type" : [ "string", "null" ]
+          },
+          "openingNote" : {
+            "type" : [ "string", "null" ]
           }
         },
-        "required" : [ "available", "generatedAt", "month" ]
+        "required" : [ "available", "closing", "generatedAt", "moneyIn", "moneyOut", "month", "opening", "openingNote", "openingSource" ]
       },
       "Row" : {
         "type" : "object",

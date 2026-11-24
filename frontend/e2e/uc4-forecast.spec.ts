@@ -2,6 +2,28 @@ import { expect, test } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 import { greenLane, signIn, ENTITY_A } from "./support/green-lane";
 import { forecastBoundary } from "./support/forecast";
+test("FR-UC04-04 grid opening edit refreshes the saved amount", async ({ page }) => {
+  await greenLane(page, "FINANCIAL_ADMIN");
+  const state = await forecastBoundary(page);
+  await signIn(page);
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Forecast", exact: true })
+    .click();
+  const grid = page.getByRole("region", { name: "Invoice and bill forecast table" });
+  await grid
+    .getByRole("button", { name: /^Edit opening balance for / })
+    .first()
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Save opening balance", exact: true }),
+  ).toBeDisabled();
+  await page.getByLabel("Opening cash balance (NZD)").fill("500.00");
+  await page.getByRole("button", { name: "Save opening balance", exact: true }).click();
+  await expect.poll(() => state.opening.get(ENTITY_A)).toBe("500.00");
+  await expect(grid.getByText(/500\.00/).first()).toBeVisible();
+  await expect(grid.getByText(/615\.00/).first()).toBeVisible();
+});
 const fixture = fileURLToPath(
   new URL("../../backend/src/test/resources/forecast/template-v1.xlsx", import.meta.url),
 );
@@ -24,7 +46,8 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       page.getByRole("region", { name: "Invoice and bill forecast table" }),
     ).toBeVisible();
     await expect(page.getByRole("button", { name: "Create forecast" })).toBeVisible();
-    await page
+    const summary = page.locator("details").filter({ hasText: "Financial year summary" });
+    await summary
       .getByRole("button", { name: /^Edit opening balance for / })
       .filter({ visible: true })
       .first()
@@ -33,7 +56,7 @@ for (const width of [320, 390, 768, 1024, 1440]) {
     await page.getByLabel("Balance source (optional)").fill("Synthetic statement");
     await page.getByRole("button", { name: "Save opening balance", exact: true }).click();
     await expect(
-      page
+      summary
         .getByText(/1,115\.00/)
         .filter({ visible: true })
         .first(),
@@ -71,7 +94,7 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       .getByRole("tablist", { name: "Forecast sections" })
       .getByRole("tab", { name: "Forecast", exact: true })
       .click();
-    await expect(page.getByText(/1,115\.00/).filter({ visible: true })).toHaveCount(0);
+    await expect(summary.getByText(/1,115\.00/).filter({ visible: true })).toHaveCount(0);
     await page.getByText("Excluded documents (1)", { exact: true }).click();
     await expect(page.getByRole("button", { name: "Include again", exact: true })).toHaveCount(1);
     let downloads = 0;

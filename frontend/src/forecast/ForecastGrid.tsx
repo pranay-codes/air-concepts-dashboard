@@ -6,7 +6,7 @@ import { useAction } from "../api/useAction";
 import { Failure, Loading } from "../ui/Feedback";
 import { formatMoney } from "../ui/format";
 import { currentMonth } from "./ForecastHeader";
-import { monthName } from "./ForecastTable";
+import { monthName, signClass } from "./ForecastTable";
 
 export function stepMonth(month: string, offset: number) {
   const [year = "0", value = "1"] = month.split("-");
@@ -16,6 +16,8 @@ export function ForecastGrid(props: {
   api: DashboardApi;
   entityId: string;
   subject: string;
+  revision: number;
+  onOpening(month: string, opening: string | null, source: string | null, carried: boolean): void;
   onAccessDenied(): void;
 }) {
   const { api, entityId, onAccessDenied } = props;
@@ -35,7 +37,10 @@ export function ForecastGrid(props: {
     },
     [api, entityId, onAccessDenied, start],
   );
-  const resource = useResource(`${props.subject}:${props.entityId}:grid:${start}`, load);
+  const resource = useResource(
+    `${props.subject}:${props.entityId}:grid:${start}:${props.revision}`,
+    load,
+  );
   const action = useAction(`${props.subject}:${props.entityId}:grid:generate`);
   return (
     <section aria-label="Invoice and bill forecast">
@@ -82,7 +87,9 @@ export function ForecastGrid(props: {
       <p className="supporting">
         Current and past forecasts are preserved. Creating a forecast refreshes the next six months
         from the latest synced Xero data. Rows are grouped by contact name; contacts with the same
-        name appear together. A dash means no amount for that contact in a saved month.
+        name appear together. Balances reflect only the invoices and bills shown here. A dash means
+        no amount for that contact in a saved month. An entered opening overrides the carried
+        balance.
       </p>
       {success ? (
         <p role="status">
@@ -129,9 +136,51 @@ export function ForecastGrid(props: {
               </tr>
             </thead>
             <tbody>
+              <tr>
+                <th scope="row">Opening balance</th>
+                {resource.data.months.map((month) => (
+                  <td className="money" key={month.month}>
+                    <span className={signClass(month.opening)}>
+                      {month.opening === null ? "Not recorded" : formatMoney(month.opening, "NZD")}
+                    </span>{" "}
+                    <button
+                      type="button"
+                      aria-label={`Edit opening balance for ${monthName(month.month)}`}
+                      onClick={() =>
+                        props.onOpening(
+                          month.month,
+                          month.opening,
+                          month.openingNote,
+                          month.openingSource === "CARRIED_FORWARD",
+                        )
+                      }
+                    >
+                      Edit
+                    </button>
+                    {month.openingSource ? (
+                      <span className="supporting">
+                        {" "}
+                        {month.openingSource === "ENTERED" ? "Entered" : "Carried forward"}
+                      </span>
+                    ) : null}
+                  </td>
+                ))}
+              </tr>
               {(["IN", "OUT"] as const).map((direction) => (
                 <FragmentRows key={direction} direction={direction} grid={resource.data!} />
               ))}
+              <tr>
+                <th scope="row">Closing balance</th>
+                {resource.data.months.map((month) => (
+                  <td className={`money ${signClass(month.closing) ?? ""}`} key={month.month}>
+                    {!month.available
+                      ? "Not created"
+                      : month.closing === null
+                        ? "Not recorded"
+                        : formatMoney(month.closing, "NZD")}
+                  </td>
+                ))}
+              </tr>
             </tbody>
           </table>
         </div>
@@ -151,7 +200,7 @@ function FragmentRows({
     <>
       <tr>
         <th colSpan={9} scope="colgroup">
-          {direction === "IN" ? "Customer invoices" : "Supplier bills"}
+          {direction === "IN" ? "Money In" : "Money Out"}
         </th>
       </tr>
       {rows.length === 0 ? (
@@ -174,6 +223,17 @@ function FragmentRows({
           </tr>
         ))
       )}
+      <tr>
+        <th scope="row">Total {direction === "IN" ? "Money In" : "Money Out"}</th>
+        {grid.months.map((month) => {
+          const total = direction === "IN" ? month.moneyIn : month.moneyOut;
+          return (
+            <td className="money" key={month.month}>
+              {total === null ? "Not created" : formatMoney(total, "NZD")}
+            </td>
+          );
+        })}
+      </tr>
     </>
   );
 }
