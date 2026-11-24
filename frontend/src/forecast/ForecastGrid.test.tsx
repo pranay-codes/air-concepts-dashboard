@@ -47,15 +47,16 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
     omittedCurrentItems: 0,
     changedProtectedSchedules: 0,
   });
-  const onOpening = vi.fn();
+  const save = vi.spyOn(api, "saveForecastOpening").mockResolvedValue({} as never);
+  const onChanged = vi.fn();
   render(
     <ForecastGrid
       api={api}
       entityId="10000000-0000-4000-8000-000000000001"
       subject="user"
       revision={0}
-      onOpening={onOpening}
       onAccessDenied={vi.fn()}
+      onChanged={onChanged}
     />,
   );
   expect(await screen.findByText("Customer A")).toBeInTheDocument();
@@ -65,12 +66,31 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
   expect(screen.getByText("Total Money Out")).toBeInTheDocument();
   expect(screen.getByText("Opening balance")).toBeInTheDocument();
   expect(screen.getByText("Closing balance")).toBeInTheDocument();
-  expect(screen.getByText("-NZD 10.00")).toHaveClass("amount-negative");
-  expect(screen.getAllByText("NZD 200.00")[0]).toHaveClass("amount-positive");
+  expect(screen.getByText("-10.00")).toHaveClass("amount-negative");
+  expect(screen.getAllByText("200.00")[0]).toHaveClass("amount-positive");
   const openingButtons = screen.getAllByRole("button", { name: /Edit opening balance for/ });
   fireEvent.click(openingButtons[1]!);
-  expect(onOpening).toHaveBeenCalledWith(expect.any(String), "100.00", null, true);
-  expect(screen.getAllByText(/Not created/).length).toBeGreaterThan(0);
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  const input = screen.getByRole("textbox", { name: /Opening balance for/ });
+  expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  fireEvent.change(input, { target: { value: "invalid" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(screen.getByRole("alert")).toHaveTextContent("Enter a cash balance");
+  expect(save).not.toHaveBeenCalled();
+  fireEvent.change(input, { target: { value: "150.00" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() =>
+    expect(save).toHaveBeenCalledWith(
+      "10000000-0000-4000-8000-000000000001",
+      stepMonth(grid.mock.calls[0]![1], 1),
+      "150.00",
+      "",
+      expect.any(AbortSignal),
+    ),
+  );
+  expect(onChanged).toHaveBeenCalledOnce();
+  expect(screen.queryByRole("columnheader", { name: "Contact" })).not.toBeInTheDocument();
+  expect(screen.queryByText("Carried forward")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Create forecast" }));
   await screen.findByText(/Future months have been refreshed/);
   await waitFor(() => expect(grid).toHaveBeenCalledTimes(2));
