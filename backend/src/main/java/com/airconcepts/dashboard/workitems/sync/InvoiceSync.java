@@ -124,7 +124,13 @@ public final class InvoiceSync {
     return hasText(candidate.jobId()) ? candidate.jobId() : candidate.quoteNumber();
   }
   static boolean matchesReference(String reference, InvoiceMirrorRepository.Unlinked candidate, boolean strict) {
-    String term=matchTerm(candidate);
+    return matchesTerm(reference,matchTerm(candidate),strict);
+  }
+  /** Conflict detection stays conservative: an invoice naming either identifier of another item is a conflict. */
+  static boolean matchesAnyTerm(String reference, InvoiceMirrorRepository.Unlinked candidate, boolean strict) {
+    return matchesTerm(reference,candidate.jobId(),strict) || matchesTerm(reference,candidate.quoteNumber(),strict);
+  }
+  private static boolean matchesTerm(String reference, String term, boolean strict) {
     if (reference==null || !hasText(term)) return false;
     String text=reference.toLowerCase(Locale.ROOT);
     String normalized=term.strip().toLowerCase(Locale.ROOT);

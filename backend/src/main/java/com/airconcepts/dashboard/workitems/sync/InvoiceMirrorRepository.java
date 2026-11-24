@@ -77,7 +77,7 @@ public class InvoiceMirrorRepository {
                 r.getObject("xero_contact_id",UUID.class))),mapping.entityId(),mapping.tenantId(),candidate.itemId(),invoice.id(),
         invoice.contactId(),invoice.contactId(),invoice.reference(),invoice.reference());
     return others.stream().anyMatch(other -> invoice.id().equals(other.invoiceId())
-        || InvoiceSync.matchesReference(invoice.reference(),other.item(),true));
+        || InvoiceSync.matchesAnyTerm(invoice.reference(),other.item(),true));
   }
   public boolean referenceMatches(QuoteMirrorService.Mapping mapping, Unlinked candidate) {
     return Boolean.TRUE.equals(jdbc.queryForObject("""

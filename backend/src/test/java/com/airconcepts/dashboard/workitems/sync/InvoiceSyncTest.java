@@ -113,6 +113,13 @@ class InvoiceSyncTest {
     assertThat(withLookup.run(entity,() -> access)).isEqualTo(1);
     verify(mirror).link(mapping,candidate,invoice,true);
   }
+  /** Conflict detection stays conservative: an invoice naming another item's quote is still a conflict under job-first matching. */
+  @Test void gl_status_04_conflictDetectionStillCountsAnotherItemsQuoteWhenJobIdsMatch() {
+    var duplicate=new InvoiceMirrorRepository.Unlinked(UUID.randomUUID(),"J-1","Q-3");
+    assertThat(InvoiceSync.matchesAnyTerm("Q-1 / Q-3",duplicate,true)).isTrue();
+    assertThat(InvoiceSync.matchesReference("Q-1 / Q-3",duplicate,true)).isFalse();
+    assertThat(InvoiceSync.matchesAnyTerm("Q-1",duplicate,true)).isFalse();
+  }
   @Test void gl_status_04_duplicateJobReferenceNeedsReviewWithoutLinking() {
     var candidate=new InvoiceMirrorRepository.Unlinked(item,"J-1","Q-1");
     var mapping=new QuoteMirrorService.Mapping(entity,tenant,grant);
