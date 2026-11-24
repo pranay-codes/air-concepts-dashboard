@@ -54,13 +54,14 @@ public class GreenLineSyncConfig {
   }
 
   @Bean InvoiceSync greenLineInvoiceSync(InvoiceMirrorRepository repository, InvoiceMirrorService mirror, XeroInvoiceClient invoices,
-      InvoiceGateway gateway, @Value("${dashboard.green-line.xero.early-invoice-lookup:false}") boolean earlyInvoiceLookup) {
+      InvoiceGateway gateway) {
     if (gateway instanceof MockInvoiceGateway mock) return new InvoiceSync(repository,mirror,mock::read,true,
         (access,jobId,quoteNumber) -> mock.find(access,jobId,quoteNumber).matches().stream()
             .map(XeroInvoiceClient.WorkflowInvoice::id).collect(java.util.stream.Collectors.toUnmodifiableSet()),true);
     // Xero documents SentToContact as the indicator shown as sent in its interface.
+    // Invoice matching runs for every open work item on every sync, at all times, always in the budgeted mode.
     return new InvoiceSync(repository,mirror,invoices::workflowInvoice,true,
-        new ManualInvoiceLookup(invoices,earlyInvoiceLookup)::find,earlyInvoiceLookup,false,true);
+        new ManualInvoiceLookup(invoices,true)::find,true,false,true);
   }
 
   @Bean GreenLineSyncService greenLineSyncService(GreenLineSyncRunRepository repository, QuoteSync quotes,
