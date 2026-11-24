@@ -556,7 +556,7 @@ class QuoteMirrorRepositoryTest {
       var entity=entity(); var mapping=mapping(entity); var actor=staff("FINANCIAL_ADMIN"); var item=UUID.randomUUID();
       jdbc.update("insert into public.green_line_entity_settings(entity_id,enabled) values (?,true)",entity);
       jdbc.update("insert into public.work_items(id,entity_id,xero_tenant_id,xero_quote_id,quote_number,xero_quote_status,stage,xero_invoice_id,invoice_status) "
-          + "values (?,?,?,?,'Q-1','ACCEPTED','JOB_COMPLETED',?,'AUTHORISED')",item,entity,mapping.tenantId(),UUID.randomUUID(),UUID.randomUUID());
+          + "values (?,?,?,?,'Q-1','ACCEPTED','INVOICE_CREATED',?,'AUTHORISED')",item,entity,mapping.tenantId(),UUID.randomUUID(),UUID.randomUUID());
       jdbc.execute("set local role service_role");
       var service=new WorkItemService(new WorkItemRepository(jdbc));
       service.markSent(new CurrentUser(actor.toString(),Role.FINANCIAL_ADMIN),entity,item,0);
