@@ -95,6 +95,12 @@ export async function forecastBoundary(page: Page) {
           month: new Date(Date.UTC(y, m - 1 + i, 1)).toISOString().slice(0, 7),
           available: true,
           generatedAt: "2026-11-10T00:00:00Z",
+          moneyIn: "115.00",
+          moneyOut: "0.00",
+          opening: opening.get(entity) ?? null,
+          closing: opening.has(entity) ? (Number(opening.get(entity)) + 115).toFixed(2) : null,
+          openingSource: opening.has(entity) ? "ENTERED" : null,
+          openingNote: opening.has(entity) ? "Synthetic statement" : null,
         }));
         result = {
           entityId: entity,

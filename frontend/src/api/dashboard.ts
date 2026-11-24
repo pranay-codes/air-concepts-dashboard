@@ -6,7 +6,17 @@ import type { components } from "./generated/schema";
 
 export type ForecastGrid = Omit<components["schemas"]["Grid"], "entityId" | "months" | "rows"> & {
   entityId: string;
-  months: { month: string; available: boolean; generatedAt: string | null }[];
+  months: {
+    month: string;
+    available: boolean;
+    generatedAt: string | null;
+    moneyIn: string | null;
+    moneyOut: string | null;
+    opening: string | null;
+    closing: string | null;
+    openingSource: string | null;
+    openingNote: string | null;
+  }[];
   rows: { direction: "IN" | "OUT"; contact: string; amounts: Record<string, string> }[];
 };
 function isForecastGrid(value: unknown): value is ForecastGrid {
@@ -20,7 +30,14 @@ function isForecastGrid(value: unknown): value is ForecastGrid {
         isRecord(m) &&
         typeof m.month === "string" &&
         typeof m.available === "boolean" &&
-        (m.generatedAt === null || typeof m.generatedAt === "string"),
+        (m.generatedAt === null || typeof m.generatedAt === "string") &&
+        (m.openingSource === null ||
+          m.openingSource === "ENTERED" ||
+          m.openingSource === "CARRIED_FORWARD") &&
+        (m.openingNote === null || typeof m.openingNote === "string") &&
+        [m.moneyIn, m.moneyOut, m.opening, m.closing].every(
+          (value) => value === null || f.money(value),
+        ),
     ) &&
     Array.isArray(value.rows) &&
     value.rows.every(

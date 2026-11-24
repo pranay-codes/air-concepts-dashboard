@@ -193,10 +193,12 @@
   color: var(--information, #245e9b);
 }
 /* Applied to the amount only, never the cell: the preview tint above does not override these. */
+.forecast-grid-table .amount-positive,
 .forecast-desktop .amount-positive,
 .forecast-summary-strip .amount-positive {
   color: var(--success, #18794e);
 }
+.forecast-grid-table .amount-negative,
 .forecast-desktop .amount-negative,
 .forecast-summary-strip .amount-negative {
   color: var(--error, #b42318);
