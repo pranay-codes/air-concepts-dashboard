@@ -89,7 +89,7 @@ public class GreenLineSettingsRepository {
     var entries = jdbc.query("""
         select w.id,w.stage_entered_at from public.work_items w
         join public.xero_entity_connections c on c.entity_id=w.entity_id and c.tenant_id=w.xero_tenant_id
-        where w.entity_id=? and w.stage in ('JOB_COMPLETED') for update of w
+        where w.entity_id=? and w.stage in ('JOB_COMPLETED','INVOICE_CREATED') for update of w
         """, (row, index) -> new Entry(row.getObject("id", UUID.class),
         row.getObject("stage_entered_at", OffsetDateTime.class).atZoneSameInstant(ZoneId.of("Pacific/Auckland")).toLocalDate()), entity);
     var workingDays = new WorkingDays(Set.of());
@@ -103,7 +103,7 @@ public class GreenLineSettingsRepository {
   }
 
   private void assignUnowned(UUID entity, UUID actor, UUID owner, boolean manager) {
-    String stages = manager ? "('TO_SCHEDULE','SCHEDULED','WORK_IN_PROGRESS')" : "('QUOTED','JOB_COMPLETED','INVOICED')";
+    String stages = manager ? "('TO_SCHEDULE','SCHEDULED','WORK_IN_PROGRESS')" : "('QUOTED','JOB_COMPLETED','INVOICE_CREATED','INVOICED')";
     // The stage list is a fixed server-side constant; no user-controlled SQL is interpolated.
     jdbc.update("""
         with assigned as (

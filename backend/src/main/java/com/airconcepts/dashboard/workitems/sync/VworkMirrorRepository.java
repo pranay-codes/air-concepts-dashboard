@@ -23,7 +23,7 @@ public class VworkMirrorRepository {
         + "join public.entities e on e.id=w.entity_id and e.archived_at is null "
         + "join public.green_line_entity_settings s on s.entity_id=w.entity_id and s.enabled "
         + "join public.xero_entity_connections c on c.entity_id=w.entity_id and c.tenant_id=w.xero_tenant_id "
-        + "where w.entity_id=? and w.stage in ('TO_SCHEDULE','SCHEDULED','WORK_IN_PROGRESS') ";
+        + "where w.entity_id=? and w.stage in ('TO_SCHEDULE','SCHEDULED','WORK_IN_PROGRESS','INVOICE_CREATED') ";
     var mapper = (org.springframework.jdbc.core.RowMapper<Candidate>) (r, n) -> new Candidate(
         r.getObject("id", UUID.class), r.getString("job_id"), r.getString("vwork_job_id"));
     var result = new ArrayList<>(jdbc.query(base + "and w.vwork_job_id is not null order by w.stage_entered_at,w.id", mapper, entity));
@@ -37,7 +37,7 @@ public class VworkMirrorRepository {
         join public.entities e on e.id=w.entity_id and e.archived_at is null
         join public.green_line_entity_settings s on s.entity_id=w.entity_id and s.enabled
         join public.xero_entity_connections c on c.entity_id=w.entity_id and c.tenant_id=w.xero_tenant_id
-        where w.entity_id=? and w.stage in ('QUOTED','JOB_COMPLETED','INVOICED')
+        where w.entity_id=? and w.stage in ('QUOTED','JOB_COMPLETED','INVOICE_CREATED','INVOICED')
           and (w.vwork_job_id is not null or w.job_id is not null)
         order by w.stage_entered_at,w.id
         """, (r,n) -> new Candidate(r.getObject("id",UUID.class),r.getString("job_id"),r.getString("vwork_job_id")),entity);

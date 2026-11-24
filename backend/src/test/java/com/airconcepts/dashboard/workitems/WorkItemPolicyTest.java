@@ -39,6 +39,15 @@ class WorkItemPolicyTest {
         WorkItemStage.TO_SCHEDULE, true, false)).isFalse();
   }
 
+  /** GL-STATUS-08: Mark sent belongs to Invoice created, the stage an invoice that is not yet sent sits in. */
+  @Test void gl_status_08_markSentIsOnlyAvailableWhileInvoiceCreated() {
+    assertThat(WorkItemPolicy.allowed(WorkItemAction.MARK_SENT, Role.FINANCIAL_ADMIN, true, false, false,
+        WorkItemStage.INVOICE_CREATED, true, true)).isTrue();
+    assertThat(WorkItemPolicy.allowed(WorkItemAction.MARK_SENT, Role.FINANCIAL_ADMIN, true, false, false,
+        WorkItemStage.JOB_COMPLETED, true, true)).isFalse();
+    assertThat(WorkItemPolicy.allowed(WorkItemAction.MARK_SENT, Role.FINANCIAL_ADMIN, true, false, false,
+        WorkItemStage.INVOICE_CREATED, true, false)).isFalse();
+  }
   @Test void gl09_invoiceActionsRequireFinanceRoleAndNoExistingInvoice() {
     assertThat(WorkItemPolicy.allowed(WorkItemAction.PREPARE_INVOICE, Role.FINANCIAL_ADMIN, true, false, false,
         WorkItemStage.JOB_COMPLETED, true, false)).isTrue();

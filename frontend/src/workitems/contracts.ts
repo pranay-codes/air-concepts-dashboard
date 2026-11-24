@@ -66,6 +66,7 @@ const stages = new Set([
   "SCHEDULED",
   "WORK_IN_PROGRESS",
   "JOB_COMPLETED",
+  "INVOICE_CREATED",
   "INVOICED",
   "CLOSED",
 ]);

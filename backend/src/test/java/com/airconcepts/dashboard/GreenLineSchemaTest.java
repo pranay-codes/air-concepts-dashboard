@@ -40,7 +40,7 @@ class GreenLineSchemaTest {
          var statement = connection.createStatement()) {
       statement.execute("insert into public.entities(id, code, display_name) values "
           + "('00000000-0000-0000-0000-000000000011','green-line-stage-test','Stage test')");
-      for (var stage : new String[]{"QUOTED", "TO_SCHEDULE", "SCHEDULED", "WORK_IN_PROGRESS", "JOB_COMPLETED", "INVOICED"})
+      for (var stage : new String[]{"QUOTED", "TO_SCHEDULE", "SCHEDULED", "WORK_IN_PROGRESS", "JOB_COMPLETED", "INVOICE_CREATED", "INVOICED"})
         statement.execute(insertAtStage(stage));
       for (var retired : new String[]{"TO_INVOICE", "INVOICE_DRAFTED"})
         assertThatThrownBy(() -> statement.execute(insertAtStage(retired))).isInstanceOf(SQLException.class);

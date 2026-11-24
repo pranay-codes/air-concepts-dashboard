@@ -77,7 +77,7 @@ public class MyWorkService {
     if (!owner) return Bucket.IGNORE;
     boolean action = switch (item.stage()) {
       case QUOTED -> item.followUp() == null || !item.followUp().isAfter(today);
-      case TO_SCHEDULE, JOB_COMPLETED -> true;
+      case TO_SCHEDULE, JOB_COMPLETED, INVOICE_CREATED -> true;
       case INVOICED -> item.invoiceDue() != null && item.invoiceDue().isBefore(today)
           && item.amountDue() != null && item.amountDue().signum() > 0;
       case SCHEDULED, WORK_IN_PROGRESS, CLOSED -> false;

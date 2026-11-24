@@ -89,7 +89,7 @@ public class QuoteMirrorService {
   }
 
   private LocalDate lateAfter(WorkItemStage stage, Instant entered, int threshold) {
-    return stage == WorkItemStage.JOB_COMPLETED || stage == WorkItemStage.JOB_COMPLETED
+    return stage.awaitsFinance()
         ? workingDays.addWorkingDays(BusinessTime.dateOf(entered), threshold) : null;
   }
 

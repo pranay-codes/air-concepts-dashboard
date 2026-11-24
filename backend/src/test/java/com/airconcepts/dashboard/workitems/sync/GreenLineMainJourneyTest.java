@@ -105,7 +105,7 @@ class GreenLineMainJourneyTest {
     var invoiceCompletion=new InvoiceOperationCompletion(mappings,invoices,operations,clock);
     var prepare=new PrepareInvoiceService(drafts,reservation,invoiceCompletion,outcomes,connections,new MockInvoiceGateway());
     assertThat(prepare.submit(user,entity,item,4,draft.fingerprint()).outcome()).isEqualTo(OperationState.Result.CREATED);
-    assertThat(state.get().stage()).isEqualTo(WorkItemStage.JOB_COMPLETED);
+    assertThat(state.get().stage()).isEqualTo(WorkItemStage.INVOICE_CREATED);
     assertThat(invoiceId.get()).isNotNull();
     verify(operations).complete(entity,item,invoiceOperation,OperationState.Result.CREATED,invoiceId.get().toString());
   }

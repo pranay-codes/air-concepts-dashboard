@@ -16,7 +16,7 @@ public final class WorkItemPolicy {
       case CREATE_JOB -> stage == WorkItemStage.TO_SCHEDULE && !hasJob
           && (role == Role.DIRECTOR || serviceManager);
       case PREPARE_INVOICE, NO_INVOICE_NEEDED -> stage == WorkItemStage.JOB_COMPLETED && !hasInvoice && finance;
-      case MARK_SENT -> stage == WorkItemStage.JOB_COMPLETED && hasInvoice && finance;
+      case MARK_SENT -> stage == WorkItemStage.INVOICE_CREATED && hasInvoice && finance;
       case MARK_ACCEPTED -> stage == WorkItemStage.QUOTED && !hasJob && !hasInvoice && finance;
     };
   }

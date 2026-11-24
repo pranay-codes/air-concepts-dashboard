@@ -165,7 +165,7 @@ public class WorkItemReadService {
         rs.getString("xero_quote_status"), decimal(rs,"quote_total"), rs.getString("quote_currency"), stage,
         rs.getString("close_reason"), staff(ownerId, rs.getString("owner_name")), rs.getObject("follow_up_date", LocalDate.class),
         entered, Math.max(0, ChronoUnit.DAYS.between(BusinessTime.dateOf(entered), today)), late,
-        nextAction(stage, vworkId != null, invoiceId != null, rs.getObject("invoice_due_date", LocalDate.class), today, attention),
+        nextAction(stage, vworkId != null, rs.getObject("invoice_due_date", LocalDate.class), today, attention),
         Set.copyOf(flags), attention, rs.getInt("version"));
     var vwork = new VworkPanel(vworkId, rs.getString("vwork_job_number"), rs.getString("vwork_status"),
         rs.getString("technician_name"), instant(rs,"scheduled_start"), instant(rs,"completed_at"),
@@ -176,13 +176,14 @@ public class WorkItemReadService {
     return new Detail(summary, rs.getString("notes"), rs.getString("closing_note"), vwork, invoice, null, List.of(), List.of(), Set.copyOf(actions));
   }
 
-  static String nextAction(WorkItemStage stage, boolean job, boolean invoiced, LocalDate due, LocalDate today, Set<String> attention) {
+  static String nextAction(WorkItemStage stage, boolean job, LocalDate due, LocalDate today, Set<String> attention) {
     if (!attention.isEmpty()) return "RESOLVE";
     return switch(stage) {
       case QUOTED -> "FOLLOW_UP";
       case TO_SCHEDULE -> job ? "SCHEDULE_IN_VWORK" : "CREATE_JOB";
       case SCHEDULED, WORK_IN_PROGRESS -> "AWAIT_COMPLETION";
-      case JOB_COMPLETED -> invoiced ? "REVIEW_AND_SEND" : "PREPARE_INVOICE";
+      case JOB_COMPLETED -> "PREPARE_INVOICE";
+      case INVOICE_CREATED -> "REVIEW_AND_SEND";
       case INVOICED -> due != null && due.isBefore(today) ? "CHASE_PAYMENT" : "AWAIT_PAYMENT";
       case CLOSED -> null;
     };

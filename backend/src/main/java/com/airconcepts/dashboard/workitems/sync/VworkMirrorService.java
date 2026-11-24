@@ -50,7 +50,7 @@ public class VworkMirrorService {
     if (repository.hasUnresolvedOperation(entity, itemId))
       throw new ApiFailure(HttpStatus.CONFLICT, "VWORK_SYNC_OPERATION_IN_PROGRESS", "Resolve the existing operation before syncing this job.");
     var now = clock.instant();
-    LocalDate late = next.stage() == WorkItemStage.JOB_COMPLETED && before.stage() != next.stage()
+    LocalDate late = next.stage().awaitsFinance() && !before.stage().awaitsFinance()
         ? workingDays.addWorkingDays(BusinessTime.dateOf(now), item.threshold()) : null;
     try {
       if (repository.update(entity, itemId, job, next, before, item.version(), now, late) != 1) throw changed();

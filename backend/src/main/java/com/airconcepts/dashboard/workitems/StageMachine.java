@@ -67,7 +67,7 @@ public final class StageMachine {
       }
       case INVOICED -> {
         if (context.firstSync()) return Optional.empty();
-        created = withAttention(handOff(initial, WorkItemStage.JOB_COMPLETED, settings.defaultOwnerId(),
+        created = withAttention(handOff(initial, WorkItemStage.INVOICE_CREATED, settings.defaultOwnerId(),
             settings.defaultOwnerActive(), "NO_DEFAULT_OWNER").state(), "QUOTE_INVOICED_IN_XERO");
       }
       case DELETED -> { return Optional.empty(); }
@@ -101,7 +101,7 @@ public final class StageMachine {
         case DECLINED -> close(s, "LOST", "Declined in Xero", "STAGE_CHANGED");
         case DELETED -> close(s, "LOST", "Deleted in Xero", "STAGE_CHANGED");
         case INVOICED -> {
-          Result handoff = handOff(s, WorkItemStage.JOB_COMPLETED, settings.defaultOwnerId(),
+          Result handoff = handOff(s, WorkItemStage.INVOICE_CREATED, settings.defaultOwnerId(),
               settings.defaultOwnerActive(), "NO_DEFAULT_OWNER");
           yield new Result(withAttention(handoff.state(), "QUOTE_INVOICED_IN_XERO"), "STAGE_CHANGED");
         }
@@ -135,11 +135,14 @@ public final class StageMachine {
   private static Result invoice(State s, InvoiceObserved event, Settings settings) {
     InvoiceStatus status = Objects.requireNonNull(event.status(), "invoice status");
     if (s.stage() != WorkItemStage.CLOSED && !inJobStage(s.stage()) && s.stage() != WorkItemStage.JOB_COMPLETED
-        && s.stage() != WorkItemStage.INVOICED) return unchanged(s);
+        && s.stage() != WorkItemStage.INVOICE_CREATED && s.stage() != WorkItemStage.INVOICED) return unchanged(s);
     if (status == InvoiceStatus.VOIDED || status == InvoiceStatus.DELETED) {
       if (!s.invoiceLinked()) return unchanged(s);
+      // Voiding returns the item to the job stage the caller derives from vWork and the quote. Without that, an item
+      // that was invoiced before its job finished goes back to To schedule, and a completed-job invoice to Job completed.
+      WorkItemStage fallback = s.stage() == WorkItemStage.INVOICED ? WorkItemStage.JOB_COMPLETED : WorkItemStage.TO_SCHEDULE;
       WorkItemStage afterVoid = inJobStage(s.stage()) ? s.stage()
-          : event.stageAfterVoid() != null ? event.stageAfterVoid() : WorkItemStage.JOB_COMPLETED;
+          : event.stageAfterVoid() != null ? event.stageAfterVoid() : fallback;
       if (!inJobStage(afterVoid) && afterVoid != WorkItemStage.JOB_COMPLETED)
         throw new IllegalArgumentException("Invalid stage after void");
       State unlinked = copy(s, afterVoid, s.ownerId(), null, null, s.jobLinked(), false, s.attention());
@@ -157,17 +160,20 @@ public final class StageMachine {
     if (s.stage() == WorkItemStage.CLOSED) {
       if (status != InvoiceStatus.AUTHORISED || event.amountDue() == null || event.amountDue().signum() <= 0)
         return unchanged(s);
-      WorkItemStage reopened = event.sent() ? WorkItemStage.INVOICED : WorkItemStage.JOB_COMPLETED;
+      WorkItemStage reopened = event.sent() ? WorkItemStage.INVOICED : WorkItemStage.INVOICE_CREATED;
       return new Result(copy(s, reopened, s.ownerId(), null, null, s.jobLinked(), true, s.attention()), "STAGE_CHANGED");
     }
-    // A draft or unsent invoice links to the item but keeps it at Job completed; only a sent, authorised invoice moves it on.
+    // Stage is the single source of truth: a created invoice (draft, or authorised but not sent) moves the item to
+    // Invoice created, and only a sent, authorised invoice moves it to Invoiced.
     WorkItemStage next = s.stage();
     if (s.stage() != WorkItemStage.INVOICED && status == InvoiceStatus.AUTHORISED && event.sent()) {
       next = WorkItemStage.INVOICED;
+    } else if (s.stage() != WorkItemStage.INVOICED && s.stage() != WorkItemStage.INVOICE_CREATED) {
+      next = WorkItemStage.INVOICE_CREATED;
     }
     boolean newlyLinked = !s.invoiceLinked();
     State result = copy(s, next, s.ownerId(), null, null, s.jobLinked(), true, s.attention());
-    if (next == WorkItemStage.INVOICED && inJobStage(s.stage()))
+    if (next != s.stage() && inJobStage(s.stage()))
       result = handOff(result, next, settings.defaultOwnerId(), settings.defaultOwnerActive(), "NO_DEFAULT_OWNER").state();
     if (next != s.stage()) return new Result(result, "STAGE_CHANGED");
     return newlyLinked ? new Result(result, "INVOICE_LINKED") : unchanged(s);
@@ -193,7 +199,7 @@ public final class StageMachine {
   }
 
   private static Result markSent(State s, MarkSent event) {
-    if (s.stage() != WorkItemStage.JOB_COMPLETED || !s.invoiceLinked()
+    if (s.stage() != WorkItemStage.INVOICE_CREATED || !s.invoiceLinked()
         || !event.fallbackEnabled() || !event.invoiceAuthorised()) {
       throw new IllegalArgumentException("Invoice cannot be marked sent in this state");
     }

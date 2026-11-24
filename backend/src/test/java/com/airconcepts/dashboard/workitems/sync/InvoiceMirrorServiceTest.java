@@ -45,7 +45,7 @@ class InvoiceMirrorServiceTest {
   @Test void gl21_unverifiedSendFlagCannotMoveADraftToInvoiced() {
     setup(WorkItemStage.JOB_COMPLETED);
     service.apply(mapping,item,invoice(InvoiceStatus.AUTHORISED,"40"),false);
-    verify(invoices).update(eq(mapping),eq(item),any(),argThat(s -> s.stage()==WorkItemStage.JOB_COMPLETED),eq(4),any(),any(),any());
+    verify(invoices).update(eq(mapping),eq(item),any(),argThat(s -> s.stage()==WorkItemStage.INVOICE_CREATED),eq(4),any(),any(),any());
   }
   @Test void gl21_identicalObservationDoesNotBumpVersion() {
     setup(WorkItemStage.INVOICED);
@@ -79,7 +79,7 @@ class InvoiceMirrorServiceTest {
     when(invoices.link(eq(mapping),eq(candidate),any(),any(),eq(4),any(),any())).thenReturn(1);
     service.link(mapping,candidate,invoice(InvoiceStatus.DRAFT,"40"),false);
     verify(invoices).link(eq(mapping),eq(candidate),any(),argThat(s -> s.invoiceLinked()
-        && s.stage()==WorkItemStage.JOB_COMPLETED && !s.attention().contains("QUOTE_INVOICED_IN_XERO")),eq(4),any(),any());
+        && s.stage()==WorkItemStage.INVOICE_CREATED && !s.attention().contains("QUOTE_INVOICED_IN_XERO")),eq(4),any(),any());
   }
   @Test void gl_status_02_manualSentInvoiceLinksBeforeScheduling() {
     var candidate=new InvoiceMirrorRepository.Unlinked(item,"J-1","Q-1");

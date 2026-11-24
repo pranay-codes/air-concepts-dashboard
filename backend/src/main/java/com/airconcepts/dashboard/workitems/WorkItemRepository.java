@@ -88,7 +88,7 @@ public class WorkItemRepository {
   public int markSent(UUID entity, UUID id, int version) {
     return jdbc.update("""
         update public.work_items set stage='INVOICED',stage_entered_at=now(),late_after=null,version=version+1,updated_at=now()
-        where entity_id=? and id=? and version=? and stage='JOB_COMPLETED' and xero_invoice_id is not null
+        where entity_id=? and id=? and version=? and stage='INVOICE_CREATED' and xero_invoice_id is not null
           and invoice_status='AUTHORISED' and not exists (select 1 from public.external_operations op
             where op.entity_id=work_items.entity_id and op.work_item_id=work_items.id and op.status in ('PENDING','UNKNOWN'))
         """,entity,id,version);
@@ -96,7 +96,7 @@ public class WorkItemRepository {
   public void auditMarkSent(UUID entity, UUID item, UUID actor) {
     jdbc.update("""
         insert into public.work_item_events(entity_id,work_item_id,actor_id,source,event_type,from_stage,to_stage)
-        values (?,?,?,'USER','MARKED_SENT','JOB_COMPLETED','INVOICED')
+        values (?,?,?,'USER','MARKED_SENT','INVOICE_CREATED','INVOICED')
         """,entity,item,actor);
   }
 

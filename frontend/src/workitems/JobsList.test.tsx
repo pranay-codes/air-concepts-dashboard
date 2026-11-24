@@ -194,7 +194,7 @@ describe("GL-01 and GL-03 Jobs list", () => {
         ...detail(entity.id, created ? 2 : 1),
         summary: {
           ...row(entity.id),
-          stage: "JOB_COMPLETED",
+          stage: created ? "INVOICE_CREATED" : "JOB_COMPLETED",
           version: created ? 2 : 1,
         },
         invoice: created
@@ -226,7 +226,7 @@ describe("GL-01 and GL-03 Jobs list", () => {
         ...detail(entity.id, sent ? 2 : 1),
         summary: {
           ...row(entity.id),
-          stage: sent ? "INVOICED" : "JOB_COMPLETED",
+          stage: sent ? "INVOICED" : "INVOICE_CREATED",
           version: sent ? 2 : 1,
         },
         invoice: {

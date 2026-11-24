@@ -545,7 +545,7 @@ class QuoteMirrorRepositoryTest {
       mirror.link(mapping,candidate,new com.airconcepts.dashboard.xero.XeroInvoiceClient.WorkflowInvoice(invoice,"INV-1",
           com.airconcepts.dashboard.invoices.InvoiceStatus.DRAFT,new java.math.BigDecimal("100"),new java.math.BigDecimal("100"),null,false,"J-1 / Q-1"),false);
       assertThat(jdbc.queryForObject("select xero_invoice_id from public.work_items where id=?",UUID.class,item)).isEqualTo(invoice);
-      assertThat(jdbc.queryForObject("select stage from public.work_items where id=?",String.class,item)).isEqualTo("JOB_COMPLETED");
+      assertThat(jdbc.queryForObject("select stage from public.work_items where id=?",String.class,item)).isEqualTo("INVOICE_CREATED");
       assertThat(jdbc.queryForObject("select 'QUOTE_INVOICED_IN_XERO'=any(attention_codes) from public.work_items where id=?",Boolean.class,item)).isFalse();
       tx.setRollbackOnly();
     });
@@ -611,7 +611,7 @@ class QuoteMirrorRepositoryTest {
       new com.airconcepts.dashboard.workitems.operations.InvoiceOperationCompletion(new QuoteMirrorRepository(jdbc),new InvoiceMirrorRepository(jdbc),operations,
           Clock.fixed(NOW,ZoneOffset.UTC)).complete(entity,item,context,reservation.id(),observed,
           com.airconcepts.dashboard.workitems.operations.OperationState.Result.CREATED);
-      assertThat(jdbc.queryForObject("select stage from public.work_items where id=?",String.class,item)).isEqualTo("JOB_COMPLETED");
+      assertThat(jdbc.queryForObject("select stage from public.work_items where id=?",String.class,item)).isEqualTo("INVOICE_CREATED");
       assertThat(jdbc.queryForObject("select xero_invoice_id from public.work_items where id=?",UUID.class,item)).isEqualTo(invoice);
       assertThat(jdbc.queryForObject("select status from public.external_operations where id=?",String.class,reservation.id())).isEqualTo("SUCCEEDED");
       tx.setRollbackOnly();

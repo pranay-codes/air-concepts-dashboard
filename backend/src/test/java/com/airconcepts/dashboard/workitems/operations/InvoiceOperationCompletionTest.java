@@ -37,7 +37,7 @@ class InvoiceOperationCompletionTest {
     service.complete(entity,item,context,operation,draft,OperationState.Result.CREATED);
     var order=inOrder(invoices,operations);
     order.verify(operations).lockOperation(entity,item,operation);
-    order.verify(invoices).link(eq(mapping),any(),eq(draft),argThat(state -> state.stage()==WorkItemStage.JOB_COMPLETED),eq(5),any(),any());
+    order.verify(invoices).link(eq(mapping),any(),eq(draft),argThat(state -> state.stage()==WorkItemStage.INVOICE_CREATED),eq(5),any(),any());
     order.verify(operations).complete(entity,item,operation,OperationState.Result.CREATED,invoice.toString());
   }
   @Test void gl22_unknownOutcomeCannotBeClaimedAsCreated() {
