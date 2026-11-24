@@ -152,11 +152,13 @@ export function ForecastTable({
   onOpen,
   onOpening,
   onGenerate,
+  canGenerate,
 }: {
   months: ForecastMonth[];
   onOpen?: (month: string) => void;
   onOpening?: (month: ForecastMonth) => void;
   onGenerate?: (month: ForecastMonth) => void;
+  canGenerate?: (month: ForecastMonth) => boolean;
 }) {
   const warning = (month: ForecastMonth) =>
     month.closing?.startsWith("-") ? (
@@ -227,7 +229,10 @@ export function ForecastTable({
                   <FigureCell month={month} value={month.closing} signed /> {warning(month)}
                 </td>
                 <td>
-                  <MonthAction month={month} onGenerate={onGenerate} />
+                  <MonthAction
+                    month={month}
+                    onGenerate={canGenerate?.(month) === false ? undefined : onGenerate}
+                  />
                 </td>
               </tr>
             ))}

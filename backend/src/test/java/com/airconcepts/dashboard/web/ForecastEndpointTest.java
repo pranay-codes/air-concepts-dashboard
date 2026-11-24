@@ -58,7 +58,7 @@ class ForecastEndpointTest {
   @Test void frUc04_07_roleMatrixOnEveryRoute() throws Exception {
     var id=UUID.randomUUID();
     var routes=List.of(
-        get(base()),get(base()+"/months/2026-11/items"),post(base()+"/months/2026-11/generate"),get(base()+"/documents"),get(base()+"/documents/"+id),
+        get(base()),get(base()+"/grid?startMonth=2026-11"),post(base()+"/grid/generate"),get(base()+"/months/2026-11/items"),post(base()+"/months/2026-11/generate"),get(base()+"/documents"),get(base()+"/documents/"+id),
         get("/api/v1/forecast/combined"),get(base()+"/sync"),post(base()+"/sync"),
         get(base()+"/periods/2026-11/opening-balance"),put(base()+"/periods/2026-11/opening-balance"),
         get(base()+"/manual-items"),post(base()+"/manual-items"),patch(base()+"/manual-items/"+id),post(base()+"/manual-items/"+id+"/deactivate"),

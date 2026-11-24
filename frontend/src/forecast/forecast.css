@@ -540,3 +540,35 @@
     grid-template-columns: 1fr;
   }
 }
+.forecast-grid-controls {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-block: 1rem;
+}
+.forecast-grid-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.forecast-grid-table {
+  border-collapse: collapse;
+  min-width: 100%;
+}
+.forecast-grid-table th,
+.forecast-grid-table td {
+  padding: 0.65rem;
+  border-bottom: 1px solid var(--border, #d6d6d6);
+  white-space: nowrap;
+}
+.forecast-grid-table th:first-child {
+  position: sticky;
+  left: 0;
+  background: var(--surface, white);
+  text-align: left;
+  min-width: 14rem;
+}
+.forecast-grid-table td {
+  min-width: 8rem;
+  text-align: right;
+}

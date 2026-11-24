@@ -2,6 +2,53 @@ import { ApiClient, ApiError, isRecord } from "./client";
 import * as c from "./contracts";
 import * as f from "../forecast/contracts";
 import * as w from "../workitems/contracts";
+import type { components } from "./generated/schema";
+
+export type ForecastGrid = Omit<components["schemas"]["Grid"], "entityId" | "months" | "rows"> & {
+  entityId: string;
+  months: { month: string; available: boolean; generatedAt: string | null }[];
+  rows: { direction: "IN" | "OUT"; contact: string; amounts: Record<string, string> }[];
+};
+function isForecastGrid(value: unknown): value is ForecastGrid {
+  return (
+    isRecord(value) &&
+    typeof value.entityId === "string" &&
+    Array.isArray(value.months) &&
+    value.months.length === 8 &&
+    value.months.every(
+      (m: unknown) =>
+        isRecord(m) &&
+        typeof m.month === "string" &&
+        typeof m.available === "boolean" &&
+        (m.generatedAt === null || typeof m.generatedAt === "string"),
+    ) &&
+    Array.isArray(value.rows) &&
+    value.rows.every(
+      (r: unknown) =>
+        isRecord(r) &&
+        (r.direction === "IN" || r.direction === "OUT") &&
+        typeof r.contact === "string" &&
+        isRecord(r.amounts) &&
+        Object.values(r.amounts).every(f.money),
+    )
+  );
+}
+function isGridGeneration(value: unknown): value is {
+  created: string[];
+  refreshed: string[];
+  preserved: string[];
+  omittedCurrentItems: number;
+  changedProtectedSchedules: number;
+} {
+  return (
+    isRecord(value) &&
+    typeof value.omittedCurrentItems === "number" &&
+    typeof value.changedProtectedSchedules === "number" &&
+    [value.created, value.refreshed, value.preserved].every(
+      (v) => Array.isArray(v) && v.every((m: unknown) => typeof m === "string"),
+    )
+  );
+}
 
 function id(value: string): string {
   if (!c.isUuid(value)) throw new ApiError(400, "INVALID_REQUEST");
@@ -32,6 +79,25 @@ function matchesPeriod(rows: f.ForecastMonth[], start: string): boolean {
 /** Typed feature interface. All tenant selection and financial calculations remain on the backend. */
 export class DashboardApi {
   constructor(private readonly client: ApiClient) {}
+  async forecastGrid(
+    entity: string,
+    startMonth: string,
+    signal?: AbortSignal,
+  ): Promise<ForecastGrid> {
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(startMonth)) throw new ApiError(400, "INVALID_REQUEST");
+    const grid = await this.client.json(
+      `${root(entity)}/forecast/grid?startMonth=${startMonth}&monthCount=8`,
+      isForecastGrid,
+      signal,
+    );
+    if (grid.entityId !== entity) throw new ApiError(502, "INVALID_RESPONSE");
+    return grid;
+  }
+  async generateForecastGrid(entity: string, signal?: AbortSignal) {
+    return this.client.json(`${root(entity)}/forecast/grid/generate`, isGridGeneration, signal, {
+      method: "POST",
+    });
+  }
   async greenLineSyncStatus(entity: string, signal?: AbortSignal): Promise<c.GreenLineSyncStatus> {
     const result = await this.client.json(
       `${root(entity)}/green-line/sync`,

@@ -20,6 +20,10 @@ for (const width of [320, 390, 768, 1024, 1440]) {
     await expect(
       page.getByRole("heading", { name: "Financial forecast", exact: true }),
     ).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Invoice and bill forecast table" }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Create forecast" })).toBeVisible();
     await page
       .getByRole("button", { name: /^Edit opening balance for / })
       .filter({ visible: true })
