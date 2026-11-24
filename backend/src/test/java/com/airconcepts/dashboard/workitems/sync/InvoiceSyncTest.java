@@ -80,6 +80,39 @@ class InvoiceSyncTest {
     verify(mirror).link(mapping,candidate,exact,true);
     verify(mirror,never()).multiple(any(),any());
   }
+  /** GL-STATUS-02: job-first matching. An item with a Job ID links on the Job ID; the quote number is not a second route. */
+  @Test void gl_status_02_jobIdLinksAnInvoiceThatNamesOnlyTheJobId() {
+    var candidate=new InvoiceMirrorRepository.Unlinked(item,"JO413","QU-0008");
+    var mapping=new QuoteMirrorService.Mapping(entity,tenant,grant);
+    var invoice=new XeroInvoiceClient.WorkflowInvoice(id,"INV-0055",InvoiceStatus.DRAFT,
+        BigDecimal.TEN,BigDecimal.TEN,null,false,"JO413");
+    when(repository.unlinkedAllOpen(entity)).thenReturn(List.of(candidate));
+    when(source.read(access,id)).thenReturn(invoice);
+    var withLookup=new InvoiceSync(repository,mirror,source,true,(a,j,q) -> Set.of(id),true);
+    assertThat(withLookup.run(entity,() -> access)).isEqualTo(1);
+    verify(mirror).link(mapping,candidate,invoice,true);
+  }
+  @Test void gl_status_02_aJobLinkedItemIgnoresAnInvoiceThatNamesOnlyTheQuote() {
+    var candidate=new InvoiceMirrorRepository.Unlinked(item,"JO413","QU-0008");
+    var invoice=new XeroInvoiceClient.WorkflowInvoice(id,"INV-0055",InvoiceStatus.DRAFT,
+        BigDecimal.TEN,BigDecimal.TEN,null,false,"QU-0008");
+    when(repository.unlinkedAllOpen(entity)).thenReturn(List.of(candidate));
+    when(source.read(access,id)).thenReturn(invoice);
+    var withLookup=new InvoiceSync(repository,mirror,source,true,(a,j,q) -> Set.of(id),true);
+    assertThat(withLookup.run(entity,() -> access)).isZero();
+    verify(mirror,never()).link(any(),any(),any(),anyBoolean());
+  }
+  @Test void gl_status_02_withoutAJobIdTheQuoteNumberLinks() {
+    var candidate=new InvoiceMirrorRepository.Unlinked(item,null,"QU-0008");
+    var mapping=new QuoteMirrorService.Mapping(entity,tenant,grant);
+    var invoice=new XeroInvoiceClient.WorkflowInvoice(id,"INV-0055",InvoiceStatus.DRAFT,
+        BigDecimal.TEN,BigDecimal.TEN,null,false,"QU-0008");
+    when(repository.unlinkedAllOpen(entity)).thenReturn(List.of(candidate));
+    when(source.read(access,id)).thenReturn(invoice);
+    var withLookup=new InvoiceSync(repository,mirror,source,true,(a,j,q) -> Set.of(id),true);
+    assertThat(withLookup.run(entity,() -> access)).isEqualTo(1);
+    verify(mirror).link(mapping,candidate,invoice,true);
+  }
   @Test void gl_status_04_duplicateJobReferenceNeedsReviewWithoutLinking() {
     var candidate=new InvoiceMirrorRepository.Unlinked(item,"J-1","Q-1");
     var mapping=new QuoteMirrorService.Mapping(entity,tenant,grant);
