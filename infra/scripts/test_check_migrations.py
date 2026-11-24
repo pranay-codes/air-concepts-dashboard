@@ -159,15 +159,17 @@ def test_cli_refuses_unknown_versions(tmp_path, capsys):
 
 # --- The real migrations ------------------------------------------------------------------------
 
-def test_the_first_live_push_needs_a_human_acknowledgement_for_three_constraint_drops():
+def test_the_first_live_push_needs_a_human_acknowledgement_for_the_constraint_drops():
     output = "\n".join(path.name for path in sorted(REAL_MIGRATIONS.glob("*.sql")))
     pending, flagged = mig.check(output, REAL_MIGRATIONS)
     assert len(pending) == len(list(REAL_MIGRATIONS.glob("*.sql")))
     # Documented in docs/live-environment-runbook.md: each drops check constraints that the same migration re-adds.
     # 20261123020000 drops them inside a DO block (dynamic SQL), so it is flagged as well.
+    # 20261124010000 replaces work_items_stage_check and remaps existing rows; it needs review before a Live release.
     assert {name for name, _, _ in flagged} == {
         "20261106050000_uc5_staff_and_dynamic_entities.sql",
         "20261111010000_uc4_generated_forecast_months.sql",
         "20261123020000_gl_quote_accept.sql",
+        "20261124010000_gl_vwork_stage_set.sql",
     }
     assert {reason for _, reason, _ in flagged} == {"ALTER TABLE ... DROP"}
