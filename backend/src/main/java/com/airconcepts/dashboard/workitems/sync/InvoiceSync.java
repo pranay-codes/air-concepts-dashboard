@@ -60,7 +60,9 @@ public final class InvoiceSync {
     if (lookup!=null) for (var candidate : earlyLookupVerified ? repository.unlinkedAllOpen(entity) : repository.unlinked(entity)) {
       try {
       var current=check(entity,resolver.get(),original);
-      var matches=lookup.find(current,candidate.jobId(),candidate.quoteNumber());
+      // Search by the job-first term only, so an invoice that names just the quote is not fetched for a job-linked item.
+      boolean job=hasText(candidate.jobId());
+      var matches=lookup.find(current,job ? candidate.jobId() : null,job ? null : candidate.quoteNumber());
       current=check(entity,resolver.get(),original);
       if (matches==null || matches.stream().anyMatch(Objects::isNull)) throw changed();
       var mapping=new QuoteMirrorService.Mapping(entity,current.tenantId(),current.grantId());
@@ -117,16 +119,24 @@ public final class InvoiceSync {
     return Set.of("INVOICE_LOOKUP_INCOMPLETE","INVOICE_SYNC_CHANGED","INVOICE_SYNC_OPERATION_IN_PROGRESS").contains(failure.code())
         || (failure instanceof com.airconcepts.dashboard.web.ProviderFailure provider && provider.upstreamStatus()==404);
   }
-  static boolean matchesReference(String reference, InvoiceMirrorRepository.Unlinked candidate, boolean strict) {
-    if (reference==null) return false;
-    String text=reference.toLowerCase(Locale.ROOT);
-    for (var term : new String[]{candidate.jobId(),candidate.quoteNumber()})
-      if (term!=null && !term.isBlank()) {
-        String normalized=term.strip().toLowerCase(Locale.ROOT);
-        if (strict ? containsIdentifier(text,normalized) : text.contains(normalized)) return true;
-      }
-    return false;
+  /** Job-first: the vWork Job ID when the work item has one, otherwise the quote number. Only one term is used. */
+  static String matchTerm(InvoiceMirrorRepository.Unlinked candidate) {
+    return hasText(candidate.jobId()) ? candidate.jobId() : candidate.quoteNumber();
   }
+  static boolean matchesReference(String reference, InvoiceMirrorRepository.Unlinked candidate, boolean strict) {
+    return matchesTerm(reference,matchTerm(candidate),strict);
+  }
+  /** Conflict detection stays conservative: an invoice naming either identifier of another item is a conflict. */
+  static boolean matchesAnyTerm(String reference, InvoiceMirrorRepository.Unlinked candidate, boolean strict) {
+    return matchesTerm(reference,candidate.jobId(),strict) || matchesTerm(reference,candidate.quoteNumber(),strict);
+  }
+  private static boolean matchesTerm(String reference, String term, boolean strict) {
+    if (reference==null || !hasText(term)) return false;
+    String text=reference.toLowerCase(Locale.ROOT);
+    String normalized=term.strip().toLowerCase(Locale.ROOT);
+    return strict ? containsIdentifier(text,normalized) : text.contains(normalized);
+  }
+  private static boolean hasText(String value) { return value!=null && !value.isBlank(); }
   private static boolean containsIdentifier(String text, String term) {
     for (int index=text.indexOf(term); index>=0; index=text.indexOf(term,index+1)) {
       int end=index+term.length();
