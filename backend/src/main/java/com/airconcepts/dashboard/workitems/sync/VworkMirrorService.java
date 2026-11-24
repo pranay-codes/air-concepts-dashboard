@@ -36,8 +36,13 @@ public class VworkMirrorService {
       try { linked = StageMachine.apply(before, new StageMachine.LinkJob(), item.settings()).state(); }
       catch (IllegalArgumentException invalid) { throw changed(); }
     } else if (!item.jobId().equals(job.id())) throw changed();
-    var observed = StageMachine.apply(linked, new StageMachine.JobObserved(job.workerName() != null && !job.workerName().isBlank(),
-        job.plannedStart() != null, job.status() == VworkClient.Status.COMPLETED, job.status() == VworkClient.Status.CANCELED), item.settings());
+    // vWork statuses: assigned = Job scheduled; started or paused = Work in progress; completed = Job completed.
+    var status = job.status();
+    boolean assigned = status == VworkClient.Status.ASSIGNED || status == VworkClient.Status.STARTED
+        || status == VworkClient.Status.PAUSED || status == VworkClient.Status.COMPLETED;
+    boolean started = status == VworkClient.Status.STARTED || status == VworkClient.Status.PAUSED;
+    var observed = StageMachine.apply(linked, new StageMachine.JobObserved(assigned, started,
+        status == VworkClient.Status.COMPLETED, status == VworkClient.Status.CANCELED), item.settings());
     var next = observed.state();
     if (!newLink && next.equals(before) && Objects.equals(item.status(), job.status().name())
         && Objects.equals(item.worker(), job.workerName()) && Objects.equals(item.planned(), job.plannedStart())
@@ -45,7 +50,7 @@ public class VworkMirrorService {
     if (repository.hasUnresolvedOperation(entity, itemId))
       throw new ApiFailure(HttpStatus.CONFLICT, "VWORK_SYNC_OPERATION_IN_PROGRESS", "Resolve the existing operation before syncing this job.");
     var now = clock.instant();
-    LocalDate late = next.stage() == WorkItemStage.TO_INVOICE && before.stage() != next.stage()
+    LocalDate late = next.stage() == WorkItemStage.JOB_COMPLETED && before.stage() != next.stage()
         ? workingDays.addWorkingDays(BusinessTime.dateOf(now), item.threshold()) : null;
     try {
       if (repository.update(entity, itemId, job, next, before, item.version(), now, late) != 1) throw changed();

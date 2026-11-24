@@ -18,7 +18,8 @@ class StageMachineTest {
   }
 
   @Test void gl_status_02_sentInvoiceCanAdvanceAnUnscheduledItem() {
-    for (var stage : new WorkItemStage[]{WorkItemStage.QUOTED, WorkItemStage.TO_SCHEDULE, WorkItemStage.SCHEDULED}) {
+    for (var stage : new WorkItemStage[]{WorkItemStage.QUOTED, WorkItemStage.TO_SCHEDULE, WorkItemStage.SCHEDULED,
+        WorkItemStage.WORK_IN_PROGRESS}) {
       var result = StageMachine.apply(item(stage, false, false),
           new StageMachine.InvoiceObserved(StageMachine.InvoiceStatus.AUTHORISED, true, new BigDecimal("50")), SETTINGS);
       assertThat(result.state().stage()).isEqualTo(WorkItemStage.INVOICED);
@@ -35,9 +36,37 @@ class StageMachineTest {
 
   @Test void gl_status_03_aVerifiedJobCanBeLinkedAndScheduledFromQuoted() {
     var linked = StageMachine.apply(item(WorkItemStage.QUOTED, false, false), new StageMachine.LinkJob(), SETTINGS);
-    var scheduled = StageMachine.apply(linked.state(), new StageMachine.JobObserved(true, true, false, false), SETTINGS);
+    var scheduled = StageMachine.apply(linked.state(), new StageMachine.JobObserved(true, false, false, false), SETTINGS);
     assertThat(scheduled.state().stage()).isEqualTo(WorkItemStage.SCHEDULED);
     assertThat(scheduled.state().ownerId()).isEqualTo(MANAGER);
+  }
+  @Test void gl_status_03_aStartedJobFromQuotedShowsWorkInProgressWithTheServiceManager() {
+    var linked = StageMachine.apply(item(WorkItemStage.QUOTED, false, false), new StageMachine.LinkJob(), SETTINGS);
+    var started = StageMachine.apply(linked.state(), new StageMachine.JobObserved(true, true, false, false), SETTINGS);
+    assertThat(started.state().stage()).isEqualTo(WorkItemStage.WORK_IN_PROGRESS);
+    assertThat(started.state().ownerId()).isEqualTo(MANAGER);
+    assertThat(started.event()).isEqualTo("STAGE_CHANGED");
+  }
+  @Test void gl_status_01_workInProgressRevertsToScheduledOrToScheduleWhenProviderStateMovesBack() {
+    var wip = item(WorkItemStage.WORK_IN_PROGRESS, true, false);
+    assertThat(StageMachine.apply(wip, new StageMachine.JobObserved(true, false, false, false), SETTINGS).state().stage())
+        .isEqualTo(WorkItemStage.SCHEDULED);
+    assertThat(StageMachine.apply(wip, new StageMachine.JobObserved(false, false, false, false), SETTINGS).state().stage())
+        .isEqualTo(WorkItemStage.TO_SCHEDULE);
+  }
+  @Test void gl_status_01_workInProgressCompletesToJobCompletedWithTheDefaultOwner() {
+    var wip = item(WorkItemStage.WORK_IN_PROGRESS, true, false);
+    var completed = StageMachine.apply(wip, new StageMachine.JobObserved(true, true, true, false), SETTINGS);
+    assertThat(completed.state().stage()).isEqualTo(WorkItemStage.JOB_COMPLETED);
+    assertThat(completed.state().ownerId()).isEqualTo(OWNER);
+  }
+  @Test void gl_status_02_sentInvoiceFromWorkInProgressHandsOwnershipToFinance() {
+    var wip = new StageMachine.State(WorkItemStage.WORK_IN_PROGRESS, MANAGER, null, null, true, false, Set.of());
+    var result = StageMachine.apply(wip,
+        new StageMachine.InvoiceObserved(StageMachine.InvoiceStatus.AUTHORISED, true, new BigDecimal("50")), SETTINGS);
+    assertThat(result.state().stage()).isEqualTo(WorkItemStage.INVOICED);
+    assertThat(result.state().ownerId()).isEqualTo(OWNER);
+    assertThat(result.state().invoiceLinked()).isTrue();
   }
   @Test void gl_status_01_unchangedQuoteStatusAfterSchedulingDoesNotRaiseRegression() {
     var scheduled=item(WorkItemStage.SCHEDULED,true,false);
@@ -96,7 +125,7 @@ class StageMachineTest {
       assertThat(result.event()).isEqualTo("STAGE_CHANGED");
     }
     var invoiced = StageMachine.apply(quoted, new StageMachine.QuoteObserved(StageMachine.QuoteStatus.INVOICED), SETTINGS);
-    assertThat(invoiced.state().stage()).isEqualTo(WorkItemStage.TO_INVOICE);
+    assertThat(invoiced.state().stage()).isEqualTo(WorkItemStage.JOB_COMPLETED);
     assertThat(invoiced.state().attention()).contains("QUOTE_INVOICED_IN_XERO");
     assertThat(invoiced.event()).isEqualTo("STAGE_CHANGED");
     assertThat(StageMachine.apply(quoted, new StageMachine.QuoteObserved(StageMachine.QuoteStatus.SENT), SETTINGS).event()).isNull();
@@ -104,7 +133,7 @@ class StageMachineTest {
 
   @Test void gl05_allRegressedQuoteStatusesRaiseAttentionOnceForEveryOpenLaterStage() {
     for (var stage : new WorkItemStage[]{WorkItemStage.TO_SCHEDULE, WorkItemStage.SCHEDULED,
-        WorkItemStage.TO_INVOICE, WorkItemStage.INVOICE_DRAFTED, WorkItemStage.INVOICED}) {
+        WorkItemStage.JOB_COMPLETED, WorkItemStage.JOB_COMPLETED, WorkItemStage.INVOICED}) {
       for (var status : new StageMachine.QuoteStatus[]{StageMachine.QuoteStatus.SENT, StageMachine.QuoteStatus.DECLINED,
           StageMachine.QuoteStatus.DELETED, StageMachine.QuoteStatus.DRAFT}) {
         var result = StageMachine.apply(item(stage, true, false), new StageMachine.QuoteObserved(status), SETTINGS);
@@ -148,9 +177,9 @@ class StageMachineTest {
 
   @Test void gl15_scheduleRequiresWorkerAndStartAndCanRevert() {
     var pending = item(WorkItemStage.TO_SCHEDULE, true, false);
-    var scheduled = StageMachine.apply(pending, new StageMachine.JobObserved(true, true, false, false), SETTINGS);
+    var scheduled = StageMachine.apply(pending, new StageMachine.JobObserved(true, false, false, false), SETTINGS);
     assertThat(scheduled.state().stage()).isEqualTo(WorkItemStage.SCHEDULED);
-    assertThat(StageMachine.apply(scheduled.state(), new StageMachine.JobObserved(false, true, false, false), SETTINGS)
+    assertThat(StageMachine.apply(scheduled.state(), new StageMachine.JobObserved(false, false, false, false), SETTINGS)
         .state().stage()).isEqualTo(WorkItemStage.TO_SCHEDULE);
     assertThatIllegalArgumentException().isThrownBy(() -> StageMachine.apply(
         item(WorkItemStage.TO_SCHEDULE, false, false), new StageMachine.JobObserved(true, true, false, false), SETTINGS));
@@ -159,7 +188,7 @@ class StageMachineTest {
   @Test void gl16_completionHandsOffAndCancellationRaisesAttention() {
     var scheduled = item(WorkItemStage.SCHEDULED, true, false);
     var completed = StageMachine.apply(scheduled, new StageMachine.JobObserved(false, false, true, false), SETTINGS);
-    assertThat(completed.state().stage()).isEqualTo(WorkItemStage.TO_INVOICE);
+    assertThat(completed.state().stage()).isEqualTo(WorkItemStage.JOB_COMPLETED);
     assertThat(completed.state().ownerId()).isEqualTo(OWNER);
     var cancelled = StageMachine.apply(scheduled, new StageMachine.JobObserved(false, false, false, true), SETTINGS);
     assertThat(cancelled.state().stage()).isEqualTo(WorkItemStage.SCHEDULED);
@@ -168,9 +197,9 @@ class StageMachineTest {
   }
 
   @Test void gl19_and_gl21_invoiceTransitionsAndPartialPayment() {
-    var pending = item(WorkItemStage.TO_INVOICE, true, false);
+    var pending = item(WorkItemStage.JOB_COMPLETED, true, false);
     var drafted = StageMachine.apply(pending, new StageMachine.InvoiceObserved(StageMachine.InvoiceStatus.DRAFT, false, null), SETTINGS);
-    assertThat(drafted.state().stage()).isEqualTo(WorkItemStage.INVOICE_DRAFTED);
+    assertThat(drafted.state().stage()).isEqualTo(WorkItemStage.JOB_COMPLETED);
     assertThat(drafted.state().invoiceLinked()).isTrue();
     var sent = StageMachine.apply(drafted.state(), new StageMachine.InvoiceObserved(StageMachine.InvoiceStatus.AUTHORISED, true, new BigDecimal("20.00")), SETTINGS);
     assertThat(sent.state().stage()).isEqualTo(WorkItemStage.INVOICED);
@@ -185,7 +214,7 @@ class StageMachineTest {
   @Test void gl19_voidInvoiceUnlinksAndReturnsToInvoice() {
     var result = StageMachine.apply(item(WorkItemStage.INVOICED, true, true),
         new StageMachine.InvoiceObserved(StageMachine.InvoiceStatus.VOIDED, false, null), SETTINGS);
-    assertThat(result.state().stage()).isEqualTo(WorkItemStage.TO_INVOICE);
+    assertThat(result.state().stage()).isEqualTo(WorkItemStage.JOB_COMPLETED);
     assertThat(result.state().invoiceLinked()).isFalse();
     assertThat(result.state().attention()).containsExactly("INVOICE_VOIDED");
     assertThat(result.event()).isEqualTo("INVOICE_UNLINKED");
@@ -202,12 +231,12 @@ class StageMachineTest {
   }
 
   @Test void gl20_noInvoiceRequiresReasonAndNoLinkedInvoice() {
-    var pending = item(WorkItemStage.TO_INVOICE, true, false);
+    var pending = item(WorkItemStage.JOB_COMPLETED, true, false);
     var result = StageMachine.apply(pending, new StageMachine.NoInvoiceNeeded("No charge"), SETTINGS);
     assertThat(result.state().closeReason()).isEqualTo("NO_INVOICE_NEEDED");
     assertThat(result.state().closingNote()).isEqualTo("No charge");
     assertThatIllegalArgumentException().isThrownBy(() -> StageMachine.apply(pending, new StageMachine.NoInvoiceNeeded(" "), SETTINGS));
-    assertThatIllegalArgumentException().isThrownBy(() -> StageMachine.apply(item(WorkItemStage.TO_INVOICE, true, true), new StageMachine.NoInvoiceNeeded("No charge"), SETTINGS));
+    assertThatIllegalArgumentException().isThrownBy(() -> StageMachine.apply(item(WorkItemStage.JOB_COMPLETED, true, true), new StageMachine.NoInvoiceNeeded("No charge"), SETTINGS));
   }
 
   @Test void gl14_linkThenObserveJobAndRejectDuplicateLink() {
@@ -215,13 +244,13 @@ class StageMachineTest {
     var linked = StageMachine.apply(pending, new StageMachine.LinkJob(), SETTINGS);
     assertThat(linked.state().jobLinked()).isTrue();
     assertThat(linked.event()).isEqualTo("JOB_LINKED");
-    assertThat(StageMachine.apply(linked.state(), new StageMachine.JobObserved(true, true, false, false), SETTINGS)
+    assertThat(StageMachine.apply(linked.state(), new StageMachine.JobObserved(true, false, false, false), SETTINGS)
         .state().stage()).isEqualTo(WorkItemStage.SCHEDULED);
     assertThatIllegalArgumentException().isThrownBy(() -> StageMachine.apply(linked.state(), new StageMachine.LinkJob(), SETTINGS));
   }
 
   @Test void gl19_markSentRequiresAuthorisedInvoiceAndEnabledFallback() {
-    var draft = item(WorkItemStage.INVOICE_DRAFTED, true, true);
+    var draft = item(WorkItemStage.JOB_COMPLETED, true, true);
     var marked = StageMachine.apply(draft, new StageMachine.MarkSent(true, true), SETTINGS);
     assertThat(marked.state().stage()).isEqualTo(WorkItemStage.INVOICED);
     assertThat(marked.event()).isEqualTo("MARKED_SENT");
@@ -230,14 +259,14 @@ class StageMachineTest {
   }
 
   @Test void gl21_zeroBalanceDraftIsNotTreatedAsPaid() {
-    var result = StageMachine.apply(item(WorkItemStage.TO_INVOICE, true, false),
+    var result = StageMachine.apply(item(WorkItemStage.JOB_COMPLETED, true, false),
         new StageMachine.InvoiceObserved(StageMachine.InvoiceStatus.DRAFT, false, BigDecimal.ZERO), SETTINGS);
-    assertThat(result.state().stage()).isEqualTo(WorkItemStage.INVOICE_DRAFTED);
+    assertThat(result.state().stage()).isEqualTo(WorkItemStage.JOB_COMPLETED);
   }
   @Test void gl21_authorisedInvoiceWithoutVerifiedSendIsDrafted() {
-    var result = StageMachine.apply(item(WorkItemStage.TO_INVOICE,true,true),
+    var result = StageMachine.apply(item(WorkItemStage.JOB_COMPLETED,true,true),
         new StageMachine.InvoiceObserved(StageMachine.InvoiceStatus.AUTHORISED,false,new BigDecimal("40")),SETTINGS);
-    assertThat(result.state().stage()).isEqualTo(WorkItemStage.INVOICE_DRAFTED);
+    assertThat(result.state().stage()).isEqualTo(WorkItemStage.JOB_COMPLETED);
   }
 
   @Test void gl23_firstSyncOnlyCreatesEligibleAcceptedQuotesAndAllSentQuotes() {
@@ -262,7 +291,7 @@ class StageMachineTest {
     assertThat(declined.state().closeReason()).isEqualTo("LOST");
     assertThat(declined.state().closingNote()).isEqualTo("Declined in Xero");
     var invoiced = StageMachine.create(StageMachine.QuoteStatus.INVOICED, later, SETTINGS).orElseThrow();
-    assertThat(invoiced.state().stage()).isEqualTo(WorkItemStage.TO_INVOICE);
+    assertThat(invoiced.state().stage()).isEqualTo(WorkItemStage.JOB_COMPLETED);
     assertThat(invoiced.state().attention()).contains("QUOTE_INVOICED_IN_XERO");
     assertThat(StageMachine.create(StageMachine.QuoteStatus.DRAFT, later, SETTINGS).orElseThrow().state().stage()).isEqualTo(WorkItemStage.QUOTED);
     assertThat(StageMachine.create(StageMachine.QuoteStatus.DELETED, later, SETTINGS)).isEmpty();

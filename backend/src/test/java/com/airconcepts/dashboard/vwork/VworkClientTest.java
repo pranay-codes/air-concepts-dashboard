@@ -114,9 +114,73 @@ class VworkClientTest {
         Map.of("Content-Encoding", "gzip"), compressed), Clock.systemUTC());
     assertThatThrownBy(() -> client.job(credential, "17")).isInstanceOfSatisfying(VworkFailure.class,
         failure -> assertThat(failure.code()).isEqualTo("VWORK_PROVIDER_FAILED"));
-    var draft = new VworkClient.NewJob("J-1", "template-A", "Task", List.of(new VworkClient.ScopeLine("Work", "1")));
-    assertThatThrownBy(() -> client.create(credential, draft)).isInstanceOfSatisfying(VworkFailure.class,
-        failure -> assertThat(failure.code()).isEqualTo("VWORK_CAPABILITY_UNVERIFIED"));
+    // A read-only transport cannot send the clone POST, so creation fails closed without a request.
+    assertThatThrownBy(() -> client.create(credential, priceFreeDraft())).isInstanceOfSatisfying(VworkFailure.class,
+        failure -> assertThat(failure.code()).isEqualTo("VWORK_UNAVAILABLE"));
+  }
+
+  @Test void gl26_createPostsAPriceFreeCloneWithReferenceAndXeroContact() {
+    var calls = new java.util.ArrayList<String>();
+    var client = replying(200, "<job><id>77</id><status>unassigned</status><third_party_id>J-1</third_party_id></job>", calls);
+    assertThat(client.create(credential, priceFreeDraft()).id()).isEqualTo("77");
+    assertThat(calls).hasSize(1);
+    assertThat(calls.getFirst())
+        .startsWith("POST /api/v5/jobs/clone.xml <?xml")
+        .contains("<template_name>template-A</template_name>")
+        .contains("<third_party_id>J-1</third_party_id>")
+        .contains("<customer_third_party_id>6f1d2a3b-0000-4000-8000-000000000001</customer_third_party_id>")
+        .doesNotContain("invoice", "pricebook", "unit_cost", "line_item", "tax_rate", "planned_start", "worker", "<status>");
+  }
+  @Test void gl26_createUsesTheTemplateIdWhenTheReferenceIsNumeric() {
+    var calls = new java.util.ArrayList<String>();
+    var client = replying(200, "<job><id>77</id><status>unassigned</status><third_party_id>J-1</third_party_id></job>", calls);
+    var numeric = new VworkClient.NewJob("J-1", "4242", "Task", List.of(new VworkClient.ScopeLine("Work", "1")))
+        .withCustomerThirdPartyId("6f1d2a3b-0000-4000-8000-000000000001");
+    client.create(credential, numeric);
+    assertThat(calls.getFirst()).contains("<template_id>4242</template_id>").doesNotContain("<template_name>");
+  }
+  @Test void gl26_pricedCreateResponseIsRejectedForReview() {
+    var priced = "<job><id>78</id><status>unassigned</status><third_party_id>J-1</third_party_id>"
+        + "<invoice><line_items><line_item><unit_cost>100.0</unit_cost></line_item></line_items></invoice></job>";
+    assertThatThrownBy(() -> replying(200, priced, new java.util.ArrayList<>()).create(credential, priceFreeDraft()))
+        .isInstanceOfSatisfying(VworkFailure.class, failure -> assertThat(failure.code()).isEqualTo("VWORK_PRICE_RETURNED"));
+  }
+  @Test void gl26_createResponseForAnotherReferenceIsMalformed() {
+    var other = "<job><id>79</id><status>unassigned</status><third_party_id>J-2</third_party_id></job>";
+    assertThatThrownBy(() -> replying(200, other, new java.util.ArrayList<>()).create(credential, priceFreeDraft()))
+        .isInstanceOfSatisfying(VworkFailure.class, failure -> assertThat(failure.code()).isEqualTo("VWORK_PROVIDER_FAILED"));
+  }
+  @Test void gl26_createWithoutXeroContactIsRefusedBeforeAnyRequest() {
+    var calls = new java.util.ArrayList<String>();
+    var noContact = new VworkClient.NewJob("J-1", "template-A", "Task", List.of(new VworkClient.ScopeLine("Work", "1")));
+    assertThatThrownBy(() -> replying(200, "<job/>", calls).create(credential, noContact)).isInstanceOf(IllegalArgumentException.class);
+    assertThat(calls).isEmpty();
+  }
+  @Test void gl26_notesAreEscapedSoTheyCannotInjectElements() {
+    var calls = new java.util.ArrayList<String>();
+    var client = replying(200, "<job><id>77</id><status>unassigned</status><third_party_id>J-1</third_party_id></job>", calls);
+    var hostile = new VworkClient.NewJob("J-1", "template-A", "<b>A & B</b>", List.of(new VworkClient.ScopeLine("Work", "1")))
+        .withCustomerThirdPartyId("6f1d2a3b-0000-4000-8000-000000000001");
+    client.create(credential, hostile);
+    assertThat(calls.getFirst()).contains("&lt;b&gt;A &amp; B&lt;/b&gt;").doesNotContain("<b>");
+  }
+
+  private static VworkClient.NewJob priceFreeDraft() {
+    return new VworkClient.NewJob("J-1", "template-A", "Task", List.of(new VworkClient.ScopeLine("Work", "1")))
+        .withCustomerThirdPartyId("6f1d2a3b-0000-4000-8000-000000000001");
+  }
+  /** Records each write as "METHOD path body" so tests can inspect exactly what would reach vWork. */
+  private static VworkLiveClient replying(int status, String xml, java.util.List<String> calls) {
+    VworkLiveClient.Transport transport = new VworkLiveClient.Transport() {
+      @Override public VworkLiveClient.Response send(java.net.URI uri, Map<String, String> headers) {
+        throw new AssertionError("reads are not expected in this test");
+      }
+      @Override public VworkLiveClient.Response send(String method, java.net.URI uri, byte[] body, Map<String, String> headers) {
+        calls.add(method + " " + uri.getRawPath() + " " + new String(body, StandardCharsets.UTF_8));
+        return new VworkLiveClient.Response(status, Map.of(), xml.getBytes(StandardCharsets.UTF_8));
+      }
+    };
+    return new VworkLiveClient(transport, Clock.systemUTC());
   }
 
   private static String job(String id, String reference) {

@@ -89,7 +89,7 @@ class WorkItemServiceTest {
   @Test void gl20_financeCanCloseWithoutInvoiceAndAuditTheReason() {
     when(repository.lockActor(actor)).thenReturn(Optional.of(Role.FINANCIAL_ADMIN));
     when(repository.lockItem(entity, item)).thenReturn(Optional.of(new WorkItemRepository.Item(
-        item, entity, WorkItemStage.TO_INVOICE, actor, null, null, 2)));
+        item, entity, WorkItemStage.JOB_COMPLETED, actor, null, null, 2)));
     when(repository.closeNoInvoice(entity, item, 2, "No charge")).thenReturn(1);
     var result = service.closeNoInvoice(user, entity, item, 2, "No charge");
     assertThat(result.stage()).isEqualTo(WorkItemStage.CLOSED);
@@ -142,7 +142,7 @@ class WorkItemServiceTest {
   @Test void gl21_financeCanConfirmAuthorisedInvoiceWasSent() {
     when(repository.lockActor(actor)).thenReturn(Optional.of(Role.FINANCIAL_ADMIN));
     when(repository.lockItem(entity,item)).thenReturn(Optional.of(new WorkItemRepository.Item(
-        item,entity,WorkItemStage.INVOICE_DRAFTED,actor,null,null,2)));
+        item,entity,WorkItemStage.JOB_COMPLETED,actor,null,null,2)));
     when(repository.markSent(entity,item,2)).thenReturn(1);
     assertThat(service.markSent(user,entity,item,2).stage()).isEqualTo(WorkItemStage.INVOICED);
     verify(repository).auditMarkSent(entity,item,actor);
@@ -151,7 +151,7 @@ class WorkItemServiceTest {
     assertThatThrownBy(() -> service.markSent(user,entity,item,2)).isInstanceOf(AccessDeniedException.class);
     when(repository.lockActor(actor)).thenReturn(Optional.of(Role.DIRECTOR));
     when(repository.lockItem(entity,item)).thenReturn(Optional.of(new WorkItemRepository.Item(
-        item,entity,WorkItemStage.INVOICE_DRAFTED,actor,null,null,2)));
+        item,entity,WorkItemStage.JOB_COMPLETED,actor,null,null,2)));
     when(repository.markSent(entity,item,2)).thenReturn(0);
     assertThatThrownBy(() -> service.markSent(user,entity,item,2)).isInstanceOf(ApiFailure.class);
     verify(repository,never()).auditMarkSent(any(),any(),any());
@@ -166,7 +166,7 @@ class WorkItemServiceTest {
     assertThatThrownBy(() -> service.closeNoInvoice(user, entity, item, 2, "No charge"))
         .isInstanceOf(ApiFailure.class).extracting(e -> ((ApiFailure) e).code()).isEqualTo("STAGE_ACTION_NOT_ALLOWED");
     when(repository.lockItem(entity, item)).thenReturn(Optional.of(new WorkItemRepository.Item(
-        item, entity, WorkItemStage.TO_INVOICE, actor, null, null, 2)));
+        item, entity, WorkItemStage.JOB_COMPLETED, actor, null, null, 2)));
     assertThatThrownBy(() -> service.closeNoInvoice(user, entity, item, 1, "No charge"))
         .isInstanceOf(ApiFailure.class).extracting(e -> ((ApiFailure) e).code()).isEqualTo("WORK_ITEM_CHANGED");
     verify(repository, never()).closeNoInvoice(any(), any(), anyInt(), any());
@@ -176,7 +176,7 @@ class WorkItemServiceTest {
   @Test void gl20_linkedInvoiceCannotBeClosedWithoutInvoice() {
     when(repository.lockActor(actor)).thenReturn(Optional.of(Role.DIRECTOR));
     when(repository.lockItem(entity, item)).thenReturn(Optional.of(new WorkItemRepository.Item(
-        item, entity, WorkItemStage.TO_INVOICE, actor, null, null, 2)));
+        item, entity, WorkItemStage.JOB_COMPLETED, actor, null, null, 2)));
     when(repository.closeNoInvoice(entity, item, 2, "No charge")).thenReturn(0);
     assertThatThrownBy(() -> service.closeNoInvoice(user, entity, item, 2, "No charge"))
         .isInstanceOf(ApiFailure.class).extracting(e -> ((ApiFailure) e).code()).isEqualTo("STAGE_ACTION_NOT_ALLOWED");
@@ -186,7 +186,7 @@ class WorkItemServiceTest {
   @Test void gl22_unresolvedExternalOperationBlocksManualClosureWithoutAudit() {
     when(repository.lockActor(actor)).thenReturn(Optional.of(Role.DIRECTOR));
     when(repository.lockItem(entity, item)).thenReturn(Optional.of(new WorkItemRepository.Item(
-        item, entity, WorkItemStage.TO_INVOICE, actor, null, null, 2)));
+        item, entity, WorkItemStage.JOB_COMPLETED, actor, null, null, 2)));
     when(repository.hasBlockingOperation(entity, item)).thenReturn(true);
     assertThatThrownBy(() -> service.closeNoInvoice(user, entity, item, 2, "No charge"))
         .isInstanceOfSatisfying(ApiFailure.class, error -> assertThat(error.code()).isEqualTo("OPERATION_IN_PROGRESS"));

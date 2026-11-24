@@ -40,12 +40,12 @@ class InvoiceMirrorServiceTest {
   @Test void gl21_voidUnlinksAndRaisesAttention() {
     setup(WorkItemStage.INVOICED);
     service.apply(mapping,item,invoice(InvoiceStatus.VOIDED,"0"),false);
-    verify(invoices).update(eq(mapping),eq(item),any(),argThat(s -> s.stage()==WorkItemStage.TO_INVOICE && !s.invoiceLinked() && s.attention().contains("INVOICE_VOIDED")),eq(4),any(),any(),any());
+    verify(invoices).update(eq(mapping),eq(item),any(),argThat(s -> s.stage()==WorkItemStage.JOB_COMPLETED && !s.invoiceLinked() && s.attention().contains("INVOICE_VOIDED")),eq(4),any(),any(),any());
   }
   @Test void gl21_unverifiedSendFlagCannotMoveADraftToInvoiced() {
-    setup(WorkItemStage.INVOICE_DRAFTED);
+    setup(WorkItemStage.JOB_COMPLETED);
     service.apply(mapping,item,invoice(InvoiceStatus.AUTHORISED,"40"),false);
-    verify(invoices).update(eq(mapping),eq(item),any(),argThat(s -> s.stage()==WorkItemStage.INVOICE_DRAFTED),eq(4),any(),any(),any());
+    verify(invoices).update(eq(mapping),eq(item),any(),argThat(s -> s.stage()==WorkItemStage.JOB_COMPLETED),eq(4),any(),any(),any());
   }
   @Test void gl21_identicalObservationDoesNotBumpVersion() {
     setup(WorkItemStage.INVOICED);
@@ -73,13 +73,13 @@ class InvoiceMirrorServiceTest {
     var candidate=new InvoiceMirrorRepository.Unlinked(item,"J-1","Q-1");
     when(quotes.lockConfig(entity)).thenReturn(Optional.of(new QuoteMirrorRepository.Config(false,30,2,settings)));
     when(quotes.lockMapping(mapping)).thenReturn(true);
-    var state=new StageMachine.State(WorkItemStage.TO_INVOICE,null,null,null,true,false,Set.of("QUOTE_INVOICED_IN_XERO"));
+    var state=new StageMachine.State(WorkItemStage.JOB_COMPLETED,null,null,null,true,false,Set.of("QUOTE_INVOICED_IN_XERO"));
     when(invoices.lock(mapping,item)).thenReturn(Optional.of(new InvoiceMirrorRepository.Stored(4,null,state)));
     when(invoices.referenceMatches(mapping,candidate)).thenReturn(true);
     when(invoices.link(eq(mapping),eq(candidate),any(),any(),eq(4),any(),any())).thenReturn(1);
     service.link(mapping,candidate,invoice(InvoiceStatus.DRAFT,"40"),false);
     verify(invoices).link(eq(mapping),eq(candidate),any(),argThat(s -> s.invoiceLinked()
-        && s.stage()==WorkItemStage.INVOICE_DRAFTED && !s.attention().contains("QUOTE_INVOICED_IN_XERO")),eq(4),any(),any());
+        && s.stage()==WorkItemStage.JOB_COMPLETED && !s.attention().contains("QUOTE_INVOICED_IN_XERO")),eq(4),any(),any());
   }
   @Test void gl_status_02_manualSentInvoiceLinksBeforeScheduling() {
     var candidate=new InvoiceMirrorRepository.Unlinked(item,"J-1","Q-1");

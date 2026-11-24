@@ -48,7 +48,7 @@ class VworkMirrorServiceTest {
     when(repository.update(eq(entity), eq(item), any(), any(), any(), anyInt(), any(), any())).thenReturn(1);
     var completed = job(VworkClient.Status.COMPLETED, "Worker", now.minusSeconds(3600), now);
     service.apply(entity, item, "revision", completed);
-    var invoicing = new StageMachine.State(WorkItemStage.TO_INVOICE, owner, null, null, true, false, Set.of());
+    var invoicing = new StageMachine.State(WorkItemStage.JOB_COMPLETED, owner, null, null, true, false, Set.of());
     verify(repository).update(eq(entity), eq(item), eq(completed), eq(invoicing), eq(scheduled), eq(1), eq(now), any());
     verify(repository).audit(entity, item, "STAGE_CHANGED", scheduled, invoicing);
   }

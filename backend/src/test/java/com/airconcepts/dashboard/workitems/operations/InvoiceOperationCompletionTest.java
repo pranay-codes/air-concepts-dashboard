@@ -23,7 +23,7 @@ class InvoiceOperationCompletionTest {
   private final InvoiceOperationCompletion service=new InvoiceOperationCompletion(mappings,invoices,operations,Clock.fixed(Instant.parse("2026-11-21T00:00:00Z"),ZoneOffset.UTC));
   private final XeroInvoiceClient.WorkflowInvoice draft=new XeroInvoiceClient.WorkflowInvoice(invoice,"INV-1",InvoiceStatus.DRAFT,BigDecimal.TEN,BigDecimal.TEN,null,false,"J-1 / Q-1");
   private void setup(OperationState.Status status) {
-    var state=new StageMachine.State(WorkItemStage.TO_INVOICE,null,null,null,true,false,Set.of());
+    var state=new StageMachine.State(WorkItemStage.JOB_COMPLETED,null,null,null,true,false,Set.of());
     when(mappings.lockConfig(entity)).thenReturn(Optional.of(new QuoteMirrorRepository.Config(false,30,2,new StageMachine.Settings(null,false,null,false))));
     when(mappings.lockMapping(mapping)).thenReturn(true);
     when(invoices.lock(mapping,item)).thenReturn(Optional.of(new InvoiceMirrorRepository.Stored(5,null,state)));
@@ -37,7 +37,7 @@ class InvoiceOperationCompletionTest {
     service.complete(entity,item,context,operation,draft,OperationState.Result.CREATED);
     var order=inOrder(invoices,operations);
     order.verify(operations).lockOperation(entity,item,operation);
-    order.verify(invoices).link(eq(mapping),any(),eq(draft),argThat(state -> state.stage()==WorkItemStage.INVOICE_DRAFTED),eq(5),any(),any());
+    order.verify(invoices).link(eq(mapping),any(),eq(draft),argThat(state -> state.stage()==WorkItemStage.JOB_COMPLETED),eq(5),any(),any());
     order.verify(operations).complete(entity,item,operation,OperationState.Result.CREATED,invoice.toString());
   }
   @Test void gl22_unknownOutcomeCannotBeClaimedAsCreated() {

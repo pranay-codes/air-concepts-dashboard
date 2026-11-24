@@ -34,6 +34,24 @@ class GreenLineSchemaTest {
 
   @AfterAll static void stop() { if (postgres != null) postgres.stop(); }
 
+  /** GL-STATUS-07: the database enforces the approved stage set and rejects the retired stages. */
+  @Test void gl_status_07_approvedStageSetIsEnforcedAndRetiredStagesAreRejected() throws Exception {
+    try (var connection = DriverManager.getConnection(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+         var statement = connection.createStatement()) {
+      statement.execute("insert into public.entities(id, code, display_name) values "
+          + "('00000000-0000-0000-0000-000000000011','green-line-stage-test','Stage test')");
+      for (var stage : new String[]{"QUOTED", "TO_SCHEDULE", "SCHEDULED", "WORK_IN_PROGRESS", "JOB_COMPLETED", "INVOICED"})
+        statement.execute(insertAtStage(stage));
+      for (var retired : new String[]{"TO_INVOICE", "INVOICE_DRAFTED"})
+        assertThatThrownBy(() -> statement.execute(insertAtStage(retired))).isInstanceOf(SQLException.class);
+    }
+  }
+
+  private static String insertAtStage(String stage) {
+    return "insert into public.work_items(entity_id,xero_quote_id,quote_number,xero_quote_status,stage) values "
+        + "('00000000-0000-0000-0000-000000000011',gen_random_uuid(),'S-" + stage + "','SENT','" + stage + "')";
+  }
+
   @Test void gl02_identityAndGl07AuditGrants() throws Exception {
     try (var connection = DriverManager.getConnection(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
          var statement = connection.createStatement()) {

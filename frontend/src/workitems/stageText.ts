@@ -1,11 +1,12 @@
 import type { WorkItem } from "./contracts";
 
+/** Labels follow the approved stage set: Quoted, To schedule, Job scheduled, Work in progress, Job completed, Invoiced. */
 export const stageLabels: Record<WorkItem["stage"], string> = {
   QUOTED: "Quoted",
   TO_SCHEDULE: "To schedule",
-  SCHEDULED: "Scheduled",
-  TO_INVOICE: "To invoice",
-  INVOICE_DRAFTED: "Invoice drafted",
+  SCHEDULED: "Job scheduled",
+  WORK_IN_PROGRESS: "Work in progress",
+  JOB_COMPLETED: "Job completed",
   INVOICED: "Invoiced",
   CLOSED: "Closed",
 };

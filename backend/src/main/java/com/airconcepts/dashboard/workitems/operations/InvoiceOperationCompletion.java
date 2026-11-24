@@ -39,7 +39,7 @@ public class InvoiceOperationCompletion {
     var item=invoices.lock(mapping,itemId).orElseThrow(InvoiceOperationCompletion::changed);
     var candidate=new InvoiceMirrorRepository.Unlinked(itemId,context.jobId(),context.quoteNumber());
     var pending=operations.lockOperation(entity,itemId,operation).orElseThrow(InvoiceOperationCompletion::changed);
-    if (item.invoiceId()!=null || item.state().stage()!=WorkItemStage.TO_INVOICE || !invoices.referenceMatches(mapping,candidate)
+    if (item.invoiceId()!=null || item.state().stage()!=WorkItemStage.JOB_COMPLETED || !invoices.referenceMatches(mapping,candidate)
         || pending.kind()!=ExternalOperationRepository.Kind.XERO_CREATE_INVOICE
         || (pending.status()!=OperationState.Status.PENDING && pending.status()!=OperationState.Status.UNKNOWN)
         || (result==OperationState.Result.CREATED && pending.status()!=OperationState.Status.PENDING)
@@ -52,7 +52,7 @@ public class InvoiceOperationCompletion {
     attention.remove("QUOTE_INVOICED_IN_XERO"); attention.remove("INVOICE_MULTIPLE_MATCHES");
     var next=new StageMachine.State(after.stage(),after.ownerId(),after.closeReason(),after.closingNote(),after.jobLinked(),after.invoiceLinked(),attention);
     var now=clock.instant();
-    var late=next.stage()==WorkItemStage.TO_INVOICE || next.stage()==WorkItemStage.INVOICE_DRAFTED
+    var late=next.stage()==WorkItemStage.JOB_COMPLETED || next.stage()==WorkItemStage.JOB_COMPLETED
         ? workingDays.addWorkingDays(BusinessTime.dateOf(now),config.threshold()) : null;
     try {
       if (invoices.link(mapping,candidate,invoice,next,item.version(),now,late)!=1) throw changed();

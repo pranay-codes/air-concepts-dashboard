@@ -15,12 +15,20 @@ public interface VworkClient {
   }
   /** No financial fields are accepted by the job-creation boundary. */
   record ScopeLine(String description, String quantity) {}
+  /** customerThirdPartyId carries the Xero contact ID; it is derived server-side, never taken from the browser. */
   record NewJob(String reference, String templateId, String description, List<ScopeLine> scope,
-      String customer, String contactPerson, String phone, String siteAddress, String notes) {
+      String customer, String contactPerson, String phone, String siteAddress, String notes, String customerThirdPartyId) {
+    public NewJob(String reference, String templateId, String description, List<ScopeLine> scope,
+        String customer, String contactPerson, String phone, String siteAddress, String notes) {
+      this(reference, templateId, description, scope, customer, contactPerson, phone, siteAddress, notes, null);
+    }
     public NewJob(String reference, String templateId, String description, List<ScopeLine> scope) {
-      this(reference, templateId, description, scope, null, null, null, null, null);
+      this(reference, templateId, description, scope, null, null, null, null, null, null);
     }
     public NewJob { scope = List.copyOf(scope); }
+    public NewJob withCustomerThirdPartyId(String id) {
+      return new NewJob(reference, templateId, description, scope, customer, contactPerson, phone, siteAddress, notes, id);
+    }
     @Override public String toString() { return "VworkNewJob[redacted]"; }
   }
   Job job(VworkCredential credential, String id);

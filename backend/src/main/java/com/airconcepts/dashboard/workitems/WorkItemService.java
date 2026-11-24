@@ -101,7 +101,7 @@ public class WorkItemService {
     Role role = repository.lockActor(actor).orElseThrow(() -> new AccessDeniedException("Active user access is required."));
     if (role != Role.DIRECTOR && role != Role.FINANCIAL_ADMIN) throw new AccessDeniedException("Finance access is required.");
     WorkItemRepository.Item item = item(entity, id);
-    if (item.stage() != WorkItemStage.TO_INVOICE) throw stageConflict();
+    if (item.stage() != WorkItemStage.JOB_COMPLETED) throw stageConflict();
     requireVersion(item, version);
     if (repository.hasBlockingOperation(entity, id)) throw operationInProgress();
     if (repository.closeNoInvoice(entity, id, version, reason) != 1) throw stageConflict();
@@ -115,7 +115,7 @@ public class WorkItemService {
     Role role=repository.lockActor(actor).orElseThrow(() -> new AccessDeniedException("Active user access is required."));
     if (role!=Role.DIRECTOR && role!=Role.FINANCIAL_ADMIN) throw new AccessDeniedException("Finance access is required.");
     var item=item(entity,id);
-    if (item.stage()!=WorkItemStage.INVOICE_DRAFTED) throw stageConflict();
+    if (item.stage()!=WorkItemStage.JOB_COMPLETED) throw stageConflict();
     requireVersion(item,version);
     if (repository.markSent(entity,id,version)!=1) throw stageConflict();
     repository.auditMarkSent(entity,id,actor);

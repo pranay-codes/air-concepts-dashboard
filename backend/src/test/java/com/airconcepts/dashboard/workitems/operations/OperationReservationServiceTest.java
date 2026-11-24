@@ -95,7 +95,7 @@ class OperationReservationServiceTest {
     when(operations.context(entity, item)).thenReturn(new ExternalOperationRepository.Context(null, null, UUID.randomUUID()));
     assertThatThrownBy(() -> service.reserve(director, entity, item, 7, ExternalOperationRepository.Kind.VWORK_CREATE_JOB, "J-1", hash))
         .isInstanceOf(AccessDeniedException.class);
-    when(items.lockItem(entity, item)).thenReturn(Optional.of(new WorkItemRepository.Item(item, entity, WorkItemStage.TO_INVOICE, actor, null, null, 7)));
+    when(items.lockItem(entity, item)).thenReturn(Optional.of(new WorkItemRepository.Item(item, entity, WorkItemStage.JOB_COMPLETED, actor, null, null, 7)));
     when(operations.latest(entity, item, ExternalOperationRepository.Kind.XERO_CREATE_INVOICE)).thenReturn(Optional.empty());
     assertThat(service.reserve(director, entity, item, 7, ExternalOperationRepository.Kind.XERO_CREATE_INVOICE, "J-1", hash).attempt()).isEqualTo(1);
   }
