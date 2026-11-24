@@ -13,7 +13,7 @@ class Uc4SchemaTest {
   private static PostgreSQLContainer postgres;
   private static final List<String> TABLES = List.of("forecast_documents", "forecast_sync_runs", "forecast_audit",
       "forecast_document_adjustments", "forecast_split_lines", "forecast_periods", "forecast_manual_items", "forecast_staffing", "forecast_exports",
-      "forecast_generated_months", "forecast_snapshot_lines");
+      "forecast_generated_months", "forecast_snapshot_lines", "forecast_grid_revisions", "forecast_grid_lines");
 
   @BeforeAll static void start() throws Exception {
     DockerRequirement.check("true".equals(System.getenv("CI")), DockerClientFactory.instance().isDockerAvailable());

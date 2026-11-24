@@ -457,6 +457,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/entities/{entityId}/forecast/grid/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["generateForecastGrid"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/entities/{entityId}/forecast/export": {
         parameters: {
             query?: never;
@@ -853,6 +869,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getForecastMonthItems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/entities/{entityId}/forecast/grid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getForecastGrid"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1367,6 +1399,15 @@ export interface components {
             endMonth?: string;
             active?: boolean;
         };
+        Generation: {
+            created: string[];
+            refreshed: string[];
+            preserved: string[];
+            /** Format: int32 */
+            omittedCurrentItems: number;
+            /** Format: int32 */
+            changedProtectedSchedules: number;
+        };
         ConflictRequest: {
             resolution?: string;
         };
@@ -1679,6 +1720,26 @@ export interface components {
             generatable: boolean;
             items: components["schemas"]["Contribution"][];
             notes: components["schemas"]["TransactionNote"][];
+        };
+        Grid: {
+            /** Format: uuid */
+            entityId: string;
+            months: components["schemas"]["Month"][];
+            rows: components["schemas"]["Row"][];
+        };
+        Month: {
+            month: string;
+            available: boolean;
+            /** Format: date-time */
+            generatedAt: string | null;
+        };
+        Row: {
+            /** @enum {string} */
+            direction: "IN" | "OUT";
+            contact: string;
+            amounts: {
+                [key: string]: string;
+            };
         };
         DocumentPage: {
             items?: components["schemas"]["StoredDocument"][];
@@ -2671,6 +2732,28 @@ export interface operations {
             };
         };
     };
+    generateForecastGrid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entityId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["Generation"];
+                };
+            };
+        };
+    };
     exportForecast: {
         parameters: {
             query?: {
@@ -3334,6 +3417,31 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["MonthItems"];
+                };
+            };
+        };
+    };
+    getForecastGrid: {
+        parameters: {
+            query: {
+                startMonth: string;
+                monthCount?: number;
+            };
+            header?: never;
+            path: {
+                entityId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["Grid"];
                 };
             };
         };

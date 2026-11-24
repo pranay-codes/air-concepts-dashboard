@@ -8,7 +8,8 @@ import { useAction } from "../api/useAction";
 import { Loading, Failure, Notice } from "../ui/Feedback";
 import { formatMoney } from "../ui/format";
 import { ForecastTable } from "./ForecastTable";
-import { ForecastHeader } from "./ForecastHeader";
+import { ForecastGrid } from "./ForecastGrid";
+import { currentMonth, ForecastHeader } from "./ForecastHeader";
 import { GenerationReview } from "./GenerationReview";
 import { OpeningBalanceForm } from "./OpeningBalanceForm";
 import { ExcelExportDialog } from "./ExcelExportDialog";
@@ -246,50 +247,62 @@ function EntityForecast(props: Props & { entity: Entity }) {
               />
             ) : resource.data ? (
               <div className="forecast-overview">
-                {review ? (
-                  <GenerationReview
-                    month={review}
-                    busy={generation.busy}
-                    error={generation.error}
-                    onConfirm={() => confirmGeneration(review)}
-                    onCancel={() => setReview(null)}
-                  />
-                ) : null}
-                <ForecastTable
-                  months={resource.data.months}
-                  onOpen={(value) => {
-                    monthOpener.current = window.document.activeElement as HTMLElement | null;
-                    setSelectedMonth(value);
-                  }}
-                  onOpening={(month) => {
-                    setOpeningMonth(month);
-                    setDialog("opening");
-                  }}
-                  onGenerate={(month) => setReview(month)}
+                <ForecastGrid
+                  api={api}
+                  entityId={entity.id}
+                  subject={props.profile.subject}
+                  onAccessDenied={onAccessDenied}
                 />
-                <p>
-                  Beyond this financial year: money in{" "}
-                  {formatMoney(resource.data.beyondWindow.receipts, "NZD")}, money out{" "}
-                  {formatMoney(resource.data.beyondWindow.payments, "NZD")}.
-                </p>
-                {resource.data.exclusions.length ? (
-                  <details className="forecast-panel">
-                    <summary>Excluded documents ({resource.data.exclusions.length})</summary>
-                    {resource.data.exclusions.map((row) => (
-                      <p key={row.documentId}>
-                        {row.number ?? row.documentId}: {row.reason}{" "}
-                        {row.documentId ? (
-                          <button
-                            type="button"
-                            onClick={() => setDocument({ id: row.documentId!, mode: "exclude" })}
-                          >
-                            Include again
-                          </button>
-                        ) : null}
-                      </p>
-                    ))}
-                  </details>
-                ) : null}
+                <details open>
+                  <summary>Financial year summary</summary>
+                  {review ? (
+                    <GenerationReview
+                      month={review}
+                      busy={generation.busy}
+                      error={generation.error}
+                      onConfirm={() => confirmGeneration(review)}
+                      onCancel={() => setReview(null)}
+                    />
+                  ) : null}
+                  <ForecastTable
+                    months={resource.data.months}
+                    onOpen={(value) => {
+                      monthOpener.current = window.document.activeElement as HTMLElement | null;
+                      setSelectedMonth(value);
+                    }}
+                    onOpening={(month) => {
+                      setOpeningMonth(month);
+                      setDialog("opening");
+                    }}
+                    onGenerate={(month) => setReview(month)}
+                    canGenerate={(month) =>
+                      month.state === "PREVIEW" || month.month > currentMonth()
+                    }
+                  />
+                  <p>
+                    Beyond this financial year: money in{" "}
+                    {formatMoney(resource.data.beyondWindow.receipts, "NZD")}, money out{" "}
+                    {formatMoney(resource.data.beyondWindow.payments, "NZD")}.
+                  </p>
+                  {resource.data.exclusions.length ? (
+                    <details className="forecast-panel">
+                      <summary>Excluded documents ({resource.data.exclusions.length})</summary>
+                      {resource.data.exclusions.map((row) => (
+                        <p key={row.documentId}>
+                          {row.number ?? row.documentId}: {row.reason}{" "}
+                          {row.documentId ? (
+                            <button
+                              type="button"
+                              onClick={() => setDocument({ id: row.documentId!, mode: "exclude" })}
+                            >
+                              Include again
+                            </button>
+                          ) : null}
+                        </p>
+                      ))}
+                    </details>
+                  ) : null}
+                </details>
               </div>
             ) : null}
           </div>
@@ -323,9 +336,9 @@ function EntityForecast(props: Props & { entity: Entity }) {
           nothing. Overdue cash is placed in the month that is current when that month is generated.
         </p>
         <p>
-          A month is generated once it is the current month or the next month after the last
-          generated month. Generating adds lines that are not yet in a forecast; it never changes
-          lines already there. Once the following month is generated, a month is locked.
+          The invoice and bill grid keeps current and past snapshots unchanged and refreshes future
+          snapshots when you create a forecast. The financial year summary uses its existing
+          separately generated monthly forecasts.
         </p>
         <p>
           Manual cash amounts and gross staffing costs are GST-inclusive where GST applies; tax is

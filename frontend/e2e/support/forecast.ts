@@ -80,7 +80,34 @@ export async function forecastBoundary(page: Page) {
         adjustment,
       };
       let result: unknown;
-      if (path.endsWith("/opening-balance")) {
+      if (path.endsWith("/grid/generate")) {
+        result = {
+          created: [],
+          refreshed: [],
+          preserved: [],
+          omittedCurrentItems: 0,
+          changedProtectedSchedules: 0,
+        };
+      } else if (path.endsWith("/grid")) {
+        const requested = url.searchParams.get("startMonth") ?? current;
+        const [y = 2026, m = 1] = requested.split("-").map(Number);
+        const months = Array.from({ length: 8 }, (_, i) => ({
+          month: new Date(Date.UTC(y, m - 1 + i, 1)).toISOString().slice(0, 7),
+          available: true,
+          generatedAt: "2026-11-10T00:00:00Z",
+        }));
+        result = {
+          entityId: entity,
+          months,
+          rows: [
+            {
+              direction: "IN",
+              contact: "Forecast customer",
+              amounts: { [months[1]!.month]: "115.00" },
+            },
+          ],
+        };
+      } else if (path.endsWith("/opening-balance")) {
         if (method === "PUT") opening.set(entity, String(request.postDataJSON().openingBalance));
         result = { openingBalance: opening.get(entity) ?? null, source: "Synthetic statement" };
       } else if (path.endsWith("/adjustment")) {

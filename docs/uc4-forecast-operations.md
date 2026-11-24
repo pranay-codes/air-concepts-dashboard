@@ -51,3 +51,9 @@ Local verification uses unit tests, mock HTTP/provider boundaries and synthetic 
 ## Rollback
 
 Migrations stay applied. Roll back the application artefact through the established human-controlled release process; no agent deploy command is authorised. Existing data, assumptions, audit history and exports remain. If a schema correction is needed, use a new compensating forward-only migration, never edit or repair applied migration history. Disable the forecast scheduler while investigating a faulty sync. No Xero accounting rollback is needed because UC4 makes no accounting writes.
+
+## Invoice and bill forecast grid
+
+The entity grid starts with the previous month, current month and next six months. Use the month arrows to move the window. Create forecast saves the current month if it has no snapshot, preserves current and past snapshots on later runs, and creates new versions for the next six months from the most recently synced forecast data. An existing generated current month is copied into the grid without changing its lines. Months without a saved snapshot are labelled Not created.
+
+Only Xero invoice and bill contributions appear in this grid. The forecast mirror currently retains contact names rather than stable contact IDs, so rows with the same name are combined. The existing financial-year summary and Excel export use the separate generated-month forecast; their totals can therefore differ from this invoice-and-bill-only grid. Grid revisions are append-only, entity-scoped and audited. Reverting the application leaves revisions in place; hosted database changes are applied by CI.

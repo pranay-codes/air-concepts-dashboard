@@ -1492,6 +1492,36 @@
         } ]
       }
     },
+    "/api/v1/entities/{entityId}/forecast/grid/generate" : {
+      "post" : {
+        "tags" : [ "forecast-grid-controller" ],
+        "operationId" : "generateForecastGrid",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Generation"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
     "/api/v1/entities/{entityId}/forecast/export" : {
       "post" : {
         "tags" : [ "forecast-export-controller" ],
@@ -2706,6 +2736,52 @@
               "*/*" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/MonthItems"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/entities/{entityId}/forecast/grid" : {
+      "get" : {
+        "tags" : [ "forecast-grid-controller" ],
+        "operationId" : "getForecastGrid",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "startMonth",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "monthCount",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 8
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Grid"
                 }
               }
             }
@@ -4037,6 +4113,38 @@
           }
         }
       },
+      "Generation" : {
+        "type" : "object",
+        "properties" : {
+          "created" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "refreshed" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "preserved" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "omittedCurrentItems" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "changedProtectedSchedules" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        },
+        "required" : [ "changedProtectedSchedules", "created", "omittedCurrentItems", "preserved", "refreshed" ]
+      },
       "ConflictRequest" : {
         "type" : "object",
         "properties" : {
@@ -4872,6 +4980,63 @@
           }
         },
         "required" : [ "generatable", "items", "month", "notes", "state" ]
+      },
+      "Grid" : {
+        "type" : "object",
+        "properties" : {
+          "entityId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "months" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Month"
+            }
+          },
+          "rows" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Row"
+            }
+          }
+        },
+        "required" : [ "entityId", "months", "rows" ]
+      },
+      "Month" : {
+        "type" : "object",
+        "properties" : {
+          "month" : {
+            "type" : "string"
+          },
+          "available" : {
+            "type" : "boolean"
+          },
+          "generatedAt" : {
+            "type" : [ "string", "null" ],
+            "format" : "date-time"
+          }
+        },
+        "required" : [ "available", "generatedAt", "month" ]
+      },
+      "Row" : {
+        "type" : "object",
+        "properties" : {
+          "direction" : {
+            "type" : "string",
+            "enum" : [ "IN", "OUT" ]
+          },
+          "contact" : {
+            "type" : "string"
+          },
+          "amounts" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            }
+          }
+        },
+        "required" : [ "amounts", "contact", "direction" ]
       },
       "DocumentPage" : {
         "type" : "object",

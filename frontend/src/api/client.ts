@@ -37,6 +37,7 @@ const messages = {
     "More than 200 settlement checks are needed. Ask an administrator to review and rerun sync.",
   FORECAST_SYNC_EXPIRED: "This sync expired. Check History and request a new run.",
   FORECAST_SYNC_FAILED: "Sync did not complete. Check History before retrying.",
+  FORECAST_SYNC_REQUIRED: "Sync Xero before creating a forecast.",
   FORECAST_CURRENCY_UNSUPPORTED:
     "Foreign-currency documents need an approved conversion rule before this forecast can be shown.",
   FORECAST_TENANT_CHANGED:
