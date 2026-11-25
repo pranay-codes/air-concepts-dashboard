@@ -2,6 +2,7 @@ import { ApiClient, ApiError, isRecord } from "./client";
 import * as c from "./contracts";
 import * as f from "../forecast/contracts";
 import * as w from "../workitems/contracts";
+import { isOverview, type Overview } from "../workitems/overviewContracts";
 import type { components } from "./generated/schema";
 
 export type ForecastGrid = Omit<components["schemas"]["Grid"], "entityId" | "months" | "rows"> & {
@@ -133,6 +134,34 @@ export class DashboardApi {
       { method: "POST" },
     );
     if (result.entityId !== entity) throw new ApiError(502, "INVALID_RESPONSE");
+    return result;
+  }
+  async overview(
+    entity: string | null,
+    authorised: string[],
+    period: { from: string; to: string },
+    signal?: AbortSignal,
+  ): Promise<Overview> {
+    for (const value of authorised) id(value);
+    if (entity !== null && !authorised.includes(entity)) throw new ApiError(400, "INVALID_REQUEST");
+    const query = new URLSearchParams(entity === null ? {} : { entityId: id(entity) });
+    query.set("from", period.from);
+    query.set("to", period.to);
+    const result = await this.client.json(
+      `/api/v1/work-items/overview?${query}`,
+      isOverview,
+      signal,
+    );
+    const ids = new Set(authorised);
+    if (
+      [result.openItems, result.uninvoiced, result.unsent, result.invoicesSent.items]
+        .flat()
+        .some(
+          ({ summary }) =>
+            !ids.has(summary.entityId) || (entity !== null && summary.entityId !== entity),
+        )
+    )
+      throw new ApiError(502, "INVALID_RESPONSE");
     return result;
   }
   async myWork(

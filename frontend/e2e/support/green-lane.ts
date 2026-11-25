@@ -165,7 +165,56 @@ export async function greenLane(page: Page, role: Role = "DIRECTOR") {
         attention: [],
         version: 0,
       });
-      if (path.endsWith("/my-work")) {
+      if (path.endsWith("/overview")) {
+        const entity = url.searchParams.get("entityId");
+        const rows = (entity ? [entity] : [ENTITY_A, ENTITY_B]).map((id) => ({
+          summary: { ...job(id), stage: "JOB_COMPLETED", quoteTotal: "100.00", currency: "NZD" },
+          technician: "Taylor Technician",
+        }));
+        const sum = `${rows.length * 100}.00`;
+        result = {
+          generatedAt: "2026-11-25T00:00:00Z",
+          from: url.searchParams.get("from"),
+          to: url.searchParams.get("to"),
+          stages: [
+            {
+              stage: "JOB_COMPLETED",
+              count: rows.length,
+              totals: [{ currency: "NZD", amount: sum }],
+            },
+          ],
+          closed: [],
+          openItems: rows,
+          openTruncated: false,
+          uninvoiced: rows,
+          uninvoicedTruncated: false,
+          unsent: [],
+          unsentTruncated: false,
+          cycleTimes: [
+            {
+              step: "COMPLETED_TO_SENT",
+              medianDays: 2,
+              averageDays: 2.5,
+              sampleSize: 2,
+              excludedBackfilled: 0,
+              excludedNoStart: 0,
+              excludedAlreadyComplete: 0,
+              excludedOutOfOrder: 0,
+            },
+          ],
+          completedTotal: rows.length,
+          completedAlreadyWhenFirstSeen: 0,
+          completedByOwner: [{ name: "Unattributed", count: rows.length }],
+          completedByTechnician: [{ name: "Taylor Technician", count: rows.length }],
+          invoicesSent: {
+            count: 0,
+            totals: [],
+            items: [],
+            truncated: false,
+            paidNotSeenSent: 0,
+          },
+        };
+      } else if (path.endsWith("/my-work")) {
         const entity = url.searchParams.get("entityId");
         result = {
           needsAction: (entity ? [entity] : [ENTITY_A, ENTITY_B]).map(job),

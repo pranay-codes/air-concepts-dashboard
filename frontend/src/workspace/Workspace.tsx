@@ -13,9 +13,15 @@ const Forecast = lazy(() => import("../forecast/Forecast"));
 const JobsList = lazy(() =>
   import("../workitems/JobsList").then((module) => ({ default: module.JobsList })),
 );
+const DirectorOverview = lazy(() =>
+  import("../workitems/DirectorOverview").then((module) => ({
+    default: module.DirectorOverview,
+  })),
+);
 const MyWork = lazy(() =>
   import("../workitems/MyWork").then((module) => ({ default: module.MyWork })),
 );
+type Route = "overview" | "mywork" | "invoices" | "jobs" | "forecast" | "settings";
 interface Props {
   api: DashboardApi;
   profile: Profile;
@@ -60,18 +66,19 @@ export function Workspace({
       id: remembered(profile, entities),
       generation: choice.generation + 1,
     });
-  const [route, setRoute] = useState<"mywork" | "invoices" | "jobs" | "forecast" | "settings">(
-    () =>
-      profile.role === "DIRECTOR" && new URLSearchParams(window.location.search).has("xeroAttempt")
-        ? "settings"
-        : "mywork",
+  const [route, setRoute] = useState<Route>(() =>
+    profile.role === "DIRECTOR" && new URLSearchParams(window.location.search).has("xeroAttempt")
+      ? "settings"
+      : "mywork",
   );
   const [collapsed, setCollapsed] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [accessError, setAccessError] = useState<unknown>(null);
   const aggregate =
     choice.id === "__all__" &&
-    (route === "mywork" || (route === "forecast" && profile.role !== "STANDARD_USER"));
+    (route === "mywork" ||
+      (route === "forecast" && profile.role !== "STANDARD_USER") ||
+      (route === "overview" && profile.role === "DIRECTOR"));
   const selected = aggregate
     ? undefined
     : (entities.find((entity) => entity.id === choice.id) ?? entities[0]);
@@ -118,14 +125,14 @@ export function Workspace({
       current?.abort();
     };
   }, [api, profile.subject, profile.role, onAccessDenied]);
-  function navigate(next: "mywork" | "invoices" | "jobs" | "forecast" | "settings") {
+  function navigate(next: Route) {
     if (dirty && !window.confirm("Discard unsaved changes before leaving this page?")) return;
     setDirty(false);
     setRoute(next);
     document.getElementById("workspace-main")?.focus();
   }
   const currentRoute =
-    (route === "settings" && profile.role !== "DIRECTOR") ||
+    ((route === "settings" || route === "overview") && profile.role !== "DIRECTOR") ||
     (route === "forecast" && profile.role === "STANDARD_USER")
       ? "mywork"
       : route;
@@ -160,6 +167,15 @@ export function Workspace({
           {collapsed ? "Expand navigation" : "Collapse navigation"}
         </button>
         <nav aria-label="Main navigation">
+          {profile.role === "DIRECTOR" ? (
+            <button
+              type="button"
+              aria-current={currentRoute === "overview" ? "page" : undefined}
+              onClick={() => navigate("overview")}
+            >
+              Overview
+            </button>
+          ) : null}
           <button
             type="button"
             aria-current={currentRoute === "mywork" ? "page" : undefined}
@@ -217,6 +233,7 @@ export function Workspace({
             selectedId={aggregate ? "__all__" : (selected?.id ?? null)}
             allowAll={
               currentRoute === "mywork" ||
+              currentRoute === "overview" ||
               (currentRoute === "forecast" && profile.role !== "STANDARD_USER")
             }
             onSelect={(id) => {
@@ -297,6 +314,17 @@ export function Workspace({
                 onAccessDenied={onAccessDenied}
               />
             </Suspense>
+          ) : currentRoute === "overview" && entities.length ? (
+            <Suspense fallback={<Loading label="Opening Overview…" />}>
+              <DirectorOverview
+                key={`${profile.subject}:${profile.role}`}
+                api={api}
+                profile={profile}
+                entity={selected ?? null}
+                entities={entities}
+                onAccessDenied={onAccessDenied}
+              />
+            </Suspense>
           ) : currentRoute === "mywork" && entities.length ? (
             <Suspense fallback={<Loading label="Opening My Work…" />}>
               <MyWork
@@ -353,7 +381,9 @@ export function Workspace({
                   ? "Service jobs"
                   : currentRoute === "mywork"
                     ? "My Work"
-                    : "Invoices"}
+                    : currentRoute === "overview"
+                      ? "Overview"
+                      : "Invoices"}
               </h1>
               <Notice>
                 No entities are available.{" "}
