@@ -1289,11 +1289,59 @@ button.danger {
 .stack-actions button {
   width: 100%;
 }
-.activity-list {
-  display: grid;
-  gap: var(--space-2);
+.activity-timeline {
   margin: 0;
-  padding-left: 1.25rem;
+  padding: 0;
+  list-style: none;
+}
+.activity-timeline li {
+  position: relative;
+  padding: 0 0 var(--space-4) var(--space-6);
+  border-left: 2px solid var(--divider);
+  margin-left: var(--space-1);
+}
+.activity-timeline li::before {
+  content: "";
+  position: absolute;
+  top: 0.4rem;
+  left: -0.4375rem;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.activity-timeline li:last-child {
+  padding-bottom: 0;
+  border-left-color: transparent;
+}
+.activity-timeline p {
+  margin: 0;
+}
+.activity-title {
+  font-weight: 600;
+}
+.activity-changes {
+  display: grid;
+  gap: var(--space-1);
+  margin: var(--space-1) 0;
+}
+.activity-changes > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-3);
+}
+.activity-changes dt {
+  flex: 0 0 10.5rem;
+  color: var(--secondary);
+}
+.activity-changes dd {
+  flex: 1 1 12rem;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.activity-previous {
+  color: var(--secondary);
 }
 button.danger {
   color: var(--error);
