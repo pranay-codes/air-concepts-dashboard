@@ -100,8 +100,8 @@ class VworkSyncTest {
     sync.run(entity, () -> access);
     client.complete(job.id(), at.plusSeconds(3600));
     sync.run(entity, () -> access);
-    verify(repository).audit(entity, item, "JOB_LINKED", initial, linked);
-    verify(repository).audit(entity, item, "STAGE_CHANGED", linked, scheduled);
-    verify(repository).audit(entity, item, "STAGE_CHANGED", scheduled, ready);
+    verify(repository).audit(eq(entity), eq(item), eq("JOB_LINKED"), eq(initial), eq(linked), isNull(), any());
+    verify(repository).audit(eq(entity), eq(item), eq("STAGE_CHANGED"), eq(linked), eq(scheduled), any(), any());
+    verify(repository).audit(eq(entity), eq(item), eq("STAGE_CHANGED"), eq(scheduled), eq(ready), any(), any());
   }
 }

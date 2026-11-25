@@ -1177,6 +1177,25 @@ export interface components {
             operations?: components["schemas"]["OperationView"][];
             allowedActions?: ("EDIT_NOTES" | "CLOSE_LOST" | "CREATE_JOB" | "PREPARE_INVOICE" | "NO_INVOICE_NEEDED" | "MARK_SENT" | "MARK_ACCEPTED")[];
         };
+        EventDetails: {
+            invoiceNumber?: string;
+            closeReason?: string;
+            reason?: string;
+            /** Format: date */
+            fromFollowUpDate?: string;
+            /** Format: date */
+            toFollowUpDate?: string;
+            fromJob?: components["schemas"]["EventJob"];
+            toJob?: components["schemas"]["EventJob"];
+        };
+        EventJob: {
+            status?: string;
+            technician?: string;
+            /** Format: date-time */
+            scheduledStart?: string;
+            /** Format: date-time */
+            completedAt?: string;
+        };
         EventView: {
             /** Format: int64 */
             id?: number;
@@ -1193,6 +1212,9 @@ export interface components {
             toOwnerId?: string;
             before?: string;
             after?: string;
+            fromOwner?: components["schemas"]["StaffRef"];
+            toOwner?: components["schemas"]["StaffRef"];
+            details?: components["schemas"]["EventDetails"];
         };
         InvoicePanel: {
             /** Format: uuid */
