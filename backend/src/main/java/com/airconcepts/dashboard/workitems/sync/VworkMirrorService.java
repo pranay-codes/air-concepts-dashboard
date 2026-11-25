@@ -55,8 +55,21 @@ public class VworkMirrorService {
     try {
       if (repository.update(entity, itemId, job, next, before, item.version(), now, late) != 1) throw changed();
     } catch (DuplicateKeyException duplicate) { throw invalid(); }
-    if (newLink) repository.audit(entity, itemId, "JOB_LINKED", before, linked);
-    if (observed.event() != null) repository.audit(entity, itemId, observed.event(), linked, next);
+    var fromJob = newLink ? null
+        : new VworkMirrorRepository.JobSnapshot(item.status(), item.worker(), item.planned(), item.completed());
+    var toJob = new VworkMirrorRepository.JobSnapshot(job.status().name(), job.workerName(), job.plannedStart(), job.completedAt());
+    if (newLink) repository.audit(entity, itemId, "JOB_LINKED", before, linked, fromJob, toJob);
+    if (observed.event() != null) repository.audit(entity, itemId, observed.event(), linked, next, fromJob, toJob);
+    else if (!newLink && jobChanged(fromJob, toJob))
+      repository.audit(entity, itemId, "JOB_UPDATED", linked, next, fromJob, toJob);
+  }
+  private static boolean jobChanged(VworkMirrorRepository.JobSnapshot from, VworkMirrorRepository.JobSnapshot to) {
+    return !Objects.equals(from.status(), to.status()) || !Objects.equals(from.technician(), to.technician())
+        || !sameSecond(from.scheduledStart(), to.scheduledStart()) || !sameSecond(from.completedAt(), to.completedAt());
+  }
+  /** The database stores less precision than a provider may send, which must not read as a reschedule. */
+  private static boolean sameSecond(Instant a, Instant b) {
+    return a == null ? b == null : b != null && a.getEpochSecond() == b.getEpochSecond();
   }
   private static ApiFailure changed() { return new ApiFailure(HttpStatus.CONFLICT, "VWORK_SYNC_CHANGED", "The job or connection changed. Retry sync."); }
   private static ApiFailure invalid() { return new ApiFailure(HttpStatus.CONFLICT, "VWORK_LINK_UNVERIFIED", "The vWork job cannot be safely linked to this entity."); }

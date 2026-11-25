@@ -33,8 +33,8 @@ class VworkMirrorServiceTest {
     service.apply(entity, item, "revision", job);
     var scheduled = new StageMachine.State(WorkItemStage.SCHEDULED, manager, null, null, true, false, Set.of());
     verify(repository).update(eq(entity), eq(item), eq(job), eq(scheduled), eq(toSchedule), eq(1), eq(now), isNull());
-    verify(repository).audit(eq(entity), eq(item), eq("JOB_LINKED"), any(), any());
-    verify(repository).audit(eq(entity), eq(item), eq("STAGE_CHANGED"), any(), eq(scheduled));
+    verify(repository).audit(eq(entity), eq(item), eq("JOB_LINKED"), any(), any(), any(), any());
+    verify(repository).audit(eq(entity), eq(item), eq("STAGE_CHANGED"), any(), eq(scheduled), any(), any());
   }
   @Test void gl06_neverLinksAJobWithUnverifiedOrOtherEntityTemplate() {
     when(repository.lock(entity, item, "revision")).thenReturn(Optional.of(item(toSchedule, null)));
@@ -50,7 +50,7 @@ class VworkMirrorServiceTest {
     service.apply(entity, item, "revision", completed);
     var invoicing = new StageMachine.State(WorkItemStage.JOB_COMPLETED, owner, null, null, true, false, Set.of());
     verify(repository).update(eq(entity), eq(item), eq(completed), eq(invoicing), eq(scheduled), eq(1), eq(now), any());
-    verify(repository).audit(entity, item, "STAGE_CHANGED", scheduled, invoicing);
+    verify(repository).audit(eq(entity), eq(item), eq("STAGE_CHANGED"), eq(scheduled), eq(invoicing), any(), any());
   }
   @Test void gl15_unchangedLinkedJobDoesNotWriteAnotherEvent() {
     var scheduled = new StageMachine.State(WorkItemStage.SCHEDULED, manager, null, null, true, false, Set.of());
@@ -59,7 +59,35 @@ class VworkMirrorServiceTest {
         1, "J-1", job.id(), "ASSIGNED", "Worker", now, null, scheduled, settings, 2)));
     service.apply(entity, item, "revision", job);
     verify(repository, never()).update(any(), any(), any(), any(), any(), anyInt(), any(), any());
-    verify(repository, never()).audit(any(), any(), any(), any(), any());
+    verify(repository, never()).audit(any(), any(), any(), any(), any(), any(), any());
+  }
+  @Test void gl07_rescheduleWithoutAStageChangeIsRecordedWithBothValues() {
+    var scheduled = new StageMachine.State(WorkItemStage.SCHEDULED, manager, null, null, true, false, Set.of());
+    when(repository.lock(entity, item, "revision")).thenReturn(Optional.of(new VworkMirrorRepository.Item(
+        1, "J-1", "mock-1", "ASSIGNED", "Worker", now, null, scheduled, settings, 2)));
+    when(repository.update(eq(entity), eq(item), any(), any(), any(), anyInt(), any(), any())).thenReturn(1);
+    service.apply(entity, item, "revision", job(VworkClient.Status.ASSIGNED, "Other", now.plusSeconds(86400), null));
+    verify(repository).audit(entity, item, "JOB_UPDATED", scheduled, scheduled,
+        new VworkMirrorRepository.JobSnapshot("ASSIGNED", "Worker", now, null),
+        new VworkMirrorRepository.JobSnapshot("ASSIGNED", "Other", now.plusSeconds(86400), null));
+  }
+  @Test void gl07_completionAfterInvoicingIsRecorded() {
+    var invoiced = new StageMachine.State(WorkItemStage.INVOICE_CREATED, owner, null, null, true, true, Set.of());
+    when(repository.lock(entity, item, "revision")).thenReturn(Optional.of(new VworkMirrorRepository.Item(
+        1, "J-1", "mock-1", "STARTED", "Worker", now, null, invoiced, settings, 2)));
+    when(repository.update(eq(entity), eq(item), any(), any(), any(), anyInt(), any(), any())).thenReturn(1);
+    service.apply(entity, item, "revision", job(VworkClient.Status.COMPLETED, "Worker", now, now));
+    verify(repository).audit(entity, item, "JOB_UPDATED", invoiced, invoiced,
+        new VworkMirrorRepository.JobSnapshot("STARTED", "Worker", now, null),
+        new VworkMirrorRepository.JobSnapshot("COMPLETED", "Worker", now, now));
+  }
+  @Test void gl07_subSecondDifferenceInAStoredTimeIsNotHistory() {
+    var scheduled = new StageMachine.State(WorkItemStage.SCHEDULED, manager, null, null, true, false, Set.of());
+    when(repository.lock(entity, item, "revision")).thenReturn(Optional.of(new VworkMirrorRepository.Item(
+        1, "J-1", "mock-1", "ASSIGNED", "Worker", now, null, scheduled, settings, 2)));
+    when(repository.update(eq(entity), eq(item), any(), any(), any(), anyInt(), any(), any())).thenReturn(1);
+    service.apply(entity, item, "revision", job(VworkClient.Status.ASSIGNED, "Worker", now.plusNanos(100), null));
+    verify(repository, never()).audit(any(), any(), any(), any(), any(), any(), any());
   }
   @Test void gl22_doesNotChangeAnItemWhileAnExternalOperationIsUnresolved() {
     when(repository.lock(entity, item, "revision")).thenReturn(Optional.of(item(toSchedule, null)));

@@ -3557,6 +3557,53 @@
           }
         }
       },
+      "EventDetails" : {
+        "type" : "object",
+        "properties" : {
+          "invoiceNumber" : {
+            "type" : "string"
+          },
+          "closeReason" : {
+            "type" : "string"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "fromFollowUpDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "toFollowUpDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "fromJob" : {
+            "$ref" : "#/components/schemas/EventJob"
+          },
+          "toJob" : {
+            "$ref" : "#/components/schemas/EventJob"
+          }
+        }
+      },
+      "EventJob" : {
+        "type" : "object",
+        "properties" : {
+          "status" : {
+            "type" : "string"
+          },
+          "technician" : {
+            "type" : "string"
+          },
+          "scheduledStart" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "completedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
       "EventView" : {
         "type" : "object",
         "properties" : {
@@ -3596,6 +3643,15 @@
           },
           "after" : {
             "type" : "string"
+          },
+          "fromOwner" : {
+            "$ref" : "#/components/schemas/StaffRef"
+          },
+          "toOwner" : {
+            "$ref" : "#/components/schemas/StaffRef"
+          },
+          "details" : {
+            "$ref" : "#/components/schemas/EventDetails"
           }
         }
       },

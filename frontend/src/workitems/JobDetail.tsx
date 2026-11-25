@@ -5,12 +5,13 @@ import type { DashboardApi } from "../api/dashboard";
 import { useAction } from "../api/useAction";
 import { useResource } from "../api/useResource";
 import { Failure, Loading } from "../ui/Feedback";
-import { formatDate, formatFetchTime, formatMoney } from "../ui/format";
+import { formatDate, formatMoney } from "../ui/format";
 import { Modal } from "../ui/Modal";
+import { ActivityTimeline } from "./ActivityTimeline";
 import { CreateJobForm } from "./CreateJobForm";
 import { InvoiceReviewDialog } from "./InvoiceReviewDialog";
 import type { WorkItemDetail } from "./contracts";
-import { attentionLabel, eventLabel, flagLabel, stageLabels } from "./stageText";
+import { attentionLabel, flagLabel, stageLabels } from "./stageText";
 
 const quoteStatusLabels: Record<string, string> = {
   DRAFT: "Draft",
@@ -533,20 +534,7 @@ function DetailContent({
 
           <section className="card" aria-labelledby="job-activity-title">
             <h2 id="job-activity-title">Activity</h2>
-            {current.events.length ? (
-              <ol className="activity-list">
-                {current.events.map((event) => (
-                  <li key={event.id}>
-                    <span>{eventLabel(event.eventType ?? "")}</span>{" "}
-                    <span className="supporting">
-                      · {event.actor?.displayName ?? "System"} · {formatFetchTime(event.at)}
-                    </span>
-                  </li>
-                ))}
-              </ol>
-            ) : (
-              <p className="supporting">No activity recorded.</p>
-            )}
+            <ActivityTimeline events={current.events} />
           </section>
         </div>
 

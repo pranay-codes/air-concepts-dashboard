@@ -15,6 +15,8 @@ public class VworkMirrorRepository {
   public record Candidate(UUID id, String reference, String jobId) {}
   public record Item(int version, String reference, String jobId, String status, String worker,
       Instant planned, Instant completed, StageMachine.State state, StageMachine.Settings settings, int threshold) {}
+  /** The vWork facts kept with each history record; technician notes are deliberately excluded. */
+  public record JobSnapshot(String status, String technician, Instant scheduledStart, Instant completedAt) {}
   private final JdbcTemplate jdbc;
   public VworkMirrorRepository(JdbcTemplate jdbc) { this.jdbc = jdbc; }
 
@@ -107,12 +109,22 @@ public class VworkMirrorRepository {
         next.stage().name(), next.ownerId(), String.join(",", next.attention().stream().sorted().toList()),
         stageChanged, Timestamp.from(now), stageChanged, lateAfter, entity, item, version);
   }
-  public void audit(UUID entity, UUID item, String event, StageMachine.State before, StageMachine.State after) {
+  /** A null previous snapshot means the job was not linked before this observation. */
+  public void audit(UUID entity, UUID item, String event, StageMachine.State before, StageMachine.State after,
+      JobSnapshot fromJob, JobSnapshot toJob) {
+    var from = fromJob == null ? new JobSnapshot(null, null, null, null) : fromJob;
     jdbc.update("""
-        insert into public.work_item_events(entity_id,work_item_id,source,event_type,from_stage,to_stage,from_owner_id,to_owner_id)
-        values (?,?,'VWORK_SYNC',?,?,?,?,?)
-        """, entity, item, event, before.stage().name(), after.stage().name(), before.ownerId(), after.ownerId());
+        insert into public.work_item_events(entity_id,work_item_id,source,event_type,from_stage,to_stage,from_owner_id,to_owner_id,before,after)
+        values (?,?,'VWORK_SYNC',?,?,?,?,?,
+          jsonb_build_object('jobStatus',cast(? as text),'technician',cast(? as text),
+            'scheduledStart',cast(? as text),'completedAt',cast(? as text)),
+          jsonb_build_object('jobStatus',cast(? as text),'technician',cast(? as text),
+            'scheduledStart',cast(? as text),'completedAt',cast(? as text)))
+        """, entity, item, event, before.stage().name(), after.stage().name(), before.ownerId(), after.ownerId(),
+        from.status(), from.technician(), text(from.scheduledStart()), text(from.completedAt()),
+        toJob.status(), toJob.technician(), text(toJob.scheduledStart()), text(toJob.completedAt()));
   }
+  private static String text(Instant value) { return value == null ? null : value.toString(); }
   private static Instant instant(Timestamp value) { return value == null ? null : value.toInstant(); }
   private static Timestamp timestamp(Instant value) { return value == null ? null : Timestamp.from(value); }
 }

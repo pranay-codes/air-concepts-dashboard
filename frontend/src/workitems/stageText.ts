@@ -38,6 +38,11 @@ export function eventLabel(event: string): string {
     QUOTE_ACCEPTED: "Quote accepted in Xero",
     QUOTE_ACCEPT_REQUESTED: "Quote acceptance requested",
     OPERATION_OUTCOME: "External write outcome recorded",
+    OWNER_CHANGED: "Owner changed",
+    OWNER_ASSIGNED: "Owner assigned",
+    JOB_UPDATED: "Job updated",
+    JOB_CREATE_REQUESTED: "Job creation requested",
+    INVOICE_REQUESTED: "Invoice creation requested",
   };
   return labels[event] ?? event.replaceAll("_", " ").toLowerCase();
 }

@@ -824,6 +824,49 @@ class QuoteMirrorRepositoryTest {
     });
   }
 
+  @Test void gl07_historyNamesOwnersAndJobAndInvoiceDetailsWithinOneEntity() {
+    transaction.executeWithoutResult(tx -> {
+      var entity=entity(); var mapping=mapping(entity); var other=entity(); mapping(other);
+      var director=staff("DIRECTOR"); var finance=staff("FINANCIAL_ADMIN"); var item=UUID.randomUUID();
+      jdbc.update("insert into public.green_line_entity_settings(entity_id,enabled,default_owner_id,service_manager_id) values (?,true,?,?),(?,true,null,null)",
+          entity,finance,director,other);
+      jdbc.update("insert into public.vwork_connection(id,key_ciphertext,status,configured_by) values (1,'synthetic-ciphertext','ACTIVE',?)", director);
+      jdbc.update("insert into public.vwork_entity_templates(template_ref,entity_id,created_by) values ('history-template',?,?)", entity, director);
+      jdbc.update("insert into public.work_items(id,entity_id,xero_tenant_id,xero_quote_id,quote_number,job_id,xero_quote_status,stage) "
+          + "values (?,?,?,?,'Q-1','J-1','ACCEPTED','TO_SCHEDULE')", item, entity, mapping.tenantId(), UUID.randomUUID());
+      jdbc.execute("set local role service_role");
+      new WorkItemRepository(jdbc).auditEdit(entity,item,director,"OWNER_CHANGED",null,director.toString());
+      var revision=jdbc.queryForObject("select xmin::text from public.vwork_connection where id=1", String.class);
+      new VworkMirrorService(new VworkMirrorRepository(jdbc),Clock.fixed(NOW,ZoneOffset.UTC)).apply(entity,item,revision,
+          new com.airconcepts.dashboard.vwork.VworkClient.Job("mock-history","J-1","history-template",null,
+              com.airconcepts.dashboard.vwork.VworkClient.Status.COMPLETED,"Synthetic worker",NOW,NOW));
+      var invoices=new InvoiceMirrorRepository(jdbc);
+      new InvoiceMirrorService(invoices,new QuoteMirrorRepository(jdbc),Clock.fixed(NOW,ZoneOffset.UTC)).link(mapping,
+          invoices.unlinkedAllOpen(entity).getFirst(),new com.airconcepts.dashboard.xero.XeroInvoiceClient.WorkflowInvoice(UUID.randomUUID(),"INV-7",
+              com.airconcepts.dashboard.invoices.InvoiceStatus.DRAFT,BigDecimal.TEN,BigDecimal.TEN,null,false,"J-1 / Q-1"),false);
+      var reads=new WorkItemReadService(jdbc,Clock.fixed(NOW,ZoneOffset.UTC));
+      var user=new CurrentUser(director.toString(),Role.DIRECTOR);
+      var events=reads.get(user,entity,item).events();
+      assertThat(events).filteredOn(event -> "OWNER_CHANGED".equals(event.eventType())).singleElement().satisfies(event -> {
+        assertThat(event.fromOwner()).isNull();
+        assertThat(event.toOwner().id()).isEqualTo(director);
+        assertThat(event.toOwner().displayName()).isEqualTo("Synthetic user");
+      });
+      assertThat(events).filteredOn(event -> "VWORK_SYNC".equals(event.source()) && "STAGE_CHANGED".equals(event.eventType()))
+          .singleElement().satisfies(event -> {
+            assertThat(event.toOwner().id()).isEqualTo(finance);
+            assertThat(event.details().toJob().status()).isEqualTo("COMPLETED");
+            assertThat(event.details().toJob().technician()).isEqualTo("Synthetic worker");
+            assertThat(event.details().toJob().completedAt()).isEqualTo(NOW);
+            assertThat(event.details().fromJob()).isNull();
+          });
+      assertThat(events).filteredOn(event -> "INVOICE_LINKED".equals(event.eventType())).singleElement()
+          .satisfies(event -> assertThat(event.details().invoiceNumber()).isEqualTo("INV-7"));
+      assertThatThrownBy(() -> reads.get(user,other,item)).isInstanceOf(ApiFailure.class);
+      tx.setRollbackOnly();
+    });
+  }
+
   private static UUID entity() {
     var id = UUID.randomUUID();
     jdbc.update("insert into public.entities(id,code,display_name) values (?,?,?)", id, "test-" + id, "Synthetic entity");

@@ -39,8 +39,15 @@ public class WorkItemReadService {
   @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
   public record Links(String xeroQuoteUrl, String xeroInvoiceUrl, String vworkJobUrl) {}
   @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+  public record EventJob(String status, String technician, Instant scheduledStart, Instant completedAt) {}
+  /** Typed values read from the recorded event; anything the event did not record is absent. */
+  @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+  public record EventDetails(String invoiceNumber, String closeReason, String reason,
+      LocalDate fromFollowUpDate, LocalDate toFollowUpDate, EventJob fromJob, EventJob toJob) {}
+  @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
   public record EventView(long id, Instant at, StaffRef actor, String source, String eventType,
-      String fromStage, String toStage, UUID fromOwnerId, UUID toOwnerId, String before, String after) {}
+      String fromStage, String toStage, UUID fromOwnerId, UUID toOwnerId, String before, String after,
+      StaffRef fromOwner, StaffRef toOwner, EventDetails details) {}
   @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
   public record OperationView(UUID id, ExternalOperationRepository.Kind kind, OperationState.Status status,
       OperationState.Result outcome, Instant requestedAt, boolean allowLookup, boolean allowRetry) {}
@@ -105,15 +112,34 @@ public class WorkItemReadService {
         && "SENT".equals(data.summary().xeroQuoteStatus())
         && WorkItemPolicy.allowed(WorkItemAction.MARK_ACCEPTED,user.role(),true,false,false,data.summary().stage(),
             data.vwork().jobId()!=null,data.invoice().invoiceId()!=null)) allowed.add(WorkItemAction.MARK_ACCEPTED);
+    // A manual owner change records the owner IDs only in its before and after values.
     var events = jdbc.query("""
-        select ev.*,actor.display_name actor_name from public.work_item_events ev
+        select ev.*,actor.display_name actor_name,
+          previous.id previous_id,previous.display_name previous_name,
+          assigned.id assigned_id,assigned.display_name assigned_name,
+          coalesce(ev.after->>'invoiceNumber',ev.before->>'invoiceNumber') invoice_number,
+          ev.after->>'closeReason' event_close_reason,
+          coalesce(ev.after->>'reason',ev.after->>'closingNote') event_reason,
+          case when ev.event_type='FOLLOW_UP_CHANGED' then ev.before->>'value' end from_follow_up,
+          case when ev.event_type='FOLLOW_UP_CHANGED' then ev.after->>'value' end to_follow_up,
+          ev.before->>'jobStatus' from_job_status,ev.before->>'technician' from_technician,
+          ev.before->>'scheduledStart' from_scheduled,ev.before->>'completedAt' from_completed,
+          ev.after->>'jobStatus' to_job_status,ev.after->>'technician' to_technician,
+          ev.after->>'scheduledStart' to_scheduled,ev.after->>'completedAt' to_completed
+        from public.work_item_events ev
         left join public.staff_users actor on actor.id=ev.actor_id
+        left join public.staff_users previous on previous.id=coalesce(ev.from_owner_id,
+          case when ev.event_type='OWNER_CHANGED' then cast(ev.before->>'value' as uuid) end)
+        left join public.staff_users assigned on assigned.id=coalesce(ev.to_owner_id,
+          case when ev.event_type='OWNER_CHANGED' then cast(ev.after->>'value' as uuid) end)
         where ev.entity_id=? and ev.work_item_id=? order by ev.at desc,ev.id desc
         """, (rs, n) -> new EventView(rs.getLong("id"), instant(rs,"at"),
             staff(rs.getObject("actor_id", UUID.class), rs.getString("actor_name")), rs.getString("source"),
             rs.getString("event_type"), rs.getString("from_stage"), rs.getString("to_stage"),
             rs.getObject("from_owner_id", UUID.class), rs.getObject("to_owner_id", UUID.class),
-            rs.getString("before"), rs.getString("after")), entity, id);
+            rs.getString("before"), rs.getString("after"),
+            staff(rs.getObject("previous_id", UUID.class), rs.getString("previous_name")),
+            staff(rs.getObject("assigned_id", UUID.class), rs.getString("assigned_name")), details(rs)), entity, id);
     boolean mayLookup = user.role() == Role.DIRECTOR || manager;
     var operations = jdbc.query("""
         select op.id,op.kind,op.status,op.outcome,op.requested_at,op.attempt,
@@ -189,6 +215,21 @@ public class WorkItemReadService {
     };
   }
   private static StaffRef staff(UUID id, String name) { return id == null ? null : new StaffRef(id, name); }
+  private static EventDetails details(ResultSet rs) throws SQLException {
+    var details = new EventDetails(rs.getString("invoice_number"), rs.getString("event_close_reason"),
+        rs.getString("event_reason"), date(rs.getString("from_follow_up")), date(rs.getString("to_follow_up")),
+        eventJob(rs, "from_job_status", "from_technician", "from_scheduled", "from_completed"),
+        eventJob(rs, "to_job_status", "to_technician", "to_scheduled", "to_completed"));
+    return details.equals(new EventDetails(null, null, null, null, null, null, null)) ? null : details;
+  }
+  private static EventJob eventJob(ResultSet rs, String status, String technician, String scheduled, String completed)
+      throws SQLException {
+    var job = new EventJob(rs.getString(status), rs.getString(technician),
+        parsedInstant(rs.getString(scheduled)), parsedInstant(rs.getString(completed)));
+    return job.equals(new EventJob(null, null, null, null)) ? null : job;
+  }
+  private static LocalDate date(String value) { return value == null ? null : LocalDate.parse(value); }
+  private static Instant parsedInstant(String value) { return value == null ? null : Instant.parse(value); }
   private static Instant instant(ResultSet rs, String name) throws SQLException {
     var time = rs.getTimestamp(name); return time == null ? null : time.toInstant();
   }

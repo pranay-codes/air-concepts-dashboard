@@ -170,8 +170,8 @@ public class InvoiceMirrorRepository {
         insert into public.work_item_events(entity_id,work_item_id,source,event_type,from_stage,to_stage,from_owner_id,to_owner_id,before,after)
         values (?,?,'XERO_SYNC',?,?,?,?,?,jsonb_build_object('invoiceId',cast(? as uuid),'invoiceNumber',cast(? as text),
           'invoiceStatus',cast(? as text),'invoiceTotal',cast(? as numeric),'invoiceAmountDue',cast(? as numeric)),
-          jsonb_build_object('closeReason',cast(? as text),'observedStatus',cast(? as text)))
+          jsonb_build_object('closeReason',cast(? as text),'observedStatus',cast(? as text),'invoiceNumber',cast(? as text)))
         """,mapping.entityId(),item,event,before.state().stage().name(),after.stage().name(),before.state().ownerId(),after.ownerId(),before.invoiceId(),before.number(),
-        before.status(),before.total(),before.amountDue(),after.closeReason(),invoice.status().name());
+        before.status(),before.total(),before.amountDue(),after.closeReason(),invoice.status().name(),invoice.number());
   }
 }

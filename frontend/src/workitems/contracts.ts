@@ -76,6 +76,26 @@ const optionalText = (v: unknown) => v === undefined || typeof v === "string";
 const strings = (v: unknown): v is string[] =>
   Array.isArray(v) && v.every((x) => typeof x === "string");
 const nullableText = (v: unknown) => v === null || v === undefined || typeof v === "string";
+const optionalStaff = (v: unknown) =>
+  v === undefined || (isRecord(v) && isUuid(v.id) && typeof v.displayName === "string");
+const optionalFields = (v: unknown, fields: string[]) =>
+  v === undefined || (isRecord(v) && fields.every((field) => optionalText(v[field])));
+function isEventDetails(v: unknown) {
+  if (v === undefined) return true;
+  const job = ["status", "technician", "scheduledStart", "completedAt"];
+  return (
+    isRecord(v) &&
+    optionalFields(v, [
+      "invoiceNumber",
+      "closeReason",
+      "reason",
+      "fromFollowUpDate",
+      "toFollowUpDate",
+    ]) &&
+    optionalFields(v.fromJob, job) &&
+    optionalFields(v.toJob, job)
+  );
+}
 export function isInvoiceDraftReview(v: unknown): v is InvoiceDraftReview {
   return (
     isRecord(v) &&
@@ -245,10 +265,12 @@ export function isWorkItemDetail(v: unknown): v is WorkItemDetail {
         Number.isFinite(Date.parse(event.at)) &&
         typeof event.source === "string" &&
         typeof event.eventType === "string" &&
-        (event.actor === undefined ||
-          (isRecord(event.actor) &&
-            isUuid(event.actor.id) &&
-            typeof event.actor.displayName === "string")),
+        optionalText(event.fromStage) &&
+        optionalText(event.toStage) &&
+        optionalStaff(event.actor) &&
+        optionalStaff(event.fromOwner) &&
+        optionalStaff(event.toOwner) &&
+        isEventDetails(event.details),
     )
   );
 }
