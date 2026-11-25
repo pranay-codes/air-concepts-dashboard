@@ -146,7 +146,7 @@ export function ForecastGrid(props: {
               {(["IN", "OUT"] as const).map((direction) => (
                 <FragmentRows key={direction} direction={direction} grid={resource.data!} />
               ))}
-              <tr>
+              <tr className="forecast-grid-summary">
                 <th scope="row">Closing balance</th>
                 {resource.data.months.map((month) => (
                   <td className={`money ${signClass(month.closing) ?? ""}`} key={month.month}>
@@ -321,7 +321,7 @@ function FragmentRows({
           ))}
         </tr>
       ) : null}
-      <tr>
+      <tr className="forecast-grid-summary">
         <th scope="row">Total {direction === "IN" ? "Money In" : "Money Out"}</th>
         {grid.months.map((month) => {
           const total = direction === "IN" ? month.moneyIn : month.moneyOut;
