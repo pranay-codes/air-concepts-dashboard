@@ -87,10 +87,10 @@ export function ForecastGrid(props: {
       </div>
       <p className="supporting">
         Current and past forecasts are preserved. Creating a forecast refreshes the next six months
-        from the latest synced Xero data. Rows are grouped by contact name; contacts with the same
-        name appear together. Balances include the staffing estimate shown below. A dash means no
-        amount for that contact, or a month that has not been created. An entered opening overrides
-        the carried balance.
+        from the latest synced Xero data. Each row shows a company and its invoice or bill number.
+        Balances include the staffing estimate shown below. A dash means no amount for that invoice
+        or bill, or a month that has not been created. An entered opening overrides the carried
+        balance.
       </p>
       {success ? (
         <p role="status">
@@ -296,8 +296,8 @@ function FragmentRows({
           <td colSpan={9}>No {direction === "IN" ? "invoices" : "bills"} in saved months.</td>
         </tr>
       ) : (
-        rows.map((row) => (
-          <tr key={row.contact}>
+        rows.map((row, index) => (
+          <tr key={`${row.contact}:${index}`}>
             <th scope="row">{row.contact}</th>
             {grid.months.map((month) => (
               <td className="money" key={month.month}>

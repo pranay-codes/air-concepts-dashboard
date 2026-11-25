@@ -73,9 +73,23 @@ class ForecastGridServiceTest {
       new ForecastGridRepository.Line(nov,UUID.randomUUID(),null,"OUT","Customer",new BigDecimal("5.00"))));
     var result=service.grid(user,id,"2026-11",8);
     assertThat(result.months().getFirst().available()).isTrue();assertThat(result.months().get(1).available()).isFalse();
-    assertThat(result.rows()).hasSize(2);
-    assertThat(result.rows().stream().filter(r->r.direction().equals("IN")).findFirst().orElseThrow().amounts().get("2026-11")).isEqualTo("20.00");
+    assertThat(result.rows()).hasSize(3);
+    assertThat(result.months().getFirst().moneyIn()).isEqualTo("20.00");
     verify(access).requireRead(user,id);
+  }
+  @Test void frUc04_20_gridShowsEachCompanyAndInvoiceNumber() {
+    var access=mock(ForecastAccess.class); var store=mock(ForecastGridRepository.class); var legacy=mock(ForecastMonthRepository.class);
+    var service=new ForecastGridService(access,mock(ForecastDatasetLoader.class),store,legacy,new ForecastCalendar(4,Clock.systemUTC()),mock(ForecastAssumptionRepository.class));
+    var id=UUID.randomUUID(); var user=new CurrentUser(UUID.randomUUID().toString(),Role.DIRECTOR); var month=YearMonth.of(2026,11);
+    when(store.months(id,month,month)).thenReturn(Map.of(month,Instant.EPOCH));
+    when(store.lines(id,month,month)).thenReturn(List.of(
+      new ForecastGridRepository.Line(month,UUID.randomUUID(),null,"IN","Customer",new BigDecimal("12.30"),"INV-1"),
+      new ForecastGridRepository.Line(month,UUID.randomUUID(),null,"IN","Customer",new BigDecimal("7.70"),"INV-2"),
+      new ForecastGridRepository.Line(month,UUID.randomUUID(),null,"OUT","Supplier",new BigDecimal("5.00"),null)));
+    var grid=service.grid(user,id,"2026-11",1);
+    assertThat(grid.rows()).extracting(ForecastGridService.Row::contact).containsExactlyInAnyOrder("Customer - INV-1","Customer - INV-2","Supplier - Number unavailable");
+    assertThat(grid.months().getFirst().moneyIn()).isEqualTo("20.00");
+    assertThat(grid.months().getFirst().moneyOut()).isEqualTo("5.00");
   }
   @Test void frUc04_gridRefreshPreservesCurrentAndAppendsSixFutureRevisions() {
     var access=mock(ForecastAccess.class); var loader=mock(ForecastDatasetLoader.class);

@@ -36,7 +36,7 @@ public class ForecastGridService {
     var chainStart=anchors.keySet().stream().filter(m->!m.isAfter(start)).max(Comparator.naturalOrder()).orElse(start);
     var timestamps=store.months(id,chainStart,end); var old=legacy.generated(id); var oldLines=legacy.lines(id,chainStart,end);
     var all=new ArrayList<>(store.lines(id,chainStart,end));
-    for(var entry:oldLines.entrySet()) if(!timestamps.containsKey(entry.getKey())) for(var c:entry.getValue()) if("DOCUMENT".equals(c.source())) all.add(new ForecastGridRepository.Line(c.bucket(),c.sourceId(),c.splitSequence(),c.direction(),c.label()==null?"Unknown contact":c.label(),c.amount()));
+    for(var entry:oldLines.entrySet()) if(!timestamps.containsKey(entry.getKey())) for(var c:entry.getValue()) if("DOCUMENT".equals(c.source())) all.add(new ForecastGridRepository.Line(c.bucket(),c.sourceId(),c.splitSequence(),c.direction(),c.label()==null?"Unknown contact":c.label(),c.amount(),c.number()));
     var available=new HashSet<>(timestamps.keySet());available.addAll(old.keySet());
     var staff=assumptions.staffing(id,false);Map<YearMonth,BigDecimal> staffingTotals=new HashMap<>();
     for(var month=chainStart;!month.isAfter(end);month=month.plusMonths(1)) {
@@ -49,9 +49,19 @@ public class ForecastGridService {
     staffingTotals.forEach((month,total)->balanceLines.add(new ForecastGridRepository.Line(month,null,null,"OUT","Staffing Expenses",total)));
     var balances=ForecastGridBalances.calculate(chainStart,end,available,balanceLines,anchors);
     List<Month> months=new ArrayList<>(); for(int i=0;i<count;i++){var m=start.plusMonths(i);var ts=timestamps.get(m);var prior=old.get(m);var b=balances.get(m);var anchor=records.get(m);months.add(new Month(m.toString(),ts!=null||prior!=null,ts!=null?ts:prior==null?null:prior.generatedAt(),decimal(b.moneyIn()),decimal(b.moneyOut()),b.moneyOut()==null?null:decimal(staffingTotals.get(m)),decimal(b.opening()),decimal(b.closing()),anchor!=null?"ENTERED":b.opening()!=null?"CARRIED_FORWARD":null,anchor==null?null:anchor.source()));}
-    Map<String,Map<String,BigDecimal>> groups=new TreeMap<>();
-    for(var line:all) if(!line.month().isBefore(start)){String key=line.direction()+"\u0000"+line.contact();groups.computeIfAbsent(key,k->new TreeMap<>()).merge(line.month().toString(),line.amount(),BigDecimal::add);}
-    List<Row> rows=new ArrayList<>();groups.forEach((key,amounts)->{var parts=key.split("\u0000",2);Map<String,String> values=new TreeMap<>();amounts.forEach((m,amount)->values.put(m,amount.toPlainString()));rows.add(new Row(parts[0],parts[1],values));});
+    record RowKey(String direction,String contact,String number,UUID documentId) {}
+    Map<RowKey,Map<String,BigDecimal>> groups=new HashMap<>();
+    for(var line:all) if(!line.month().isBefore(start)) {
+      var key=new RowKey(line.direction(),line.contact(),line.number(),line.documentId());
+      groups.computeIfAbsent(key,k->new TreeMap<>()).merge(line.month().toString(),line.amount(),BigDecimal::add);
+    }
+    List<Row> rows=new ArrayList<>();
+    groups.entrySet().stream().sorted(Comparator.comparing((Map.Entry<RowKey,Map<String,BigDecimal>> e)->e.getKey().direction())
+        .thenComparing(e->e.getKey().contact()).thenComparing(e->Objects.toString(e.getKey().number(),""))
+        .thenComparing(e->Objects.toString(e.getKey().documentId(),""))).forEach(entry->{
+      var key=entry.getKey();Map<String,String> values=new TreeMap<>();entry.getValue().forEach((m,amount)->values.put(m,amount.toPlainString()));
+      rows.add(new Row(key.direction(),key.contact()+" - "+(key.number()==null||key.number().isBlank()?"Number unavailable":key.number()),values));
+    });
     return new Grid(id,List.copyOf(months),List.copyOf(rows));
   }
   private static String decimal(BigDecimal amount){return amount==null?null:amount.toPlainString();}

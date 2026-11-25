@@ -37,8 +37,16 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
       openingNote: null,
     })),
     rows: [
-      { direction: "IN", contact: "Customer A", amounts: { [stepMonth(start, 1)]: "125.00" } },
-      { direction: "OUT", contact: "Supplier B", amounts: { [stepMonth(start, 1)]: "25.00" } },
+      {
+        direction: "IN",
+        contact: "Customer A - INV-123",
+        amounts: { [stepMonth(start, 1)]: "125.00" },
+      },
+      {
+        direction: "OUT",
+        contact: "Supplier B - BILL-456",
+        amounts: { [stepMonth(start, 1)]: "25.00" },
+      },
     ],
   }));
   vi.spyOn(api, "generateForecastGrid").mockResolvedValue({
@@ -60,8 +68,8 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
       onChanged={onChanged}
     />,
   );
-  expect(await screen.findByText("Customer A")).toBeInTheDocument();
-  expect(screen.getByText("Supplier B")).toBeInTheDocument();
+  expect(await screen.findByText("Customer A - INV-123")).toBeInTheDocument();
+  expect(screen.getByText("Supplier B - BILL-456")).toBeInTheDocument();
   expect(screen.getAllByText(/125\.00/).length).toBeGreaterThan(0);
   expect(screen.getByText("Total Money In")).toBeInTheDocument();
   expect(screen.getByText("Total Money Out")).toBeInTheDocument();
