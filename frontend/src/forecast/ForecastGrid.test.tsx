@@ -106,6 +106,12 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
   expect(screen.getByText("Total Money In")).toBeInTheDocument();
   expect(screen.getByText("Total Money Out")).toBeInTheDocument();
   const staffing = screen.getByRole("row", { name: /Staffing Expenses/ });
+  for (const name of [/Customer A - INV-123/, /Supplier B - BILL-456/]) {
+    const cells = screen.getByRole("row", { name }).querySelectorAll("td");
+    expect(cells[0]).toHaveTextContent(/^—$/);
+    expect(cells[2]).toHaveTextContent(/^—$/);
+  }
+  expect(staffing.querySelectorAll("td")[0]).toHaveTextContent(/^—$/);
   expect(staffing).toHaveTextContent("300.00");
   expect(staffing.nextElementSibling).toHaveTextContent("Total Money Out");
   expect(screen.getByText("Opening balance")).toBeInTheDocument();

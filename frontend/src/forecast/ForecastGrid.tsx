@@ -53,14 +53,14 @@ export function ForecastGrid(props: {
             aria-label="Previous month"
             onClick={() => setStart((value) => stepMonth(value, -1))}
           >
-            â€¹
+            ‹
           </button>{" "}
           <button
             type="button"
             aria-label="Next month"
             onClick={() => setStart((value) => stepMonth(value, 1))}
           >
-            â€º
+            ›
           </button>
         </div>
         <button
@@ -83,7 +83,7 @@ export function ForecastGrid(props: {
               });
           }}
         >
-          {action.busy ? "Creating forecastâ€¦" : "Create forecast"}
+          {action.busy ? "Creating forecast…" : "Create forecast"}
         </button>
       </div>
       <p className="supporting">
@@ -106,8 +106,8 @@ export function ForecastGrid(props: {
       ) : null}
       {action.error ? <Failure error={action.error} /> : null}
       {resource.error ? <Failure error={resource.error} onRetry={resource.refresh} /> : null}
-      {resource.status === "loading" ? <Loading label="Loading forecast gridâ€¦" /> : null}
-      {resource.status === "refreshing" ? <p role="status">Refreshing forecastâ€¦</p> : null}
+      {resource.status === "loading" ? <Loading label="Loading forecast grid…" /> : null}
+      {resource.status === "refreshing" ? <p role="status">Refreshing forecast…</p> : null}
       {resource.data ? (
         <div
           className="forecast-grid-scroll"
@@ -116,7 +116,7 @@ export function ForecastGrid(props: {
           tabIndex={0}
         >
           <table className="forecast-grid-table">
-            <caption>Cash forecast Â· NZD</caption>
+            <caption>Cash forecast · NZD</caption>
             <thead>
               <tr>
                 <th scope="col" aria-label="Forecast rows" />
@@ -354,7 +354,7 @@ function FragmentRows({
                   ? "\u2014"
                   : row.amounts[month.month]
                     ? formatDecimal(row.amounts[month.month], 2)
-                    : "â€”"}
+                    : "\u2014"}
               </td>
             ))}
           </tr>
@@ -365,7 +365,9 @@ function FragmentRows({
           <th scope="row">Staffing Expenses</th>
           {grid.months.map((month) => (
             <td className="money" key={month.month}>
-              {month.staffingExpenses === null ? "â€”" : formatDecimal(month.staffingExpenses, 2)}
+              {month.staffingExpenses === null
+                ? "\u2014"
+                : formatDecimal(month.staffingExpenses, 2)}
             </td>
           ))}
         </tr>
