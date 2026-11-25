@@ -1,6 +1,7 @@
 # Air Concepts Financial Admin Dashboard: Agent Rules
 
 ## Learned Rules
+- Forecast grid totals and closing balance must have a clearly distinct row background from ordinary entries (human correction, 25 November 2026).
 - For the November 2026 forecast grid change, focus on customer invoices and supplier bills; defer employee wages (human instruction, 24 November 2026).
 - For out-of-order job tracking, proceed without a vWork Test account and use official vWork documentation; record account-specific behaviour as unverified (human instruction, 23 November 2026).
 - For out-of-order job tracking, use official Xero documentation to guide testing; distinguish documentation-based tests from account-specific verification (human instruction, 23 November 2026).

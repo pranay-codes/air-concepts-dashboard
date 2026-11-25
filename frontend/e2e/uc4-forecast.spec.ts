@@ -2,6 +2,42 @@ import { expect, test } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 import { greenLane, signIn, ENTITY_A } from "./support/green-lane";
 import { forecastBoundary } from "./support/forecast";
+test("FR-UC04-05 forecast totals have a distinct background across each row", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  await greenLane(page, "FINANCIAL_ADMIN");
+  await forecastBoundary(page);
+  await signIn(page);
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Forecast", exact: true })
+    .click();
+  const grid = page.getByRole("region", { name: "Cash forecast table" });
+  const ordinary = grid
+    .getByRole("row", { name: /Staffing Expenses/ })
+    .locator("td")
+    .first();
+  const ordinaryBackground = await ordinary.evaluate((cell) => {
+    let element: Element | null = cell;
+    while (element) {
+      const background = getComputedStyle(element).backgroundColor;
+      if (background !== "rgba(0, 0, 0, 0)") return background;
+      element = element.parentElement;
+    }
+    return "transparent";
+  });
+  for (const label of ["Total Money In", "Total Money Out", "Closing balance"]) {
+    const row = grid
+      .getByRole("row")
+      .filter({ has: page.getByRole("rowheader", { name: label, exact: true }) });
+    const cells = row.locator("th, td");
+    const backgrounds = await cells.evaluateAll((elements) =>
+      elements.map((cell) => getComputedStyle(cell).backgroundColor),
+    );
+    expect(backgrounds.length).toBeGreaterThan(1);
+    expect(backgrounds[0]).not.toBe(ordinaryBackground);
+    expect(backgrounds.every((background) => background === backgrounds[0])).toBe(true);
+  }
+});
 test("FR-UC04-04 grid opening edit refreshes the saved amount", async ({ page }) => {
   await greenLane(page, "FINANCIAL_ADMIN");
   const state = await forecastBoundary(page);
