@@ -40,11 +40,15 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
       {
         direction: "IN",
         contact: "Customer A - INV-123",
+        documentId: "11111111-1111-4111-8111-111111111111",
+        note: null,
         amounts: { [stepMonth(start, 1)]: "125.00" },
       },
       {
         direction: "OUT",
         contact: "Supplier B - BILL-456",
+        documentId: "22222222-2222-4222-8222-222222222222",
+        note: "Pay Friday",
         amounts: { [stepMonth(start, 1)]: "25.00" },
       },
     ],
@@ -57,6 +61,12 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
     changedProtectedSchedules: 0,
   });
   const save = vi.spyOn(api, "saveForecastOpening").mockResolvedValue({} as never);
+  const saveNote = vi.spyOn(api, "saveForecastTransactionNote").mockResolvedValue({
+    source: "DOCUMENT",
+    sourceId: "11111111-1111-4111-8111-111111111111",
+    note: "Call Monday",
+    updatedAt: null,
+  });
   const onChanged = vi.fn();
   render(
     <ForecastGrid
@@ -70,6 +80,28 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
   );
   expect(await screen.findByText("Customer A - INV-123")).toBeInTheDocument();
   expect(screen.getByText("Supplier B - BILL-456")).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: /Edit note for Supplier B.*Pay Friday/ }),
+  ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /Add note for Customer A/ }));
+  fireEvent.change(screen.getByRole("textbox", { name: /Note for Customer A/ }), {
+    target: { value: "Call Monday" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() =>
+    expect(saveNote).toHaveBeenCalledWith(
+      "10000000-0000-4000-8000-000000000001",
+      "DOCUMENT",
+      "11111111-1111-4111-8111-111111111111",
+      "Call Monday",
+    ),
+  );
+  expect(
+    await screen.findByRole("button", { name: /Edit note for Customer A.*Call Monday/ }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: /Edit note for Supplier B.*Pay Friday/ }),
+  ).toBeInTheDocument();
   expect(screen.getAllByText(/125\.00/).length).toBeGreaterThan(0);
   expect(screen.getByText("Total Money In")).toBeInTheDocument();
   expect(screen.getByText("Total Money Out")).toBeInTheDocument();

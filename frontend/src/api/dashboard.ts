@@ -18,7 +18,13 @@ export type ForecastGrid = Omit<components["schemas"]["Grid"], "entityId" | "mon
     openingSource: string | null;
     openingNote: string | null;
   }[];
-  rows: { direction: "IN" | "OUT"; contact: string; amounts: Record<string, string> }[];
+  rows: {
+    direction: "IN" | "OUT";
+    contact: string;
+    amounts: Record<string, string>;
+    documentId: string;
+    note: string | null;
+  }[];
 };
 function isForecastGrid(value: unknown): value is ForecastGrid {
   return (
@@ -46,6 +52,8 @@ function isForecastGrid(value: unknown): value is ForecastGrid {
         isRecord(r) &&
         (r.direction === "IN" || r.direction === "OUT") &&
         typeof r.contact === "string" &&
+        typeof r.documentId === "string" &&
+        (r.note === null || typeof r.note === "string") &&
         isRecord(r.amounts) &&
         Object.values(r.amounts).every(f.money),
     )

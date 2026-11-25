@@ -5157,9 +5157,16 @@
             "additionalProperties" : {
               "type" : "string"
             }
+          },
+          "documentId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "note" : {
+            "type" : [ "string", "null" ]
           }
         },
-        "required" : [ "amounts", "contact", "direction" ]
+        "required" : [ "amounts", "contact", "direction", "documentId", "note" ]
       },
       "DocumentPage" : {
         "type" : "object",

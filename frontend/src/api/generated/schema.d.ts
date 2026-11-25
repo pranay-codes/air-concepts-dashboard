@@ -1791,6 +1791,9 @@ export interface components {
             amounts: {
                 [key: string]: string;
             };
+            /** Format: uuid */
+            documentId: string;
+            note: string | null;
         };
         DocumentPage: {
             items?: components["schemas"]["StoredDocument"][];

@@ -590,3 +590,17 @@
 .forecast-grid-opening input {
   width: 8rem;
 }
+
+.forecast-grid-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.forecast-grid-item .note-cell,
+.forecast-grid-item .note-editor {
+  max-width: 16rem;
+}
+.forecast-grid-item .note-editor {
+  white-space: normal;
+  min-width: 14rem;
+}
