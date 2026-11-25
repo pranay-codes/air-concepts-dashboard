@@ -250,6 +250,13 @@ export function isStaff(v: unknown): v is StaffingLine {
     nullable(v.payDayOfMonth, count) &&
     month(v.startMonth) &&
     nullable(v.endMonth, month) &&
+    nullable(v.hourlyRate, money) &&
+    nullable(v.weeklyHours, money) &&
+    (v.paymentFrequency === null ||
+      ["WEEKLY", "FORTNIGHTLY", "MONTHLY"].includes(String(v.paymentFrequency))) &&
+    nullable(v.firstPayday, date) &&
+    nullable(v.employmentStart, date) &&
+    nullable(v.employmentEnd, date) &&
     typeof v.active === "boolean"
   );
 }

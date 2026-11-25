@@ -5,6 +5,7 @@ import com.airconcepts.dashboard.forecast.calc.ForecastResult.*;
 import java.math.BigDecimal;
 import java.time.*;
 import java.util.*;
+import com.airconcepts.dashboard.forecast.StaffingSchedule;
 
 /** Cash values are already GST-inclusive. The same result feeds dashboard and workbook. */
 public final class ForecastCalculator {
@@ -41,8 +42,11 @@ public final class ForecastCalculator {
     }
     for(var staff:data.staffing()) if(staff.active()) for(int i=0;i<WINDOW_MONTHS;i++) {
       var month=data.startMonth().plusMonths(i);
-      if(active(month,staff.startMonth(),staff.endMonth())) contributions.add(new Contribution(staff.id(),"STAFFING","OUT","STAFFING",null,
-          staff.label(),day(month,staff.payDayOfMonth()),month,money(staff.monthlyCost()),DateRule.STAFFING,false,null,null));
+      if(active(month,staff.startMonth(),staff.endMonth())) {
+        var amount=staff.paymentFrequency()==null?money(staff.monthlyCost()):StaffingSchedule.monthly(staff.hourlyRate(),staff.weeklyHours(),staff.paymentFrequency(),staff.firstPayday(),staff.employmentStart(),staff.employmentEnd(),month);
+        if(amount.signum()!=0) contributions.add(new Contribution(staff.id(),"STAFFING","OUT","STAFFING",null,
+            staff.label(),day(month,staff.payDayOfMonth()),month,amount,DateRule.STAFFING,false,null,null));
+      }
     }
     if(data.openingBalance()==null) exceptions.add(new ForecastException("NO_OPENING_BALANCE",null,"Enter an opening balance for this forecast period."));
     if(data.sync()==null||data.sync().lastSuccessfulSyncAt()==null) exceptions.add(new ForecastException("NO_SYNC_YET",null,"Run a sync to load Xero documents."));

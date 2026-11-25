@@ -21,7 +21,9 @@ public class ForecastAssumptionRepository {
   private static final RowMapper<ManualItem> MANUAL=(r,n)->new ManualItem(r.getObject("id",UUID.class),r.getString("direction"),r.getString("category"),r.getString("description"),
       r.getBigDecimal("amount"),r.getString("recurrence"),r.getObject("day_of_month",Integer.class),month(r,"start_month"),month(r,"end_month"),r.getBoolean("active"));
   private static final RowMapper<StaffingLine> STAFF=(r,n)->new StaffingLine(r.getObject("id",UUID.class),r.getString("label"),r.getBigDecimal("monthly_cost"),
-      r.getObject("pay_day_of_month",Integer.class),month(r,"start_month"),month(r,"end_month"),r.getBoolean("active"));
+      r.getObject("pay_day_of_month",Integer.class),month(r,"start_month"),month(r,"end_month"),r.getBoolean("active"),
+      r.getBigDecimal("hourly_rate"),r.getBigDecimal("weekly_hours"),r.getString("payment_frequency"),
+      r.getObject("first_payday",LocalDate.class),r.getObject("employment_start",LocalDate.class),r.getObject("employment_end",LocalDate.class));
   public OpeningBalance opening(UUID entity,LocalDate start) {
     return jdbc.query("select opening_balance,opening_balance_source from public.forecast_periods where entity_id=? and start_month=?",
         (r,n)->new OpeningBalance(r.getBigDecimal(1),r.getString(2)),entity,start).stream().findFirst().orElse(new OpeningBalance(null,null));
@@ -70,6 +72,8 @@ public class ForecastAssumptionRepository {
   @Transactional public StaffingLine saveStaff(UUID entity,UUID actor,StaffingLine item) {
     lockEntity(entity);var old=staff(entity,item.id());var values=new LinkedHashMap<String,Object>();
     values.put("label",item.label());values.put("monthly_cost",item.monthlyCost());values.put("pay_day_of_month",item.payDayOfMonth());
+    values.put("hourly_rate",item.hourlyRate());values.put("weekly_hours",item.weeklyHours());values.put("payment_frequency",item.paymentFrequency());
+    values.put("first_payday",item.firstPayday());values.put("employment_start",item.employmentStart());values.put("employment_end",item.employmentEnd());
     values.put("start_month",item.startMonth().atDay(1));values.put("end_month",item.endMonth()==null?null:item.endMonth().atDay(1));values.put("active",item.active());
     save("forecast_staffing",entity,item.id(),actor,values,old.isEmpty(),!item.active());return item;
   }

@@ -37,7 +37,7 @@ export function AssumptionLines(
   async function deactivate(line: Line) {
     if (
       !window.confirm(
-        `Deactivate ${label(line)} (${formatMoney(cost(line), "NZD")}) for ${props.entity.displayName}? It will stop contributing to forecasts.`,
+        `Deactivate ${label(line)} for ${props.entity.displayName}? It will stop contributing to forecasts.`,
       )
     )
       return;
@@ -56,7 +56,7 @@ export function AssumptionLines(
       <p>
         {props.kind === "manual"
           ? "GST-inclusive cash amounts for items outside Xero."
-          : "Gross monthly cash costs. Access is restricted to Director and Financial Admin."}
+          : "Estimated gross staffing costs. Access is restricted to Director and Financial Admin."}
       </p>
       <div className="forecast-actions">
         <button type="button" onClick={() => setEditing({})}>
@@ -84,15 +84,23 @@ export function AssumptionLines(
         <article className="forecast-card" key={line.id}>
           <h3>{label(line)}</h3>
           <p>
-            {formatMoney(cost(line), "NZD")}{" "}
-            {"recurrence" in line
-              ? line.recurrence === "MONTHLY"
-                ? "monthly"
-                : "one-off"
-              : "per month"}
+            {"monthlyCost" in line && line.paymentFrequency ? (
+              `${formatMoney(line.hourlyRate ?? "0.00", "NZD")} per hour · ${line.weeklyHours} hours per week · ${line.paymentFrequency.toLowerCase()}`
+            ) : (
+              <>
+                {formatMoney(cost(line), "NZD")}{" "}
+                {"recurrence" in line
+                  ? line.recurrence === "MONTHLY"
+                    ? "monthly"
+                    : "one-off"
+                  : "per month"}
+              </>
+            )}
           </p>
           <p>
-            {line.startMonth} to {line.endMonth ?? "ongoing"}
+            {"monthlyCost" in line && line.paymentFrequency
+              ? `${line.employmentStart ?? "No start date"} to ${line.employmentEnd ?? "ongoing"}`
+              : `${line.startMonth} to ${line.endMonth ?? "ongoing"}`}
           </p>
           {!line.active ? <span className="badge warning">Inactive</span> : null}
           <div className="forecast-row-actions">
@@ -118,6 +126,7 @@ function LineForm(
 ) {
   const line = props.line;
   const manual = line && "description" in line ? line : undefined;
+  const staff = line && "monthlyCost" in line ? line : undefined;
   const [form, setForm] = useState({
     label: line ? label(line) : "",
     amount: line ? cost(line) : "",
@@ -128,6 +137,12 @@ function LineForm(
     category: manual?.category ?? "OTHER_PAYMENT",
     recurrence: manual?.recurrence ?? "MONTHLY",
     active: line?.active ?? true,
+    frequency: staff?.paymentFrequency ?? (staff ? "LEGACY" : "WEEKLY"),
+    rate: staff?.hourlyRate ?? "",
+    hours: staff?.weeklyHours ?? "",
+    payday: staff?.firstPayday ?? "",
+    employmentStart: staff?.employmentStart ?? "",
+    employmentEnd: staff?.employmentEnd ?? "",
   });
   const [dirty, setDirty] = useState(false);
   const [validation, setValidation] = useState("");
@@ -139,7 +154,21 @@ function LineForm(
     if (!dirty || window.confirm("Discard this forecast item edit?")) props.onClose();
   };
   const field = (
-    name: "label" | "amount" | "start" | "end" | "day" | "direction" | "category" | "recurrence",
+    name:
+      | "label"
+      | "amount"
+      | "start"
+      | "end"
+      | "day"
+      | "direction"
+      | "category"
+      | "recurrence"
+      | "frequency"
+      | "rate"
+      | "hours"
+      | "payday"
+      | "employmentStart"
+      | "employmentEnd",
     value: string,
   ) => setForm((current) => ({ ...current, [name]: value }));
   return (
@@ -153,13 +182,26 @@ function LineForm(
         onChange={() => setDirty(true)}
         onSubmit={async (event) => {
           event.preventDefault();
-          const amount = decimal(form.amount);
+          const amount =
+            props.kind === "staffing" && form.frequency !== "LEGACY"
+              ? "0.00"
+              : decimal(form.amount);
           if (amount === null || (cents(amount) ?? -1n) < (props.kind === "manual" ? 1n : 0n)) {
             setValidation("Enter a valid cash amount with up to two decimal places.");
             return;
           }
           if (form.end && form.end < form.start) {
             setValidation("End month must be on or after start month.");
+            return;
+          }
+          if (
+            props.kind === "staffing" &&
+            form.frequency !== "LEGACY" &&
+            (decimal(form.rate) === null || decimal(form.hours) === null)
+          ) {
+            setValidation(
+              "Enter a valid hourly rate and weekly hours with up to two decimal places.",
+            );
             return;
           }
           setValidation("");
@@ -188,9 +230,18 @@ function LineForm(
                       label: form.label,
                       monthlyCost: amount,
                       payDayOfMonth: Number(form.day),
-                      startMonth: form.start,
-                      endMonth: form.end || null,
+                      startMonth:
+                        form.frequency === "LEGACY" ? form.start : form.payday.slice(0, 7),
+                      endMonth: form.frequency === "LEGACY" ? form.end || null : null,
                       active: form.active,
+                      hourlyRate: form.frequency === "LEGACY" ? null : decimal(form.rate),
+                      weeklyHours: form.frequency === "LEGACY" ? null : decimal(form.hours),
+                      paymentFrequency: form.frequency === "LEGACY" ? null : form.frequency,
+                      firstPayday: form.frequency === "LEGACY" ? null : form.payday,
+                      employmentStart:
+                        form.frequency === "LEGACY" ? null : form.employmentStart || null,
+                      employmentEnd:
+                        form.frequency === "LEGACY" ? null : form.employmentEnd || null,
                     },
                     line?.id,
                     signal,
@@ -213,15 +264,83 @@ function LineForm(
             onChange={(e) => field("label", e.target.value)}
           />
         </label>
-        <label>
-          {props.kind === "manual" ? "Cash amount (NZD)" : "Monthly cash cost (NZD)"}
-          <input
-            inputMode="decimal"
-            required
-            value={form.amount}
-            onChange={(e) => field("amount", e.target.value)}
-          />
-        </label>
+        {props.kind === "manual" || form.frequency === "LEGACY" ? (
+          <label>
+            {props.kind === "manual" ? "Cash amount (NZD)" : "Monthly cash cost (NZD)"}
+            <input
+              inputMode="decimal"
+              required
+              value={form.amount}
+              onChange={(e) => field("amount", e.target.value)}
+            />
+          </label>
+        ) : null}
+        {props.kind === "staffing" ? (
+          <>
+            <label>
+              Payment frequency
+              <select value={form.frequency} onChange={(e) => field("frequency", e.target.value)}>
+                {staff?.paymentFrequency == null && staff ? (
+                  <option value="LEGACY">Existing monthly amount</option>
+                ) : null}
+                <option value="WEEKLY">Weekly</option>
+                <option value="FORTNIGHTLY">Fortnightly</option>
+                <option value="MONTHLY">Monthly</option>
+              </select>
+            </label>
+            {form.frequency !== "LEGACY" ? (
+              <>
+                <label>
+                  Hourly rate (NZD)
+                  <input
+                    required
+                    inputMode="decimal"
+                    value={form.rate}
+                    onChange={(e) => field("rate", e.target.value)}
+                  />
+                </label>
+                <label>
+                  Standard hours per week
+                  <input
+                    required
+                    inputMode="decimal"
+                    value={form.hours}
+                    onChange={(e) => field("hours", e.target.value)}
+                  />
+                </label>
+                <label>
+                  First scheduled payday
+                  <input
+                    required
+                    type="date"
+                    value={form.payday}
+                    onChange={(e) => field("payday", e.target.value)}
+                  />
+                </label>
+                <p>
+                  Monthly pay is estimated as weekly wages multiplied by 52 and divided by 12.
+                  Weekly and fortnightly pay repeat from the first payday.
+                </p>
+                <label>
+                  Employment start date (optional)
+                  <input
+                    type="date"
+                    value={form.employmentStart}
+                    onChange={(e) => field("employmentStart", e.target.value)}
+                  />
+                </label>
+                <label>
+                  Employment end date (optional)
+                  <input
+                    type="date"
+                    value={form.employmentEnd}
+                    onChange={(e) => field("employmentEnd", e.target.value)}
+                  />
+                </label>
+              </>
+            ) : null}
+          </>
+        ) : null}
         {props.kind === "manual" ? (
           <>
             <label>
@@ -258,35 +377,39 @@ function LineForm(
             </label>
           </>
         ) : null}
-        <label>
-          Start month
-          <input
-            type="month"
-            required
-            value={form.start}
-            onChange={(e) => field("start", e.target.value)}
-          />
-        </label>
-        <label>
-          End month (optional, inclusive)
-          <input
-            type="month"
-            min={form.start}
-            value={form.end}
-            onChange={(e) => field("end", e.target.value)}
-          />
-        </label>
-        <label>
-          Payment day
-          <input
-            type="number"
-            min={1}
-            max={31}
-            required
-            value={form.day}
-            onChange={(e) => field("day", e.target.value)}
-          />
-        </label>
+        {props.kind === "manual" || form.frequency === "LEGACY" ? (
+          <>
+            <label>
+              Start month
+              <input
+                type="month"
+                required
+                value={form.start}
+                onChange={(e) => field("start", e.target.value)}
+              />
+            </label>
+            <label>
+              End month (optional, inclusive)
+              <input
+                type="month"
+                min={form.start}
+                value={form.end}
+                onChange={(e) => field("end", e.target.value)}
+              />
+            </label>
+            <label>
+              Payment day
+              <input
+                type="number"
+                min={1}
+                max={31}
+                required
+                value={form.day}
+                onChange={(e) => field("day", e.target.value)}
+              />
+            </label>
+          </>
+        ) : null}
         <label className="checkbox-label">
           <input
             type="checkbox"

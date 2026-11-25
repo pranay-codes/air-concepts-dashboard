@@ -44,7 +44,7 @@ export function ForecastGrid(props: {
   );
   const action = useAction(`${props.subject}:${props.entityId}:grid:generate`);
   return (
-    <section aria-label="Invoice and bill forecast">
+    <section aria-label="Cash forecast">
       <div className="forecast-grid-controls">
         <div role="group" aria-label="Forecast months">
           <button
@@ -88,9 +88,9 @@ export function ForecastGrid(props: {
       <p className="supporting">
         Current and past forecasts are preserved. Creating a forecast refreshes the next six months
         from the latest synced Xero data. Rows are grouped by contact name; contacts with the same
-        name appear together. Balances reflect only the invoices and bills shown here. A dash means
-        no amount for that contact, or a month that has not been created. An entered opening
-        overrides the carried balance.
+        name appear together. Balances include the staffing estimate shown below. A dash means no
+        amount for that contact, or a month that has not been created. An entered opening overrides
+        the carried balance.
       </p>
       {success ? (
         <p role="status">
@@ -111,11 +111,11 @@ export function ForecastGrid(props: {
         <div
           className="forecast-grid-scroll"
           role="region"
-          aria-label="Invoice and bill forecast table"
+          aria-label="Cash forecast table"
           tabIndex={0}
         >
           <table className="forecast-grid-table">
-            <caption>Invoice and bill forecast · NZD</caption>
+            <caption>Cash forecast · NZD</caption>
             <thead>
               <tr>
                 <th scope="col" aria-label="Forecast rows" />
@@ -311,6 +311,16 @@ function FragmentRows({
           </tr>
         ))
       )}
+      {direction === "OUT" ? (
+        <tr>
+          <th scope="row">Staffing Expenses</th>
+          {grid.months.map((month) => (
+            <td className="money" key={month.month}>
+              {month.staffingExpenses === null ? "—" : formatDecimal(month.staffingExpenses, 2)}
+            </td>
+          ))}
+        </tr>
+      ) : null}
       <tr>
         <th scope="row">Total {direction === "IN" ? "Money In" : "Money Out"}</th>
         {grid.months.map((month) => {
