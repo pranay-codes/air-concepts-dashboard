@@ -14,6 +14,21 @@ import java.util.*;
 import org.junit.jupiter.api.Test;
 
 class ForecastGridServiceTest {
+  @Test void frUc04_03_staffingIsIncludedOnceAndCarriesIntoNextOpening() {
+    var access=mock(ForecastAccess.class);var loader=mock(ForecastDatasetLoader.class);var store=mock(ForecastGridRepository.class);var legacy=mock(ForecastMonthRepository.class);var assumptions=mock(ForecastAssumptionRepository.class);
+    var service=new ForecastGridService(access,loader,store,legacy,new ForecastCalendar(4,Clock.systemUTC()),assumptions);
+    var entity=UUID.randomUUID();var user=new CurrentUser(UUID.randomUUID().toString(),Role.DIRECTOR);var jan=YearMonth.of(2026,1);var feb=jan.plusMonths(1);
+    when(assumptions.openingAnchors(entity)).thenReturn(Map.of(jan,new ForecastAssumptionRepository.OpeningBalance(new BigDecimal("10000.00"),"Bank")));
+    when(store.months(entity,jan,feb)).thenReturn(Map.of(jan,Instant.EPOCH,feb,Instant.EPOCH));
+    when(assumptions.staffing(entity,false)).thenReturn(List.of(new ForecastDataset.StaffingLine(UUID.randomUUID(),"Private",BigDecimal.ZERO,null,jan,null,true,new BigDecimal("25.00"),new BigDecimal("40.00"),"WEEKLY",LocalDate.of(2026,1,2),null,null)));
+    var result=service.grid(user,entity,"2026-01",2);
+    assertThat(result.months().getFirst().staffingExpenses()).isEqualTo("5000.00");
+    assertThat(result.months().getFirst().moneyOut()).isEqualTo("5000.00");
+    assertThat(result.months().getFirst().closing()).isEqualTo("5000.00");
+    assertThat(result.months().get(1).opening()).isEqualTo("5000.00");
+    assertThat(result.rows()).isEmpty();
+    verify(access).requireRead(user,entity);verify(assumptions).staffing(entity,false);
+  }
   @Test void frUc04_05_gridCarriesBalanceFromBeforeTheVisibleWindow() {
     var access=mock(ForecastAccess.class);var loader=mock(ForecastDatasetLoader.class);var store=mock(ForecastGridRepository.class);var legacy=mock(ForecastMonthRepository.class);var assumptions=mock(ForecastAssumptionRepository.class);
     var calendar=new ForecastCalendar(4,Clock.systemUTC());var service=new ForecastGridService(access,loader,store,legacy,calendar,assumptions);

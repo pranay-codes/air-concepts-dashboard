@@ -97,6 +97,7 @@ export async function forecastBoundary(page: Page) {
           generatedAt: "2026-11-10T00:00:00Z",
           moneyIn: "115.00",
           moneyOut: "0.00",
+          staffingExpenses: "0.00",
           opening: opening.get(entity) ?? null,
           closing: opening.has(entity) ? (Number(opening.get(entity)) + 115).toFixed(2) : null,
           openingSource: opening.has(entity) ? "ENTERED" : null,

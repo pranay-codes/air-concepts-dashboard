@@ -12,6 +12,7 @@ export type ForecastGrid = Omit<components["schemas"]["Grid"], "entityId" | "mon
     generatedAt: string | null;
     moneyIn: string | null;
     moneyOut: string | null;
+    staffingExpenses: string | null;
     opening: string | null;
     closing: string | null;
     openingSource: string | null;
@@ -35,7 +36,7 @@ function isForecastGrid(value: unknown): value is ForecastGrid {
           m.openingSource === "ENTERED" ||
           m.openingSource === "CARRIED_FORWARD") &&
         (m.openingNote === null || typeof m.openingNote === "string") &&
-        [m.moneyIn, m.moneyOut, m.opening, m.closing].every(
+        [m.moneyIn, m.moneyOut, m.staffingExpenses, m.opening, m.closing].every(
           (value) => value === null || f.money(value),
         ),
     ) &&

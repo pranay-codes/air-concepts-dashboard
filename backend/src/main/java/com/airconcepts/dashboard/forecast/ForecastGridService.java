@@ -13,9 +13,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ForecastGridService {
-  @io.swagger.v3.oas.annotations.media.Schema(requiredProperties={"month","available","generatedAt","moneyIn","moneyOut","opening","closing","openingSource","openingNote"})
+  @io.swagger.v3.oas.annotations.media.Schema(requiredProperties={"month","available","generatedAt","moneyIn","moneyOut","staffingExpenses","opening","closing","openingSource","openingNote"})
   public record Month(String month,boolean available,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"},format="date-time") Instant generatedAt,
-      @io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String moneyIn,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String moneyOut,
+      @io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String moneyIn,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String moneyOut,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String staffingExpenses,
       @io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String opening,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String closing,
       @io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String openingSource,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String openingNote) {}
   @io.swagger.v3.oas.annotations.media.Schema(requiredProperties={"direction","contact","amounts"})
@@ -38,8 +38,17 @@ public class ForecastGridService {
     var all=new ArrayList<>(store.lines(id,chainStart,end));
     for(var entry:oldLines.entrySet()) if(!timestamps.containsKey(entry.getKey())) for(var c:entry.getValue()) if("DOCUMENT".equals(c.source())) all.add(new ForecastGridRepository.Line(c.bucket(),c.sourceId(),c.splitSequence(),c.direction(),c.label()==null?"Unknown contact":c.label(),c.amount()));
     var available=new HashSet<>(timestamps.keySet());available.addAll(old.keySet());
-    var balances=ForecastGridBalances.calculate(chainStart,end,available,all,anchors);
-    List<Month> months=new ArrayList<>(); for(int i=0;i<count;i++){var m=start.plusMonths(i);var ts=timestamps.get(m);var prior=old.get(m);var b=balances.get(m);var anchor=records.get(m);months.add(new Month(m.toString(),ts!=null||prior!=null,ts!=null?ts:prior==null?null:prior.generatedAt(),decimal(b.moneyIn()),decimal(b.moneyOut()),decimal(b.opening()),decimal(b.closing()),anchor!=null?"ENTERED":b.opening()!=null?"CARRIED_FORWARD":null,anchor==null?null:anchor.source()));}
+    var staff=assumptions.staffing(id,false);Map<YearMonth,BigDecimal> staffingTotals=new HashMap<>();
+    for(var month=chainStart;!month.isAfter(end);month=month.plusMonths(1)) {
+      BigDecimal total=BigDecimal.ZERO.setScale(2);
+      for(var item:staff) if(item.active()&&ForecastCalculator.active(month,item.startMonth(),item.endMonth()))
+        total=total.add(item.paymentFrequency()==null?item.monthlyCost():StaffingSchedule.monthly(item.hourlyRate(),item.weeklyHours(),item.paymentFrequency(),item.firstPayday(),item.employmentStart(),item.employmentEnd(),month));
+      staffingTotals.put(month,total);
+    }
+    var balanceLines=new ArrayList<>(all);
+    staffingTotals.forEach((month,total)->balanceLines.add(new ForecastGridRepository.Line(month,null,null,"OUT","Staffing Expenses",total)));
+    var balances=ForecastGridBalances.calculate(chainStart,end,available,balanceLines,anchors);
+    List<Month> months=new ArrayList<>(); for(int i=0;i<count;i++){var m=start.plusMonths(i);var ts=timestamps.get(m);var prior=old.get(m);var b=balances.get(m);var anchor=records.get(m);months.add(new Month(m.toString(),ts!=null||prior!=null,ts!=null?ts:prior==null?null:prior.generatedAt(),decimal(b.moneyIn()),decimal(b.moneyOut()),b.moneyOut()==null?null:decimal(staffingTotals.get(m)),decimal(b.opening()),decimal(b.closing()),anchor!=null?"ENTERED":b.opening()!=null?"CARRIED_FORWARD":null,anchor==null?null:anchor.source()));}
     Map<String,Map<String,BigDecimal>> groups=new TreeMap<>();
     for(var line:all) if(!line.month().isBefore(start)){String key=line.direction()+"\u0000"+line.contact();groups.computeIfAbsent(key,k->new TreeMap<>()).merge(line.month().toString(),line.amount(),BigDecimal::add);}
     List<Row> rows=new ArrayList<>();groups.forEach((key,amounts)->{var parts=key.split("\u0000",2);Map<String,String> values=new TreeMap<>();amounts.forEach((m,amount)->values.put(m,amount.toPlainString()));rows.add(new Row(parts[0],parts[1],values));});

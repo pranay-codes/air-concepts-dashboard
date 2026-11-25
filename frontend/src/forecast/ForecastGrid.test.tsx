@@ -30,6 +30,7 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
       generatedAt: null,
       moneyIn: i > 0 ? "125.00" : null,
       moneyOut: i > 0 ? "25.00" : null,
+      staffingExpenses: i > 0 ? "300.00" : null,
       opening: i > 0 ? "100.00" : null,
       closing: i === 2 ? "-10.00" : i > 0 ? "200.00" : null,
       openingSource: i > 0 ? "CARRIED_FORWARD" : null,
@@ -64,6 +65,9 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
   expect(screen.getAllByText(/125\.00/).length).toBeGreaterThan(0);
   expect(screen.getByText("Total Money In")).toBeInTheDocument();
   expect(screen.getByText("Total Money Out")).toBeInTheDocument();
+  const staffing = screen.getByRole("row", { name: /Staffing Expenses/ });
+  expect(staffing).toHaveTextContent("300.00");
+  expect(staffing.nextElementSibling).toHaveTextContent("Total Money Out");
   expect(screen.getByText("Opening balance")).toBeInTheDocument();
   expect(screen.getByText("Closing balance")).toBeInTheDocument();
   expect(screen.getByText("-10.00")).toHaveClass("amount-negative");

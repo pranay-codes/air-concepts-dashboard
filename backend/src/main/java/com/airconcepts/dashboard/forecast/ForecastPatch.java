@@ -1,6 +1,8 @@
 package com.airconcepts.dashboard.forecast;
 import java.math.BigDecimal;
 import java.time.YearMonth;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 /** Explicit presence preserves omitted values; only the approved fields can be patched. */
 final class ForecastPatch {
@@ -18,6 +20,7 @@ final class ForecastPatch {
     catch(NumberFormatException e){throw ForecastValidation.invalid(key,"Enter a decimal cash amount.");}
   }
   YearMonth month(String key,YearMonth old){if(!values.containsKey(key))return old;String value=text(key,null);return value==null?null:ForecastMonths.parse(value);}
+  LocalDate date(String key,LocalDate old){if(!values.containsKey(key))return old;String value=text(key,null);try{return value==null?null:LocalDate.parse(value);}catch(DateTimeParseException e){throw ForecastValidation.invalid(key,"Enter a valid date.");}}
   Integer day(String key,Integer old){if(!values.containsKey(key))return old;Object value=values.get(key);if(value==null)return null;if(value instanceof Integer day)return day;throw ForecastValidation.invalid(key,"Enter a whole day from 1 to 31.");}
   boolean active(boolean old){if(!values.containsKey("active"))return old;Object value=values.get("active");if(value instanceof Boolean active)return active;throw ForecastValidation.invalid("active","Choose active or inactive.");}
 }

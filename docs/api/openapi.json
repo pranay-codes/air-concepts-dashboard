@@ -3981,6 +3981,29 @@
           },
           "active" : {
             "type" : "boolean"
+          },
+          "hourlyRate" : {
+            "type" : [ "string", "null" ],
+            "format" : "decimal"
+          },
+          "weeklyHours" : {
+            "type" : [ "string", "null" ],
+            "format" : "decimal"
+          },
+          "paymentFrequency" : {
+            "type" : [ "string", "null" ]
+          },
+          "firstPayday" : {
+            "type" : [ "string", "null" ],
+            "format" : "date"
+          },
+          "employmentStart" : {
+            "type" : [ "string", "null" ],
+            "format" : "date"
+          },
+          "employmentEnd" : {
+            "type" : [ "string", "null" ],
+            "format" : "date"
           }
         }
       },
@@ -4010,6 +4033,29 @@
           },
           "active" : {
             "type" : "boolean"
+          },
+          "hourlyRate" : {
+            "type" : [ "string", "null" ],
+            "format" : "decimal"
+          },
+          "weeklyHours" : {
+            "type" : [ "string", "null" ],
+            "format" : "decimal"
+          },
+          "paymentFrequency" : {
+            "type" : [ "string", "null" ]
+          },
+          "firstPayday" : {
+            "type" : [ "string", "null" ],
+            "format" : "date"
+          },
+          "employmentStart" : {
+            "type" : [ "string", "null" ],
+            "format" : "date"
+          },
+          "employmentEnd" : {
+            "type" : [ "string", "null" ],
+            "format" : "date"
           }
         }
       },
@@ -5022,6 +5068,9 @@
           "moneyOut" : {
             "type" : [ "string", "null" ]
           },
+          "staffingExpenses" : {
+            "type" : [ "string", "null" ]
+          },
           "opening" : {
             "type" : [ "string", "null" ]
           },
@@ -5035,7 +5084,7 @@
             "type" : [ "string", "null" ]
           }
         },
-        "required" : [ "available", "closing", "generatedAt", "moneyIn", "moneyOut", "month", "opening", "openingNote", "openingSource" ]
+        "required" : [ "available", "closing", "generatedAt", "moneyIn", "moneyOut", "month", "opening", "openingNote", "openingSource", "staffingExpenses" ]
       },
       "Row" : {
         "type" : "object",

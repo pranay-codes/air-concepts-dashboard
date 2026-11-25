@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import java.math.BigDecimal;
 import java.time.YearMonth;
+import java.time.LocalDate;
 import java.util.*;
 import org.springframework.http.*;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -21,8 +22,14 @@ public class ForecastAssumptionController {
   public record ManualRequest(String direction,String category,String description,@io.swagger.v3.oas.annotations.media.Schema(type="string",format="decimal") BigDecimal amount,String recurrence,Integer dayOfMonth,YearMonth startMonth,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) YearMonth endMonth,Boolean active) {
     ManualItem item(UUID id){return new ManualItem(id,direction,category,description,amount,recurrence,dayOfMonth,startMonth,endMonth,active==null||active);}
   }
-  public record StaffingRequest(String label,@io.swagger.v3.oas.annotations.media.Schema(type="string",format="decimal") BigDecimal monthlyCost,Integer payDayOfMonth,YearMonth startMonth,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) YearMonth endMonth,Boolean active) {
-    StaffingLine item(UUID id){return new StaffingLine(id,label,monthlyCost,payDayOfMonth,startMonth,endMonth,active==null||active);}
+  public record StaffingRequest(String label,@io.swagger.v3.oas.annotations.media.Schema(type="string",format="decimal") BigDecimal monthlyCost,Integer payDayOfMonth,YearMonth startMonth,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) YearMonth endMonth,Boolean active,
+      @io.swagger.v3.oas.annotations.media.Schema(types={"string","null"},format="decimal") BigDecimal hourlyRate,
+      @io.swagger.v3.oas.annotations.media.Schema(types={"string","null"},format="decimal") BigDecimal weeklyHours,
+      @io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String paymentFrequency,
+      @io.swagger.v3.oas.annotations.media.Schema(types={"string","null"},format="date") LocalDate firstPayday,
+      @io.swagger.v3.oas.annotations.media.Schema(types={"string","null"},format="date") LocalDate employmentStart,
+      @io.swagger.v3.oas.annotations.media.Schema(types={"string","null"},format="date") LocalDate employmentEnd) {
+    StaffingLine item(UUID id){return new StaffingLine(id,label,monthlyCost,payDayOfMonth,startMonth,endMonth,active==null||active,hourlyRate,weeklyHours,paymentFrequency,firstPayday,employmentStart,employmentEnd);}
   }
   private final CurrentUserResolver users;private final ForecastPeriodService periods;private final ManualItemService manual;
   private final StaffingService staff;private final ForecastAccess access;private final ForecastAssumptionRepository repository;

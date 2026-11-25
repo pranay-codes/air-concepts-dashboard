@@ -1347,6 +1347,17 @@ export interface components {
             startMonth?: string;
             endMonth?: string | null;
             active?: boolean;
+            /** Format: decimal */
+            hourlyRate?: string | null;
+            /** Format: decimal */
+            weeklyHours?: string | null;
+            paymentFrequency?: string | null;
+            /** Format: date */
+            firstPayday?: string | null;
+            /** Format: date */
+            employmentStart?: string | null;
+            /** Format: date */
+            employmentEnd?: string | null;
         };
         StaffingLine: {
             /** Format: uuid */
@@ -1359,6 +1370,17 @@ export interface components {
             startMonth?: string;
             endMonth?: string;
             active?: boolean;
+            /** Format: decimal */
+            hourlyRate?: string | null;
+            /** Format: decimal */
+            weeklyHours?: string | null;
+            paymentFrequency?: string | null;
+            /** Format: date */
+            firstPayday?: string | null;
+            /** Format: date */
+            employmentStart?: string | null;
+            /** Format: date */
+            employmentEnd?: string | null;
         };
         GenerationResult: {
             month?: string;
@@ -1734,6 +1756,7 @@ export interface components {
             generatedAt: string | null;
             moneyIn: string | null;
             moneyOut: string | null;
+            staffingExpenses: string | null;
             opening: string | null;
             closing: string | null;
             openingSource: string | null;
