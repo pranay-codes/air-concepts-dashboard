@@ -110,6 +110,8 @@ export async function forecastBoundary(page: Page) {
             {
               direction: "IN",
               contact: "Forecast customer",
+              documentId: INVOICE_A,
+              note: null,
               amounts: { [months[1]!.month]: "115.00" },
             },
           ],
