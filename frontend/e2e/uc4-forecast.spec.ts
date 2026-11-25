@@ -173,18 +173,20 @@ test("FR-UC04-03_13 manual and staffing edits, deactivation and combined view", 
     await page
       .getByLabel(kind === "manual" ? "Description" : "Staffing label", { exact: true })
       .fill(`Synthetic ${kind}`);
-    await page
-      .getByLabel(kind === "manual" ? "Cash amount (NZD)" : "Monthly cash cost (NZD)", {
-        exact: true,
-      })
-      .fill("100.00");
+    if (kind === "manual") {
+      await page.getByLabel("Cash amount (NZD)", { exact: true }).fill("100.00");
+    } else {
+      await page.getByLabel("Hourly rate (NZD)", { exact: true }).fill("100.00");
+      await page.getByLabel("Standard hours per week", { exact: true }).fill("40");
+      await page.getByLabel("First scheduled payday", { exact: true }).fill("2026-11-06");
+    }
     await page.getByRole("button", { name: "Save item", exact: true }).click();
     await expect(
       page.getByRole("heading", { name: `Synthetic ${kind}`, exact: true }),
     ).toBeVisible();
     await page.getByRole("button", { name: `Edit Synthetic ${kind}`, exact: true }).click();
     await page
-      .getByLabel(kind === "manual" ? "Cash amount (NZD)" : "Monthly cash cost (NZD)", {
+      .getByLabel(kind === "manual" ? "Cash amount (NZD)" : "Hourly rate (NZD)", {
         exact: true,
       })
       .fill("125.00");
