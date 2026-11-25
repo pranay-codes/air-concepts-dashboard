@@ -659,6 +659,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/work-items/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the Director overview of work, cycle times and invoices */
+        get: operations["getWorkItemOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/work-items/my-work": {
         parameters: {
             query?: never;
@@ -1502,6 +1519,88 @@ export interface components {
             total?: number;
             /** Format: int64 */
             totalPages?: number;
+        };
+        Overview: {
+            /** Format: date-time */
+            generatedAt?: string;
+            /** Format: date */
+            from?: string;
+            /** Format: date */
+            to?: string;
+            stages?: components["schemas"]["OverviewStageTotal"][];
+            closed?: components["schemas"]["OverviewClosedTotal"][];
+            openItems?: components["schemas"]["OverviewItem"][];
+            openTruncated?: boolean;
+            uninvoiced?: components["schemas"]["OverviewItem"][];
+            uninvoicedTruncated?: boolean;
+            unsent?: components["schemas"]["OverviewItem"][];
+            unsentTruncated?: boolean;
+            cycleTimes?: components["schemas"]["OverviewCycleTime"][];
+            /** Format: int32 */
+            completedTotal?: number;
+            /** Format: int32 */
+            completedAlreadyWhenFirstSeen?: number;
+            completedByOwner?: components["schemas"]["OverviewPersonCount"][];
+            completedByTechnician?: components["schemas"]["OverviewPersonCount"][];
+            invoicesSent?: components["schemas"]["OverviewInvoicesSent"];
+        };
+        OverviewClosedTotal: {
+            reason?: string;
+            /** Format: int32 */
+            count?: number;
+        };
+        OverviewCycleTime: {
+            /** @enum {string} */
+            step?: "QUOTE_TO_ACCEPTED" | "ACCEPTED_TO_SCHEDULED" | "QUOTE_TO_SCHEDULED" | "SCHEDULED_TO_COMPLETED" | "COMPLETED_TO_SENT";
+            /** Format: double */
+            medianDays?: number;
+            /** Format: double */
+            averageDays?: number;
+            /** Format: int32 */
+            sampleSize?: number;
+            /** Format: int32 */
+            excludedBackfilled?: number;
+            /** Format: int32 */
+            excludedNoStart?: number;
+            /** Format: int32 */
+            excludedAlreadyComplete?: number;
+            /** Format: int32 */
+            excludedOutOfOrder?: number;
+        };
+        OverviewInvoicesSent: {
+            /** Format: int32 */
+            count?: number;
+            totals?: components["schemas"]["OverviewMoney"][];
+            items?: components["schemas"]["OverviewItem"][];
+            truncated?: boolean;
+            /** Format: int32 */
+            paidNotSeenSent?: number;
+        };
+        OverviewItem: {
+            summary?: components["schemas"]["Summary"];
+            technician?: string;
+            invoiceNumber?: string;
+            invoiceTotal?: string;
+            /** Format: date-time */
+            invoiceSentSeenAt?: string;
+        };
+        OverviewMoney: {
+            currency?: string;
+            amount?: string;
+        };
+        OverviewPersonCount: {
+            /** Format: uuid */
+            id?: string;
+            name?: string;
+            /** Format: int32 */
+            count?: number;
+        };
+        OverviewStageTotal: {
+            /** @enum {string} */
+            stage?: "QUOTED" | "TO_SCHEDULE" | "SCHEDULED" | "WORK_IN_PROGRESS" | "JOB_COMPLETED" | "INVOICE_CREATED" | "INVOICED" | "CLOSED";
+            /** Format: int32 */
+            count?: number;
+            totals?: components["schemas"]["OverviewMoney"][];
         };
         MyWork: {
             needsAction?: components["schemas"]["Summary"][];
@@ -3155,6 +3254,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkItemPage"];
+                };
+            };
+        };
+    };
+    getWorkItemOverview: {
+        parameters: {
+            query?: {
+                entityId?: string;
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Overview"];
                 };
             };
         };

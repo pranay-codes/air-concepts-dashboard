@@ -2149,6 +2149,53 @@
         } ]
       }
     },
+    "/api/v1/work-items/overview" : {
+      "get" : {
+        "tags" : [ "work-item-overview-controller" ],
+        "summary" : "Read the Director overview of work, cycle times and invoices",
+        "operationId" : "getWorkItemOverview",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "from",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        }, {
+          "name" : "to",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Overview"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
     "/api/v1/work-items/my-work" : {
       "get" : {
         "tags" : [ "my-work-controller" ],
@@ -4382,6 +4429,235 @@
           "totalPages" : {
             "type" : "integer",
             "format" : "int64"
+          }
+        }
+      },
+      "Overview" : {
+        "type" : "object",
+        "properties" : {
+          "generatedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "from" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "to" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "stages" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/OverviewStageTotal"
+            }
+          },
+          "closed" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/OverviewClosedTotal"
+            }
+          },
+          "openItems" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/OverviewItem"
+            }
+          },
+          "openTruncated" : {
+            "type" : "boolean"
+          },
+          "uninvoiced" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/OverviewItem"
+            }
+          },
+          "uninvoicedTruncated" : {
+            "type" : "boolean"
+          },
+          "unsent" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/OverviewItem"
+            }
+          },
+          "unsentTruncated" : {
+            "type" : "boolean"
+          },
+          "cycleTimes" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/OverviewCycleTime"
+            }
+          },
+          "completedTotal" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "completedAlreadyWhenFirstSeen" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "completedByOwner" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/OverviewPersonCount"
+            }
+          },
+          "completedByTechnician" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/OverviewPersonCount"
+            }
+          },
+          "invoicesSent" : {
+            "$ref" : "#/components/schemas/OverviewInvoicesSent"
+          }
+        }
+      },
+      "OverviewClosedTotal" : {
+        "type" : "object",
+        "properties" : {
+          "reason" : {
+            "type" : "string"
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "OverviewCycleTime" : {
+        "type" : "object",
+        "properties" : {
+          "step" : {
+            "type" : "string",
+            "enum" : [ "QUOTE_TO_ACCEPTED", "ACCEPTED_TO_SCHEDULED", "QUOTE_TO_SCHEDULED", "SCHEDULED_TO_COMPLETED", "COMPLETED_TO_SENT" ]
+          },
+          "medianDays" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "averageDays" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "sampleSize" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "excludedBackfilled" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "excludedNoStart" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "excludedAlreadyComplete" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "excludedOutOfOrder" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "OverviewInvoicesSent" : {
+        "type" : "object",
+        "properties" : {
+          "count" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "totals" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/OverviewMoney"
+            }
+          },
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/OverviewItem"
+            }
+          },
+          "truncated" : {
+            "type" : "boolean"
+          },
+          "paidNotSeenSent" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "OverviewItem" : {
+        "type" : "object",
+        "properties" : {
+          "summary" : {
+            "$ref" : "#/components/schemas/Summary"
+          },
+          "technician" : {
+            "type" : "string"
+          },
+          "invoiceNumber" : {
+            "type" : "string"
+          },
+          "invoiceTotal" : {
+            "type" : "string"
+          },
+          "invoiceSentSeenAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
+      "OverviewMoney" : {
+        "type" : "object",
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "amount" : {
+            "type" : "string"
+          }
+        }
+      },
+      "OverviewPersonCount" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "OverviewStageTotal" : {
+        "type" : "object",
+        "properties" : {
+          "stage" : {
+            "type" : "string",
+            "enum" : [ "QUOTED", "TO_SCHEDULE", "SCHEDULED", "WORK_IN_PROGRESS", "JOB_COMPLETED", "INVOICE_CREATED", "INVOICED", "CLOSED" ]
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "totals" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/OverviewMoney"
+            }
           }
         }
       },
