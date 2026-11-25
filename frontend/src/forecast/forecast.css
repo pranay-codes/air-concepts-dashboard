@@ -576,7 +576,7 @@
 }
 .forecast-grid-table .forecast-grid-summary > th,
 .forecast-grid-table .forecast-grid-summary > td {
-  background: var(--workspace, #f5f6f8);
+  background: var(--selected, #e7f2f5);
   border-top: 2px solid var(--boundary, #7b8790);
   font-weight: 600;
 }
