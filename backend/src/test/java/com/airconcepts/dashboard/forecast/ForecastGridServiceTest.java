@@ -14,9 +14,23 @@ import java.util.*;
 import org.junit.jupiter.api.Test;
 
 class ForecastGridServiceTest {
+  @Test void frUc04_20_gridNotesBelongToIndividualDocuments() {
+    var access=mock(ForecastAccess.class); var store=mock(ForecastGridRepository.class);
+    var notes=mock(ForecastNoteRepository.class); var entity=UUID.randomUUID(); var first=UUID.randomUUID(); var second=UUID.randomUUID();
+    var service=new ForecastGridService(access,mock(ForecastDatasetLoader.class),store,mock(ForecastMonthRepository.class),new ForecastCalendar(4,Clock.systemUTC()),mock(ForecastAssumptionRepository.class),notes);
+    var user=new CurrentUser(UUID.randomUUID().toString(),Role.DIRECTOR); var month=YearMonth.of(2026,11);
+    when(store.lines(entity,month,month)).thenReturn(List.of(
+      new ForecastGridRepository.Line(month,first,null,"IN","Customer",new BigDecimal("12.00"),"INV-1"),
+      new ForecastGridRepository.Line(month,second,null,"IN","Customer",new BigDecimal("9.00"),"INV-2")));
+    when(notes.notes(entity)).thenReturn(List.of(new ForecastNoteRepository.TransactionNote("DOCUMENT",first,"Call Monday",Instant.EPOCH)));
+    var rows=service.grid(user,entity,"2026-11",1).rows();
+    assertThat(rows).filteredOn(r->r.documentId().equals(first)).singleElement().satisfies(r->assertThat(r.note()).isEqualTo("Call Monday"));
+    assertThat(rows).filteredOn(r->r.documentId().equals(second)).singleElement().satisfies(r->assertThat(r.note()).isNull());
+    verify(notes).notes(entity); verify(access).requireRead(user,entity);
+  }
   @Test void frUc04_03_staffingIsIncludedOnceAndCarriesIntoNextOpening() {
     var access=mock(ForecastAccess.class);var loader=mock(ForecastDatasetLoader.class);var store=mock(ForecastGridRepository.class);var legacy=mock(ForecastMonthRepository.class);var assumptions=mock(ForecastAssumptionRepository.class);
-    var service=new ForecastGridService(access,loader,store,legacy,new ForecastCalendar(4,Clock.systemUTC()),assumptions);
+    var service=new ForecastGridService(access,loader,store,legacy,new ForecastCalendar(4,Clock.systemUTC()),assumptions,mock(ForecastNoteRepository.class));
     var entity=UUID.randomUUID();var user=new CurrentUser(UUID.randomUUID().toString(),Role.DIRECTOR);var jan=YearMonth.of(2026,1);var feb=jan.plusMonths(1);
     when(assumptions.openingAnchors(entity)).thenReturn(Map.of(jan,new ForecastAssumptionRepository.OpeningBalance(new BigDecimal("10000.00"),"Bank")));
     when(store.months(entity,jan,feb)).thenReturn(Map.of(jan,Instant.EPOCH,feb,Instant.EPOCH));
@@ -31,7 +45,7 @@ class ForecastGridServiceTest {
   }
   @Test void frUc04_05_gridCarriesBalanceFromBeforeTheVisibleWindow() {
     var access=mock(ForecastAccess.class);var loader=mock(ForecastDatasetLoader.class);var store=mock(ForecastGridRepository.class);var legacy=mock(ForecastMonthRepository.class);var assumptions=mock(ForecastAssumptionRepository.class);
-    var calendar=new ForecastCalendar(4,Clock.systemUTC());var service=new ForecastGridService(access,loader,store,legacy,calendar,assumptions);
+    var calendar=new ForecastCalendar(4,Clock.systemUTC());var service=new ForecastGridService(access,loader,store,legacy,calendar,assumptions,mock(ForecastNoteRepository.class));
     var id=UUID.randomUUID();var user=new CurrentUser(UUID.randomUUID().toString(),Role.DIRECTOR);var nov=YearMonth.of(2026,11);var dec=nov.plusMonths(1);var end=dec.plusMonths(7);
     when(assumptions.openingAnchors(id)).thenReturn(Map.of(nov,new ForecastAssumptionRepository.OpeningBalance(new BigDecimal("100.00"),"Statement")));
     when(store.months(id,nov,end)).thenReturn(Map.of(nov,Instant.EPOCH,dec,Instant.EPOCH));
@@ -43,7 +57,7 @@ class ForecastGridServiceTest {
   }
   @Test void frUc04_changedProtectedUnsplitDocumentIsNotCountedAgainAsSplits() {
     var access=mock(ForecastAccess.class);var loader=mock(ForecastDatasetLoader.class);var store=mock(ForecastGridRepository.class);var legacy=mock(ForecastMonthRepository.class);
-    var calendar=new ForecastCalendar(4,Clock.fixed(Instant.parse("2026-11-10T00:00:00Z"),ZoneOffset.UTC));var service=new ForecastGridService(access,loader,store,legacy,calendar,mock(ForecastAssumptionRepository.class));
+    var calendar=new ForecastCalendar(4,Clock.fixed(Instant.parse("2026-11-10T00:00:00Z"),ZoneOffset.UTC));var service=new ForecastGridService(access,loader,store,legacy,calendar,mock(ForecastAssumptionRepository.class),mock(ForecastNoteRepository.class));
     var id=UUID.randomUUID();var doc=UUID.randomUUID();var entity=new Entity(id,"Synthetic");var user=new CurrentUser(UUID.randomUUID().toString(),Role.DIRECTOR);var now=YearMonth.of(2026,11);
     when(access.requireWrite(user,id)).thenReturn(entity);when(store.months(id,now,now.plusMonths(6))).thenReturn(Map.of(now,Instant.EPOCH));
     when(store.lines(id,YearMonth.of(1,1),now)).thenReturn(List.of(new ForecastGridRepository.Line(now,doc,null,"IN","A",new BigDecimal("100.00"))));
@@ -54,7 +68,7 @@ class ForecastGridServiceTest {
   }
   @Test void frUc04_firstGenerationCreatesCurrentMonthAndSixFutureMonths() {
     var access=mock(ForecastAccess.class);var loader=mock(ForecastDatasetLoader.class);var store=mock(ForecastGridRepository.class);var legacy=mock(ForecastMonthRepository.class);
-    var calendar=new ForecastCalendar(4,Clock.fixed(Instant.parse("2026-11-10T00:00:00Z"),ZoneOffset.UTC));var service=new ForecastGridService(access,loader,store,legacy,calendar,mock(ForecastAssumptionRepository.class));
+    var calendar=new ForecastCalendar(4,Clock.fixed(Instant.parse("2026-11-10T00:00:00Z"),ZoneOffset.UTC));var service=new ForecastGridService(access,loader,store,legacy,calendar,mock(ForecastAssumptionRepository.class),mock(ForecastNoteRepository.class));
     var id=UUID.randomUUID();var entity=new Entity(id,"Synthetic");var user=new CurrentUser(UUID.randomUUID().toString(),Role.FINANCIAL_ADMIN);var now=YearMonth.of(2026,11);
     when(access.requireWrite(user,id)).thenReturn(entity);
     when(loader.load(entity,now)).thenReturn(new ForecastDataset(id,"Synthetic",now,LocalDate.of(2026,11,10),null,null,List.of(),List.of(),List.of(),new ForecastDataset.SyncInfo(Instant.EPOCH,"SUCCEEDED",false)));
@@ -65,7 +79,7 @@ class ForecastGridServiceTest {
   @Test void frUc04_gridGroupsInvoicesAndBillsAndMarksMissingMonthsUnavailable() {
     var access=mock(ForecastAccess.class); var loader=mock(ForecastDatasetLoader.class); var store=mock(ForecastGridRepository.class); var legacy=mock(ForecastMonthRepository.class);
     var calendar=new ForecastCalendar(4,Clock.fixed(Instant.parse("2026-11-10T00:00:00Z"),ZoneOffset.UTC));
-    var service=new ForecastGridService(access,loader,store,legacy,calendar,mock(ForecastAssumptionRepository.class));var id=UUID.randomUUID();var user=new CurrentUser(UUID.randomUUID().toString(),Role.DIRECTOR);var nov=YearMonth.of(2026,11);
+    var service=new ForecastGridService(access,loader,store,legacy,calendar,mock(ForecastAssumptionRepository.class),mock(ForecastNoteRepository.class));var id=UUID.randomUUID();var user=new CurrentUser(UUID.randomUUID().toString(),Role.DIRECTOR);var nov=YearMonth.of(2026,11);
     when(store.months(id,nov,nov.plusMonths(7))).thenReturn(Map.of(nov,Instant.EPOCH));
     when(store.lines(id,nov,nov.plusMonths(7))).thenReturn(List.of(
       new ForecastGridRepository.Line(nov,UUID.randomUUID(),null,"IN","Customer",new BigDecimal("12.30")),
@@ -79,7 +93,7 @@ class ForecastGridServiceTest {
   }
   @Test void frUc04_20_gridShowsEachCompanyAndInvoiceNumber() {
     var access=mock(ForecastAccess.class); var store=mock(ForecastGridRepository.class); var legacy=mock(ForecastMonthRepository.class);
-    var service=new ForecastGridService(access,mock(ForecastDatasetLoader.class),store,legacy,new ForecastCalendar(4,Clock.systemUTC()),mock(ForecastAssumptionRepository.class));
+    var service=new ForecastGridService(access,mock(ForecastDatasetLoader.class),store,legacy,new ForecastCalendar(4,Clock.systemUTC()),mock(ForecastAssumptionRepository.class),mock(ForecastNoteRepository.class));
     var id=UUID.randomUUID(); var user=new CurrentUser(UUID.randomUUID().toString(),Role.DIRECTOR); var month=YearMonth.of(2026,11);
     when(store.months(id,month,month)).thenReturn(Map.of(month,Instant.EPOCH));
     when(store.lines(id,month,month)).thenReturn(List.of(
@@ -95,7 +109,7 @@ class ForecastGridServiceTest {
     var access=mock(ForecastAccess.class); var loader=mock(ForecastDatasetLoader.class);
     var store=mock(ForecastGridRepository.class); var legacy=mock(ForecastMonthRepository.class);
     var calendar=new ForecastCalendar(4,Clock.fixed(Instant.parse("2026-11-10T00:00:00Z"),ZoneOffset.UTC));
-    var service=new ForecastGridService(access,loader,store,legacy,calendar,mock(ForecastAssumptionRepository.class));
+    var service=new ForecastGridService(access,loader,store,legacy,calendar,mock(ForecastAssumptionRepository.class),mock(ForecastNoteRepository.class));
     var id=UUID.randomUUID(); var entity=new Entity(id,"Synthetic");
     var user=new CurrentUser(UUID.randomUUID().toString(),Role.DIRECTOR); var current=YearMonth.of(2026,11);
     when(access.requireWrite(user,id)).thenReturn(entity);

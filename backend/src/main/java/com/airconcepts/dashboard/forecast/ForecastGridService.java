@@ -18,15 +18,15 @@ public class ForecastGridService {
       @io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String moneyIn,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String moneyOut,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String staffingExpenses,
       @io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String opening,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String closing,
       @io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String openingSource,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String openingNote) {}
-  @io.swagger.v3.oas.annotations.media.Schema(requiredProperties={"direction","contact","amounts"})
-  public record Row(@io.swagger.v3.oas.annotations.media.Schema(allowableValues={"IN","OUT"}) String direction,String contact,Map<String,String> amounts) {}
+  @io.swagger.v3.oas.annotations.media.Schema(requiredProperties={"direction","contact","amounts","documentId","note"})
+  public record Row(@io.swagger.v3.oas.annotations.media.Schema(allowableValues={"IN","OUT"}) String direction,String contact,Map<String,String> amounts,UUID documentId,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String note) {}
   @io.swagger.v3.oas.annotations.media.Schema(requiredProperties={"entityId","months","rows"})
   public record Grid(UUID entityId,List<Month> months,List<Row> rows) {}
   @io.swagger.v3.oas.annotations.media.Schema(requiredProperties={"created","refreshed","preserved","omittedCurrentItems","changedProtectedSchedules"})
   public record Generation(List<String> created,List<String> refreshed,List<String> preserved,int omittedCurrentItems,int changedProtectedSchedules) {}
   private final ForecastAccess access; private final ForecastDatasetLoader loader; private final ForecastGridRepository store;
-  private final ForecastMonthRepository legacy; private final ForecastCalendar calendar; private final ForecastAssumptionRepository assumptions;
-  public ForecastGridService(ForecastAccess access,ForecastDatasetLoader loader,ForecastGridRepository store,ForecastMonthRepository legacy,ForecastCalendar calendar,ForecastAssumptionRepository assumptions){this.access=access;this.loader=loader;this.store=store;this.legacy=legacy;this.calendar=calendar;this.assumptions=assumptions;}
+  private final ForecastMonthRepository legacy; private final ForecastCalendar calendar; private final ForecastAssumptionRepository assumptions; private final ForecastNoteRepository notes;
+  public ForecastGridService(ForecastAccess access,ForecastDatasetLoader loader,ForecastGridRepository store,ForecastMonthRepository legacy,ForecastCalendar calendar,ForecastAssumptionRepository assumptions,ForecastNoteRepository notes){this.access=access;this.loader=loader;this.store=store;this.legacy=legacy;this.calendar=calendar;this.assumptions=assumptions;this.notes=notes;}
 
   @Transactional(readOnly=true,isolation=org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
   public Grid grid(CurrentUser user,UUID id,String startValue,int count){
@@ -55,12 +55,14 @@ public class ForecastGridService {
       var key=new RowKey(line.direction(),line.contact(),line.number(),line.documentId());
       groups.computeIfAbsent(key,k->new TreeMap<>()).merge(line.month().toString(),line.amount(),BigDecimal::add);
     }
+    Map<UUID,String> documentNotes=new HashMap<>();
+    for(var note:notes.notes(id)) if("DOCUMENT".equals(note.source())) documentNotes.put(note.sourceId(),note.note());
     List<Row> rows=new ArrayList<>();
     groups.entrySet().stream().sorted(Comparator.comparing((Map.Entry<RowKey,Map<String,BigDecimal>> e)->e.getKey().direction())
         .thenComparing(e->e.getKey().contact()).thenComparing(e->Objects.toString(e.getKey().number(),""))
         .thenComparing(e->Objects.toString(e.getKey().documentId(),""))).forEach(entry->{
       var key=entry.getKey();Map<String,String> values=new TreeMap<>();entry.getValue().forEach((m,amount)->values.put(m,amount.toPlainString()));
-      rows.add(new Row(key.direction(),key.contact()+" - "+(key.number()==null||key.number().isBlank()?"Number unavailable":key.number()),values));
+      rows.add(new Row(key.direction(),key.contact()+" - "+(key.number()==null||key.number().isBlank()?"Number unavailable":key.number()),values,key.documentId(),documentNotes.get(key.documentId())));
     });
     return new Grid(id,List.copyOf(months),List.copyOf(rows));
   }

@@ -6,6 +6,7 @@ import { useAction } from "../api/useAction";
 import { Failure, Loading } from "../ui/Feedback";
 import { formatDecimal } from "../ui/format";
 import { decimal } from "./contracts";
+import { TransactionNoteEditor } from "./TransactionNoteEditor";
 import { currentMonth } from "./ForecastHeader";
 import { monthName, signClass } from "./ForecastTable";
 
@@ -52,14 +53,14 @@ export function ForecastGrid(props: {
             aria-label="Previous month"
             onClick={() => setStart((value) => stepMonth(value, -1))}
           >
-            ‹
+            â€¹
           </button>{" "}
           <button
             type="button"
             aria-label="Next month"
             onClick={() => setStart((value) => stepMonth(value, 1))}
           >
-            ›
+            â€º
           </button>
         </div>
         <button
@@ -82,7 +83,7 @@ export function ForecastGrid(props: {
               });
           }}
         >
-          {action.busy ? "Creating forecast…" : "Create forecast"}
+          {action.busy ? "Creating forecastâ€¦" : "Create forecast"}
         </button>
       </div>
       <p className="supporting">
@@ -105,8 +106,8 @@ export function ForecastGrid(props: {
       ) : null}
       {action.error ? <Failure error={action.error} /> : null}
       {resource.error ? <Failure error={resource.error} onRetry={resource.refresh} /> : null}
-      {resource.status === "loading" ? <Loading label="Loading forecast grid…" /> : null}
-      {resource.status === "refreshing" ? <p role="status">Refreshing forecast…</p> : null}
+      {resource.status === "loading" ? <Loading label="Loading forecast gridâ€¦" /> : null}
+      {resource.status === "refreshing" ? <p role="status">Refreshing forecastâ€¦</p> : null}
       {resource.data ? (
         <div
           className="forecast-grid-scroll"
@@ -115,7 +116,7 @@ export function ForecastGrid(props: {
           tabIndex={0}
         >
           <table className="forecast-grid-table">
-            <caption>Cash forecast · NZD</caption>
+            <caption>Cash forecast Â· NZD</caption>
             <thead>
               <tr>
                 <th scope="col" aria-label="Forecast rows" />
@@ -144,7 +145,14 @@ export function ForecastGrid(props: {
                 ))}
               </tr>
               {(["IN", "OUT"] as const).map((direction) => (
-                <FragmentRows key={direction} direction={direction} grid={resource.data!} />
+                <FragmentRows
+                  key={`${props.subject}:${entityId}:${direction}`}
+                  direction={direction}
+                  grid={resource.data!}
+                  api={api}
+                  entityId={entityId}
+                  onAccessDenied={onAccessDenied}
+                />
               ))}
               <tr className="forecast-grid-summary">
                 <th scope="row">Closing balance</th>
@@ -279,10 +287,21 @@ function OpeningCell(props: {
 function FragmentRows({
   direction,
   grid,
+  api,
+  entityId,
+  onAccessDenied,
 }: {
   direction: "IN" | "OUT";
   grid: import("../api/dashboard").ForecastGrid;
+  api: DashboardApi;
+  entityId: string;
+  onAccessDenied(): void;
 }) {
+  const [saves, setSaves] = useState<{
+    base: typeof grid | null;
+    notes: Record<string, string | null>;
+  }>({ base: null, notes: {} });
+  const savedNotes = saves.base === grid ? saves.notes : {};
   const rows = grid.rows.filter((row) => row.direction === direction);
   return (
     <>
@@ -296,16 +315,46 @@ function FragmentRows({
           <td colSpan={9}>No {direction === "IN" ? "invoices" : "bills"} in saved months.</td>
         </tr>
       ) : (
-        rows.map((row, index) => (
-          <tr key={`${row.contact}:${index}`}>
-            <th scope="row">{row.contact}</th>
+        rows.map((row) => (
+          <tr key={`${row.documentId}:${row.contact}`}>
+            <th scope="row">
+              <div className="forecast-grid-item">
+                <span>{row.contact}</span>
+                <TransactionNoteEditor
+                  label={row.contact}
+                  note={
+                    row.documentId in savedNotes ? (savedNotes[row.documentId] ?? null) : row.note
+                  }
+                  onSave={async (text) => {
+                    try {
+                      const result = await api.saveForecastTransactionNote(
+                        entityId,
+                        "DOCUMENT",
+                        row.documentId,
+                        text,
+                      );
+                      setSaves((current) => ({
+                        base: grid,
+                        notes: {
+                          ...(current.base === grid ? current.notes : {}),
+                          [row.documentId]: result.note ?? null,
+                        },
+                      }));
+                    } catch (error) {
+                      if (isAccessFailure(error)) onAccessDenied();
+                      throw error;
+                    }
+                  }}
+                />
+              </div>
+            </th>
             {grid.months.map((month) => (
               <td className="money" key={month.month}>
                 {!month.available
                   ? "\u2014"
                   : row.amounts[month.month]
                     ? formatDecimal(row.amounts[month.month], 2)
-                    : "—"}
+                    : "â€”"}
               </td>
             ))}
           </tr>
@@ -316,7 +365,7 @@ function FragmentRows({
           <th scope="row">Staffing Expenses</th>
           {grid.months.map((month) => (
             <td className="money" key={month.month}>
-              {month.staffingExpenses === null ? "—" : formatDecimal(month.staffingExpenses, 2)}
+              {month.staffingExpenses === null ? "â€”" : formatDecimal(month.staffingExpenses, 2)}
             </td>
           ))}
         </tr>
