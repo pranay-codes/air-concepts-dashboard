@@ -3205,7 +3205,7 @@
             "type" : "integer",
             "format" : "int32",
             "maximum" : 1440,
-            "minimum" : 10
+            "minimum" : 1
           }
         },
         "required" : [ "backfillDays", "enabled", "lateThresholdWorkingDays" ]

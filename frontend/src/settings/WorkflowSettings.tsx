@@ -171,10 +171,10 @@ function WorkflowForm({
     if (
       !/^\d+$/.test(syncInterval) ||
       !Number.isSafeInteger(interval) ||
-      interval < 10 ||
+      interval < 1 ||
       interval > 1440
     ) {
-      setError("Enter a sync interval from 10 to 1440 minutes.");
+      setError("Enter a sync interval from 1 to 1440 minutes.");
       document.getElementById(`${prefix}-sync-interval`)?.focus();
       return;
     }
@@ -240,16 +240,17 @@ function WorkflowForm({
         Enable automatic sync
       </label>
       <label htmlFor={`${prefix}-sync-interval`}>Sync interval in minutes</label>
+      <p>Actual timing depends on sync duration and provider limits.</p>
       <input
         id={`${prefix}-sync-interval`}
         type="number"
-        min="10"
+        min="1"
         max="1440"
         value={syncInterval}
         disabled={action.busy}
-        aria-invalid={error === "Enter a sync interval from 10 to 1440 minutes."}
+        aria-invalid={error === "Enter a sync interval from 1 to 1440 minutes."}
         aria-describedby={
-          error === "Enter a sync interval from 10 to 1440 minutes." ? `${prefix}-error` : undefined
+          error === "Enter a sync interval from 1 to 1440 minutes." ? `${prefix}-error` : undefined
         }
         onChange={(event) => {
           setSyncInterval(event.target.value);

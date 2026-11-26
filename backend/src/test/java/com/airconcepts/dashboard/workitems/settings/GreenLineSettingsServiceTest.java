@@ -48,9 +48,15 @@ class GreenLineSettingsServiceTest {
   }
 
   @Test void glAutoSync01_rejectsAnInvalidInterval() {
-    var invalid = new GreenLineSettingsRepository.Settings(entity, true, owner, manager, 2, 90, true, 9);
+    var invalid = new GreenLineSettingsRepository.Settings(entity, true, owner, manager, 2, 90, true, 0);
     assertThatThrownBy(() -> service.save(director, invalid)).isInstanceOf(ApiFailure.class);
     verify(repository, never()).save(any(), any());
+  }
+
+  @Test void glAutoSync01_acceptsOneMinuteInterval() {
+    var oneMinute = new GreenLineSettingsRepository.Settings(entity, true, owner, manager, 2, 90, true, 1);
+    assertThat(service.save(director, oneMinute).automaticSyncIntervalMinutes()).isEqualTo(1);
+    verify(repository).save(oneMinute, actor);
   }
 
   @Test void gl09_directorMustStillBeActiveAndDirectorInsideTransaction() {

@@ -255,6 +255,8 @@ The first release applies all existing migrations to an empty database. Three of
 
 If you need to look first, run once without `destructive_ack`: the workflow stops at that step after listing the migrations, and nothing has changed in the database.
 
+Migration `20261126040000_gl_sync_one_minute.sql` replaces the automatic-sync interval check to allow one minute. Review its constraint drop and replacement before acknowledging it for a Live release; it does not drop a table or data.
+
 ### 6.3 What to watch
 The job runs, in order: confirm the target is the Live instance, check the image came from Test, copy it to the Live repository and verify the digest, list pending migrations, stop on destructive statements, apply migrations and run the read-only schema tests, record the in-flight release, deploy the backend (waits for health), build and publish the frontend, smoke test (including a 401 for an unauthenticated call), record the release. A failed step stops the run; the host restores the previous backend by itself if the new one is not healthy.
 

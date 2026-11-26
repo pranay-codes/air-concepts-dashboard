@@ -57,6 +57,20 @@ class QuoteMirrorRepositoryTest {
 
   @AfterAll static void stop() { if (postgres != null) postgres.stop(); }
 
+  @Test void glAutoSync01_claimsOneMinuteScheduleOnlyOncePerMinute() {
+    transaction.executeWithoutResult(tx -> {
+      var entity = entity();
+      mapping(entity);
+      jdbc.update("insert into public.green_line_entity_settings(entity_id,enabled,automatic_sync_enabled,automatic_sync_interval_minutes,automatic_sync_next_at) values (?,true,true,1,?)",
+          entity, java.sql.Timestamp.from(NOW.minusSeconds(1)));
+      var repo = new GreenLineSyncRunRepository(jdbc, transaction.getTransactionManager());
+      assertThat(repo.claimDue(NOW)).containsExactly(entity);
+      assertThat(repo.claimDue(NOW.plusSeconds(59))).isEmpty();
+      assertThat(repo.claimDue(NOW.plusSeconds(60))).containsExactly(entity);
+      tx.setRollbackOnly();
+    });
+  }
+
   @Test void glAutoSync01_claimsOnlyDueEnabledEntitiesOnce() {
     transaction.executeWithoutResult(tx -> {
       var due = entity();

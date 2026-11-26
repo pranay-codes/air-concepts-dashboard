@@ -61,12 +61,12 @@ describe("GL workflow settings", () => {
     });
     fireEvent.click(within(form).getByLabelText("Enable automatic sync"));
     fireEvent.change(within(form).getByLabelText("Sync interval in minutes"), {
-      target: { value: "30" },
+      target: { value: "1" },
     });
     fireEvent.submit(form);
     await waitFor(() =>
       expect(saved).toHaveBeenCalledWith(
-        expect.objectContaining({ automaticSyncEnabled: true, automaticSyncIntervalMinutes: 30 }),
+        expect.objectContaining({ automaticSyncEnabled: true, automaticSyncIntervalMinutes: 1 }),
       ),
     );
   });
@@ -93,11 +93,11 @@ describe("GL workflow settings", () => {
       name: `Workflow settings for ${entities[0]!.displayName}`,
     });
     fireEvent.change(within(form).getByLabelText("Sync interval in minutes"), {
-      target: { value: "1" },
+      target: { value: "0" },
     });
     fireEvent.submit(form);
     expect(
-      await within(form).findByText("Enter a sync interval from 10 to 1440 minutes."),
+      await within(form).findByText("Enter a sync interval from 1 to 1440 minutes."),
     ).toBeInTheDocument();
     expect(saved).not.toHaveBeenCalled();
   });

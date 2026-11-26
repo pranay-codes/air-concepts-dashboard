@@ -23,6 +23,9 @@ Keep Service Jobs data current through a server-side schedule that runs when the
 
 ## Confirmed decisions
 
+- The minimum automatic sync interval is one minute. The existing ten-minute default remains unchanged. Human, 26 November 2026.
+- The scheduler checks for due work after each preceding check completes; a sync taking time or several entities can make the actual interval longer than configured. A one-minute setting can consume a provider's daily request budget quickly. Per-run call counts and vWork account limits remain unverified; provider retry deadlines continue to apply.
+
 - The schedule runs server-side even when the dashboard is closed. The configuration is entered in the frontend and stored where the server can read it. Human, 26 November 2026.
 - The human approved the acceptance criteria and authorised a task ID based on this request, without a Notion source. Human, 26 November 2026.
 

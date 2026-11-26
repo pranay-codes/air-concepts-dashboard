@@ -49,8 +49,8 @@ public class GreenLineSettingsService {
         settings.serviceManagerId(), settings.lateThresholdWorkingDays(), settings.backfillDays(),
         settings.automaticSyncEnabled() == null ? before.automaticSyncEnabled() : settings.automaticSyncEnabled(),
         settings.automaticSyncIntervalMinutes() == null ? before.automaticSyncIntervalMinutes() : settings.automaticSyncIntervalMinutes());
-    if (settings.automaticSyncIntervalMinutes() < 10 || settings.automaticSyncIntervalMinutes() > 1440)
-      throw new ApiFailure(HttpStatus.BAD_REQUEST, "INVALID_WORKFLOW_SETTINGS", "Enter an interval from 10 to 1440 minutes.");
+    if (settings.automaticSyncIntervalMinutes() < 1 || settings.automaticSyncIntervalMinutes() > 1440)
+      throw new ApiFailure(HttpStatus.BAD_REQUEST, "INVALID_WORKFLOW_SETTINGS", "Enter an interval from 1 to 1440 minutes.");
     if (!before.equals(settings)) {
       repository.save(settings, actor);
       repository.auditSettings(settings.entityId(), actor, before, settings);
