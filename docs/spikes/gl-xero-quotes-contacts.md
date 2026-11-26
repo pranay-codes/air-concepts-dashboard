@@ -21,3 +21,7 @@ Documentation can inform a read adapter but does not prove account-specific beha
 ## Documentation update, 23 November 2026
 
 Xero's [API efficiency guidance](https://developer.xero.com/documentation/best-practices/api-call-efficiencies/rate-limits/) lists Quotes among endpoints supporting paging. Its [general HTTP guidance](https://developer.xero.com/documentation/api/accounting/requests-and-responses/) describes an older practice of requesting subsequent pages until none are returned, but its current list of endpoints covered by pagination metadata omits Quotes. These sources support using the `page` parameter, but do not explicitly establish a Quotes-specific empty-page termination contract or stable ordering during concurrent changes. Do not treat a short page alone as proof of completeness.
+
+## Decision, 26 November 2026
+
+The user requested removal of the failure on short pages. The adapter now follows Xero's general guidance to request pages until an empty response, including after a short nonempty page. This is a documentation-based integration decision, not confirmation of Quotes-specific termination or stable ordering in the customer's organisation; those remain unverified. Page limits, duplicate detection and other sync checks remain in place.

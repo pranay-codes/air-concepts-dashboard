@@ -130,14 +130,38 @@ class QuoteSyncTest {
     verify(source, times(1)).page(any(), any(), anyInt(), any());
   }
 
-  @Test void gl25_documentedShortPageCannotClaimCompletion() {
+  @Test void gl25_shortPageContinuesUntilAnEmptyPage() {
     var client = mock(XeroQuoteClient.class);
     var row = quote(XeroQuoteClient.Status.SENT);
     when(client.page(access, 1, XeroQuoteClient.Status.SENT, modified)).thenReturn(List.of(row));
     var page = new DocumentedQuoteSource(client).page(access, XeroQuoteClient.Status.SENT, 1, modified);
     assertThat(page.quotes()).containsExactly(row);
-    assertThat(page.continuation()).isEqualTo(QuoteSync.Continuation.UNKNOWN);
+    assertThat(page.continuation()).isEqualTo(QuoteSync.Continuation.MORE);
     verify(client).page(access, 1, XeroQuoteClient.Status.SENT, modified);
+    when(client.page(access, 2, XeroQuoteClient.Status.SENT, modified)).thenReturn(List.of());
+    assertThat(new DocumentedQuoteSource(client).page(access, XeroQuoteClient.Status.SENT, 2, modified).continuation())
+        .isEqualTo(QuoteSync.Continuation.COMPLETE);
+  }
+
+  @Test void gl25_shortQuoteResultsCompleteTheSync() {
+    var client = mock(XeroQuoteClient.class);
+    var sent = quote(XeroQuoteClient.Status.SENT);
+    when(client.page(any(), eq(1), eq(XeroQuoteClient.Status.SENT), isNull())).thenReturn(List.of(sent));
+    when(mirror.apply(mapping, sent, QuoteMirrorService.InvoiceMatch.UNCHECKED))
+        .thenReturn(QuoteMirrorService.Outcome.CREATED);
+    var result = new QuoteSync(mirror, new DocumentedQuoteSource(client),
+        (ctx, quote) -> QuoteMirrorService.InvoiceMatch.NOT_FOUND).run(entity, () -> access, null);
+    assertThat(result.complete()).isTrue();
+    assertThat(result.seen()).isEqualTo(1);
+    verify(client).page(access, 2, XeroQuoteClient.Status.SENT, null);
+  }
+
+  @Test void gl25_fullPageContinuesToNextPage() {
+    var client = mock(XeroQuoteClient.class);
+    when(client.page(access, 1, XeroQuoteClient.Status.SENT, modified))
+        .thenReturn(Collections.nCopies(100, quote(XeroQuoteClient.Status.SENT)));
+    assertThat(new DocumentedQuoteSource(client).page(access, XeroQuoteClient.Status.SENT, 1, modified).continuation())
+        .isEqualTo(QuoteSync.Continuation.MORE);
   }
 
   @Test void gl25_emptyContinuationAndWrongStatusAreRejected() {
