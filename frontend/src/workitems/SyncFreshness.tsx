@@ -53,8 +53,6 @@ export function SyncFreshness({
   const views = status.data
     ? { xero: syncView(status.data.xero), vwork: syncView(status.data.vwork) }
     : null;
-  const someOutOfDate =
-    views !== null && (views.xero.label !== "Synced" || views.vwork.label !== "Synced");
   return (
     <section aria-label={`${entity.displayName} data sync`} className="mywork-sync">
       <div className="mywork-sync-row">
@@ -77,9 +75,6 @@ export function SyncFreshness({
           {action.busy ? "Refreshing sync…" : "Refresh sync"}
         </button>
       </div>
-      {someOutOfDate ? (
-        <p className="supporting">Some work may be out of date until both systems have synced.</p>
-      ) : null}
       {action.error ? (
         <p role="alert">
           {action.error instanceof ApiError && action.error.status === 403
@@ -100,9 +95,8 @@ export function SyncFreshness({
 
 const syncErrors: Record<string, string> = {
   QUOTE_SYNC_COMPLETENESS_UNVERIFIED:
-    "Xero returned quotes, but the dashboard could not confirm that the complete list was received. Some work may be missing or out of date. Ask an administrator to review the quote sync before relying on this list.",
-  VWORK_NOT_CONNECTED:
-    "vWork is not connected. Ask a Director to check the vWork connection in Settings.",
+    "Some quotes may be missing. Ask an administrator to check the sync.",
+  VWORK_NOT_CONNECTED: "Not connected. Ask a Director to check Settings.",
   QUOTE_SYNC_INVOICE_CHECK_REQUIRED:
     "A quote needs an invoice check before sync can finish. Ask an administrator to review it.",
   INVOICE_SYNC_PARTIAL:

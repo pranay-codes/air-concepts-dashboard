@@ -43,8 +43,9 @@ describe("GL-25 sync freshness", () => {
     expect(within(vwork).getByText("No successful sync recorded")).toBeInTheDocument();
     expect(screen.queryByText("Synced")).not.toBeInTheDocument();
     expect(
-      within(xero).getByText(/could not confirm that the complete list was received/),
+      within(xero).getByText("Some quotes may be missing. Ask an administrator to check the sync."),
     ).toBeInTheDocument();
+    expect(screen.queryByText(/until both systems have synced/)).not.toBeInTheDocument();
     expect(screen.getByText(/QUOTE_SYNC_COMPLETENESS_UNVERIFIED/)).toBeInTheDocument();
   });
 
@@ -64,7 +65,9 @@ describe("GL-25 sync freshness", () => {
       />,
     );
     const vwork = await screen.findByRole("group", { name: "vWork data" });
-    expect(within(vwork).getByText(/vWork is not connected/)).toBeInTheDocument();
+    expect(
+      within(vwork).getByText("Not connected. Ask a Director to check Settings."),
+    ).toBeInTheDocument();
     expect(
       within(screen.getByRole("group", { name: "Xero data" })).getByText(/could not be completed/),
     ).toBeInTheDocument();
