@@ -27,7 +27,7 @@ public class GreenLineSettingsController {
   public record SettingsRequest(@NotNull Boolean enabled, UUID defaultOwnerId, UUID serviceManagerId,
       @NotNull @Min(1) @Max(30) Integer lateThresholdWorkingDays,
       @NotNull @Min(0) @Max(365) Integer backfillDays, Boolean automaticSyncEnabled,
-      @Min(10) @Max(1440) Integer automaticSyncIntervalMinutes) {}
+      @Min(1) @Max(1440) Integer automaticSyncIntervalMinutes) {}
 
   @JsonInclude(JsonInclude.Include.NON_NULL)
   @Schema(name = "GreenLineSettings", requiredProperties = {"entityId", "enabled"},

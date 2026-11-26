@@ -1,6 +1,7 @@
 # Air Concepts Financial Admin Dashboard: Agent Rules
 
 ## Learned Rules
+- Service Jobs automatic sync must accept a minimum interval of one minute (human correction, 26 November 2026).
 - Treat fewer than 100 Xero quotes as a normal result, not an error in itself (human correction, 26 November 2026).
 - Forecast grid totals and closing balance must have a clearly distinct row background from ordinary entries (human correction, 25 November 2026).
 - For the November 2026 forecast grid change, focus on customer invoices and supplier bills; defer employee wages (human instruction, 24 November 2026).

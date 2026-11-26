@@ -2,6 +2,8 @@
 
 Status: proposed for human review, 26 November 2026. This contract implements GL-AUTO-SYNC-01 in `GL-automatic-sync.md`.
 
+**Amendment, 26 November 2026:** The human changed the minimum interval to one minute. A new forward-only migration replaces the original ten-minute check; the default remains ten minutes. Frontend and backend validation accept whole minutes from 1 through 1440. The original SQL and historical rationale below describe the initial implementation.
+
 ## Database
 
 Add to `public.green_line_entity_settings` in a new forward-only migration:

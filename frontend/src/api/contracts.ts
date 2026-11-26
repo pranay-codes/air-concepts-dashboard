@@ -293,7 +293,7 @@ export function isDirectorGreenLineSettings(value: unknown): value is GreenLineS
       typeof value.automaticSyncAvailable === "boolean") &&
     (value.automaticSyncIntervalMinutes === undefined ||
       (integer(value.automaticSyncIntervalMinutes) &&
-        value.automaticSyncIntervalMinutes >= 10 &&
+        value.automaticSyncIntervalMinutes >= 1 &&
         value.automaticSyncIntervalMinutes <= 1440))
   );
 }

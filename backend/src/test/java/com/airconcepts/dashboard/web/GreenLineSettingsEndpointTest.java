@@ -74,6 +74,19 @@ class GreenLineSettingsEndpointTest {
     verify(settings, never()).save(any(), any());
   }
 
+  @Test void glAutoSync01_acceptsOneMinuteAndRejectsZero() throws Exception {
+    as(Role.DIRECTOR);
+    when(settings.save(any(), any())).thenAnswer(call -> call.getArgument(1));
+    var prefix = "{\"enabled\":true,\"lateThresholdWorkingDays\":2,\"backfillDays\":90,\"automaticSyncEnabled\":true,\"automaticSyncIntervalMinutes\":";
+    mvc.perform(put(path()).header("Authorization", "Bearer " + TestJwts.TOKEN)
+        .contentType(MediaType.APPLICATION_JSON).content(prefix + "1}"))
+        .andExpect(status().isOk()).andExpect(jsonPath("$.automaticSyncIntervalMinutes").value(1));
+    mvc.perform(put(path()).header("Authorization", "Bearer " + TestJwts.TOKEN)
+        .contentType(MediaType.APPLICATION_JSON).content(prefix + "0}"))
+        .andExpect(status().isBadRequest());
+    verify(settings, times(1)).save(any(), any());
+  }
+
   @Test void gl11_invalidThresholdAndMissingFieldsAreBadRequests() throws Exception {
     as(Role.DIRECTOR);
     for (var content : new String[]{body(0), body(31), "{\"enabled\":true}"}) {
