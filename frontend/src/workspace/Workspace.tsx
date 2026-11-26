@@ -322,7 +322,12 @@ export function Workspace({
                 profile={profile}
                 entity={selected ?? null}
                 entities={entities}
+                onDirty={setDirty}
                 onAccessDenied={onAccessDenied}
+                onSelectEntity={(id) => {
+                  setDirty(false);
+                  changeChoice(id);
+                }}
               />
             </Suspense>
           ) : currentRoute === "mywork" && entities.length ? (

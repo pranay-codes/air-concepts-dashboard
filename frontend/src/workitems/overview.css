@@ -1,0 +1,324 @@
+/* Director overview (GL-24). Uses the shared tokens in ui/styles.css. */
+.overview-period {
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.overview-period > :last-child {
+  margin-bottom: 0;
+}
+.overview-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-2);
+}
+.overview-controls .mywork-toolbar {
+  gap: var(--space-3);
+  margin: 0;
+}
+.overview-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.overview-presets button {
+  padding-inline: var(--space-3);
+}
+.overview-period summary {
+  min-height: 2.75rem;
+  align-content: center;
+  color: var(--accent);
+  cursor: pointer;
+}
+.overview-presets button[aria-pressed="true"] {
+  background: var(--selected);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  font-weight: 600;
+}
+.overview-jumps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.overview-jumps a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+}
+.overview-headlines {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 0 var(--space-6);
+}
+.overview-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.overview-tiles li {
+  display: grid;
+}
+.overview-tiles a {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  color: var(--text);
+  text-decoration: none;
+  background: var(--surface);
+  border: 1px solid var(--boundary);
+  border-radius: var(--radius-control);
+}
+.overview-tiles a:hover {
+  background: var(--selected);
+  border-color: var(--accent);
+}
+.overview-tile-label {
+  font-size: var(--font-small);
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+.overview-tiles strong {
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+/* On the selected surface, secondary text keeps its contrast by using the main text colour. */
+.overview-tiles a:hover .supporting {
+  color: var(--text);
+}
+.overview-section {
+  min-width: 0;
+  margin-bottom: var(--space-8);
+  scroll-margin-top: var(--space-4);
+}
+.overview-section h2 {
+  font-size: var(--font-section);
+  margin-bottom: var(--space-2);
+}
+.overview-section h3 {
+  margin: 0 0 var(--space-2);
+}
+.overview-section .overview-section {
+  margin: var(--space-6) 0 0;
+}
+.overview-decisions {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  list-style: none;
+}
+/* One row per decision, so the reading order is the priority order. */
+.overview-decisions li {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 11rem;
+  align-items: center;
+  gap: 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-left: 4px solid var(--boundary);
+}
+.overview-decisions li.urgent-warning {
+  border-left-color: var(--warning);
+}
+.overview-decisions li.urgent-error {
+  border-left-color: var(--error);
+}
+.overview-decisions h3,
+.overview-decisions p {
+  margin: 0;
+}
+.overview-decision-detail {
+  font-size: var(--font-small);
+  font-variant-numeric: tabular-nums;
+}
+.overview-decisions a {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+}
+.overview-decisions li > .supporting {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+.overview .mywork-table th.money,
+.overview .mywork-table td.money {
+  text-align: right;
+}
+.overview .mywork-table td .badge,
+.overview .mywork-table th .badge,
+.overview-card-head .badge {
+  margin-left: var(--space-2);
+}
+.overview .mywork-table td > .badge:first-child {
+  margin-left: 0;
+}
+.overview .mywork-table .text-button,
+.overview .mywork-card .text-button {
+  min-height: 1.75rem;
+  padding: 0;
+}
+.overview-compact .mywork-table {
+  min-width: 0;
+}
+.overview-compact .mywork-table th,
+.overview-compact .mywork-table td {
+  padding-inline: var(--space-3);
+}
+.overview-measure {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  white-space: nowrap;
+}
+.overview-measure > :first-child {
+  min-width: 2ch;
+  font-variant-numeric: tabular-nums;
+}
+.overview-bar {
+  display: block;
+  flex: 1 1 4rem;
+  max-width: 12rem;
+  height: 0.5rem;
+  overflow: hidden;
+  background: var(--divider);
+  border-radius: 100vmax;
+}
+.overview-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.overview-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.overview-person {
+  margin-bottom: var(--space-2);
+  background: var(--surface);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-control);
+}
+.overview-person > summary {
+  min-height: 2.75rem;
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+}
+.overview-person > summary > * {
+  margin-right: var(--space-3);
+  vertical-align: middle;
+}
+.overview-person > summary .overview-bar {
+  display: inline-block;
+  width: 10rem;
+}
+.overview-person-name {
+  font-weight: 600;
+}
+.overview-person > :not(summary) {
+  margin-inline: var(--space-3);
+}
+.overview-closed {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.overview-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: var(--space-4);
+}
+.overview-card-head > .supporting,
+.overview-card-facts .supporting {
+  display: block;
+}
+.overview-card-head > .text-button {
+  font-weight: 600;
+}
+.overview-card-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 7rem), 1fr));
+  gap: var(--space-2) var(--space-3);
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-small);
+}
+.overview-card-facts > .wide {
+  grid-column: 1 / -1;
+}
+.overview-card-facts dt {
+  color: var(--secondary);
+}
+.overview-card-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+@media (width < 75rem) {
+  .overview-headlines {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .overview .mywork-table {
+    min-width: 34rem;
+  }
+  .overview .overview-compact .mywork-table {
+    min-width: 0;
+  }
+  .overview .mywork-table th,
+  .overview .mywork-table td {
+    padding-inline: var(--space-2);
+  }
+  .overview .mywork-table-wrap:not(.overview-compact) .overview-bar {
+    display: none;
+  }
+}
+@media (width < 48rem) {
+  .overview-decisions li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .overview-decisions a,
+  .overview-decisions li > .supporting {
+    grid-column: auto;
+    grid-row: auto;
+  }
+  .overview-tiles {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  }
+  .overview-compact .mywork-table th,
+  .overview-compact .mywork-table td {
+    padding-inline: var(--space-2);
+  }
+  .overview-measure .overview-bar {
+    display: none;
+  }
+}
+/* Enlarged text: nothing may widen the page. Positioning keeps hidden table captions inside their wrap. */
+.overview .mywork-table-wrap {
+  position: relative;
+}
+.overview-controls .mywork-field {
+  min-width: min(100%, 10rem);
+}
+.overview-person > summary {
+  overflow-wrap: anywhere;
+}
+.overview-person > summary .overview-bar {
+  max-width: 100%;
+}
+.overview-card-facts dt {
+  overflow-wrap: anywhere;
+}
