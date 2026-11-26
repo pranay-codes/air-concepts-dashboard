@@ -14,6 +14,11 @@
   gap: var(--space-3) var(--space-4);
   margin-bottom: var(--space-2);
 }
+/* Both halves may shrink: a date input is otherwise as wide as its text, which wider fonts enlarge. */
+.overview-controls > * {
+  min-width: 0;
+  max-width: 100%;
+}
 .overview-controls .mywork-toolbar {
   gap: var(--space-3);
   margin: 0;
@@ -312,6 +317,7 @@
 }
 .overview-controls .mywork-field {
   min-width: min(100%, 10rem);
+  max-width: 100%;
 }
 .overview-person > summary {
   overflow-wrap: anywhere;
