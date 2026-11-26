@@ -1052,6 +1052,9 @@ export interface components {
             lateThresholdWorkingDays: number;
             /** Format: int32 */
             backfillDays: number;
+            automaticSyncEnabled?: boolean;
+            /** Format: int32 */
+            automaticSyncIntervalMinutes?: number;
         };
         /** @description All active staff see entity and enabled status; only Directors receive the other settings. */
         GreenLineSettings: {
@@ -1066,6 +1069,10 @@ export interface components {
             lateThresholdWorkingDays?: number;
             /** Format: int32 */
             backfillDays?: number;
+            automaticSyncEnabled?: boolean;
+            /** Format: int32 */
+            automaticSyncIntervalMinutes?: number;
+            automaticSyncAvailable?: boolean;
         };
         NoteRequest: {
             note?: string;

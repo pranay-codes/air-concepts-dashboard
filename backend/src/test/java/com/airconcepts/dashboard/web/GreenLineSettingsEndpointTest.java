@@ -55,7 +55,7 @@ class GreenLineSettingsEndpointTest {
         .contentType(MediaType.APPLICATION_JSON).content(body(2)))
         .andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"))
         .andExpect(jsonPath("$.entityId").value(entity.toString()));
-    verify(settings).save(any(), eq(new Settings(entity, true, null, null, 2, 90)));
+    verify(settings).save(any(), eq(new Settings(entity, true, null, null, 2, 90, null, null)));
   }
 
   @Test void gl09_otherActiveRolesSeeOnlyEnabledAndCannotWrite() throws Exception {

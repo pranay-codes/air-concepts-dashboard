@@ -287,7 +287,14 @@ export function isDirectorGreenLineSettings(value: unknown): value is GreenLineS
     value.lateThresholdWorkingDays >= 1 &&
     value.lateThresholdWorkingDays <= 30 &&
     integer(value.backfillDays) &&
-    value.backfillDays <= 365
+    value.backfillDays <= 365 &&
+    (value.automaticSyncEnabled === undefined || typeof value.automaticSyncEnabled === "boolean") &&
+    (value.automaticSyncAvailable === undefined ||
+      typeof value.automaticSyncAvailable === "boolean") &&
+    (value.automaticSyncIntervalMinutes === undefined ||
+      (integer(value.automaticSyncIntervalMinutes) &&
+        value.automaticSyncIntervalMinutes >= 10 &&
+        value.automaticSyncIntervalMinutes <= 1440))
   );
 }
 export function isVworkConnection(value: unknown): value is VworkConnection {

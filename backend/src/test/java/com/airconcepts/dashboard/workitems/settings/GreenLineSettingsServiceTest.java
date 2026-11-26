@@ -38,6 +38,21 @@ class GreenLineSettingsServiceTest {
     verify(repository).fillUnowned(entity, actor, owner, manager);
   }
 
+  @Test void glAutoSync01_oldClientsPreserveStoredSchedule() {
+    var stored = new GreenLineSettingsRepository.Settings(entity, true, owner, manager, 2, 90, true, 30);
+    when(repository.get(entity)).thenReturn(Optional.of(stored));
+    var oldClient = new GreenLineSettingsRepository.Settings(entity, true, owner, manager, 3, 90, null, null);
+    var result = service.save(director, oldClient);
+    assertThat(result.automaticSyncEnabled()).isTrue();
+    assertThat(result.automaticSyncIntervalMinutes()).isEqualTo(30);
+  }
+
+  @Test void glAutoSync01_rejectsAnInvalidInterval() {
+    var invalid = new GreenLineSettingsRepository.Settings(entity, true, owner, manager, 2, 90, true, 9);
+    assertThatThrownBy(() -> service.save(director, invalid)).isInstanceOf(ApiFailure.class);
+    verify(repository, never()).save(any(), any());
+  }
+
   @Test void gl09_directorMustStillBeActiveAndDirectorInsideTransaction() {
     when(repository.lockActor(actor)).thenReturn(Optional.of(Role.FINANCIAL_ADMIN));
     assertThatThrownBy(() -> service.save(director, desired)).isInstanceOf(AccessDeniedException.class);

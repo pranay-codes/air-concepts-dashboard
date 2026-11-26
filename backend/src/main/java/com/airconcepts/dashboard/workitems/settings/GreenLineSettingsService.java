@@ -44,7 +44,13 @@ public class GreenLineSettingsService {
     if (settings.serviceManagerId() != null && repository.findStaffRole(settings.serviceManagerId()).isEmpty()) {
       throw new ApiFailure(HttpStatus.CONFLICT, "SERVICE_MANAGER_UNAVAILABLE", "Choose an active staff member.");
     }
-    var before = repository.get(settings.entityId()).orElseGet(() -> GreenLineSettingsRepository.Settings.defaults(settings.entityId()));
+    var before = repository.get(settings.entityId()).orElse(GreenLineSettingsRepository.Settings.defaults(settings.entityId()));
+    settings = new GreenLineSettingsRepository.Settings(settings.entityId(), settings.enabled(), settings.defaultOwnerId(),
+        settings.serviceManagerId(), settings.lateThresholdWorkingDays(), settings.backfillDays(),
+        settings.automaticSyncEnabled() == null ? before.automaticSyncEnabled() : settings.automaticSyncEnabled(),
+        settings.automaticSyncIntervalMinutes() == null ? before.automaticSyncIntervalMinutes() : settings.automaticSyncIntervalMinutes());
+    if (settings.automaticSyncIntervalMinutes() < 10 || settings.automaticSyncIntervalMinutes() > 1440)
+      throw new ApiFailure(HttpStatus.BAD_REQUEST, "INVALID_WORKFLOW_SETTINGS", "Enter an interval from 10 to 1440 minutes.");
     if (!before.equals(settings)) {
       repository.save(settings, actor);
       repository.auditSettings(settings.entityId(), actor, before, settings);

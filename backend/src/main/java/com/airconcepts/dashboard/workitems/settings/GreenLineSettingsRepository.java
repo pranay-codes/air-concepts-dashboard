@@ -14,8 +14,12 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class GreenLineSettingsRepository {
   public record Settings(UUID entityId, boolean enabled, UUID defaultOwnerId, UUID serviceManagerId,
-      int lateThresholdWorkingDays, int backfillDays) {
-    public static Settings defaults(UUID entityId) { return new Settings(entityId, false, null, null, 2, 90); }
+      int lateThresholdWorkingDays, int backfillDays, Boolean automaticSyncEnabled, Integer automaticSyncIntervalMinutes) {
+    public Settings(UUID entityId, boolean enabled, UUID defaultOwnerId, UUID serviceManagerId,
+        int lateThresholdWorkingDays, int backfillDays) {
+      this(entityId, enabled, defaultOwnerId, serviceManagerId, lateThresholdWorkingDays, backfillDays, false, 10);
+    }
+    public static Settings defaults(UUID entityId) { return new Settings(entityId, false, null, null, 2, 90, false, 10); }
   }
 
   private final JdbcTemplate jdbc;
@@ -43,23 +47,32 @@ public class GreenLineSettingsRepository {
 
   public Optional<Settings> get(UUID entity) {
     return jdbc.query("""
-        select entity_id,enabled,default_owner_id,service_manager_id,late_threshold_working_days,backfill_days
+        select entity_id,enabled,default_owner_id,service_manager_id,late_threshold_working_days,backfill_days,
+          automatic_sync_enabled,automatic_sync_interval_minutes
         from public.green_line_entity_settings where entity_id=?
         """, (row, index) -> new Settings(row.getObject("entity_id", UUID.class), row.getBoolean("enabled"),
         row.getObject("default_owner_id", UUID.class), row.getObject("service_manager_id", UUID.class),
-        row.getInt("late_threshold_working_days"), row.getInt("backfill_days")), entity).stream().findFirst();
+        row.getInt("late_threshold_working_days"), row.getInt("backfill_days"), row.getBoolean("automatic_sync_enabled"),
+        row.getInt("automatic_sync_interval_minutes")), entity).stream().findFirst();
   }
 
   public void save(Settings settings, UUID actor) {
     jdbc.update("""
         insert into public.green_line_entity_settings(entity_id,enabled,default_owner_id,service_manager_id,
-          late_threshold_working_days,backfill_days,updated_by)
-        values (?,?,?,?,?,?,?)
+          late_threshold_working_days,backfill_days,updated_by,automatic_sync_enabled,automatic_sync_interval_minutes,automatic_sync_next_at)
+        values (?,?,?,?,?,?,?,?,?,case when cast(? as boolean) then now() + cast(? as integer) * interval '1 minute' end)
         on conflict (entity_id) do update set enabled=excluded.enabled,default_owner_id=excluded.default_owner_id,
           service_manager_id=excluded.service_manager_id,late_threshold_working_days=excluded.late_threshold_working_days,
-          backfill_days=excluded.backfill_days,updated_by=excluded.updated_by,updated_at=now()
+          backfill_days=excluded.backfill_days,updated_by=excluded.updated_by,updated_at=now(),
+          automatic_sync_next_at=case when not excluded.automatic_sync_enabled then null
+            when not green_line_entity_settings.automatic_sync_enabled
+              or green_line_entity_settings.automatic_sync_interval_minutes <> excluded.automatic_sync_interval_minutes
+            then excluded.automatic_sync_next_at else green_line_entity_settings.automatic_sync_next_at end,
+          automatic_sync_enabled=excluded.automatic_sync_enabled,
+          automatic_sync_interval_minutes=excluded.automatic_sync_interval_minutes
         """, settings.entityId(), settings.enabled(), settings.defaultOwnerId(), settings.serviceManagerId(),
-        settings.lateThresholdWorkingDays(), settings.backfillDays(), actor);
+        settings.lateThresholdWorkingDays(), settings.backfillDays(), actor, settings.automaticSyncEnabled(),
+        settings.automaticSyncIntervalMinutes(), settings.automaticSyncEnabled(), settings.automaticSyncIntervalMinutes());
   }
 
   public void auditSettings(UUID entity, UUID actor, Settings before, Settings after) {
@@ -67,12 +80,15 @@ public class GreenLineSettingsRepository {
         insert into public.work_item_events(entity_id,actor_id,source,event_type,before,after)
         values (?,?,'USER','SETTINGS_CHANGED',
           jsonb_build_object('enabled',cast(? as boolean),'defaultOwnerId',cast(? as uuid),
-            'serviceManagerId',cast(? as uuid),'lateThresholdWorkingDays',cast(? as integer),'backfillDays',cast(? as integer)),
+            'serviceManagerId',cast(? as uuid),'lateThresholdWorkingDays',cast(? as integer),'backfillDays',cast(? as integer),
+            'automaticSyncEnabled',cast(? as boolean),'automaticSyncIntervalMinutes',cast(? as integer)),
           jsonb_build_object('enabled',cast(? as boolean),'defaultOwnerId',cast(? as uuid),
-            'serviceManagerId',cast(? as uuid),'lateThresholdWorkingDays',cast(? as integer),'backfillDays',cast(? as integer)))
+            'serviceManagerId',cast(? as uuid),'lateThresholdWorkingDays',cast(? as integer),'backfillDays',cast(? as integer),
+            'automaticSyncEnabled',cast(? as boolean),'automaticSyncIntervalMinutes',cast(? as integer)))
         """, entity, actor, before.enabled(), before.defaultOwnerId(), before.serviceManagerId(),
-        before.lateThresholdWorkingDays(), before.backfillDays(), after.enabled(), after.defaultOwnerId(),
-        after.serviceManagerId(), after.lateThresholdWorkingDays(), after.backfillDays());
+        before.lateThresholdWorkingDays(), before.backfillDays(), before.automaticSyncEnabled(), before.automaticSyncIntervalMinutes(),
+        after.enabled(), after.defaultOwnerId(), after.serviceManagerId(), after.lateThresholdWorkingDays(), after.backfillDays(),
+        after.automaticSyncEnabled(), after.automaticSyncIntervalMinutes());
   }
 
   /** Update only currently unowned items and append an event for every assignment. */

@@ -57,6 +57,52 @@ class QuoteMirrorRepositoryTest {
 
   @AfterAll static void stop() { if (postgres != null) postgres.stop(); }
 
+  @Test void glAutoSync01_claimsOnlyDueEnabledEntitiesOnce() {
+    transaction.executeWithoutResult(tx -> {
+      var due = entity();
+      var disabled = entity();
+      mapping(due);
+      mapping(disabled);
+      jdbc.update("insert into public.green_line_entity_settings(entity_id,enabled,automatic_sync_enabled,automatic_sync_interval_minutes,automatic_sync_next_at) values (?,true,true,10,?),(?,true,false,10,?)",
+          due, java.sql.Timestamp.from(NOW.minusSeconds(1)), disabled, java.sql.Timestamp.from(NOW.minusSeconds(1)));
+      var repo = new GreenLineSyncRunRepository(jdbc, transaction.getTransactionManager());
+      assertThat(repo.claimDue(NOW)).containsExactly(due);
+      assertThat(repo.claimDue(NOW)).isEmpty();
+      assertThat(repo.claimDue(NOW.plusSeconds(600))).containsExactly(due);
+      tx.setRollbackOnly();
+    });
+  }
+
+  @Test void glAutoSync01_vworkRetryDeadlineNeverMovesEarlierForTheSameConnection() {
+    transaction.executeWithoutResult(tx -> {
+      var actor = staff("DIRECTOR");
+      jdbc.update("insert into public.vwork_connection(id,key_ciphertext,status,configured_by) values (1,'synthetic-ciphertext','ACTIVE',?)", actor);
+      var repo = new com.airconcepts.dashboard.vwork.VworkConnectionRepository(jdbc);
+      var revision = repo.read().orElseThrow().revision();
+      repo.recordRateLimit(revision, NOW.plusSeconds(1200));
+      repo.recordRateLimit(revision, NOW.plusSeconds(600));
+      assertThat(repo.read().orElseThrow().retryAt()).isEqualTo(NOW.plusSeconds(1200));
+      repo.recordRateLimit("not-the-current-revision", NOW.plusSeconds(2400));
+      assertThat(repo.read().orElseThrow().retryAt()).isEqualTo(NOW.plusSeconds(1200));
+      tx.setRollbackOnly();
+    });
+  }
+
+  @Test void glAutoSync01_disablingAfterClaimPreventsScheduledStart() {
+    transaction.executeWithoutResult(tx -> {
+      var entity = entity();
+      mapping(entity);
+      jdbc.update("insert into public.green_line_entity_settings(entity_id,enabled,automatic_sync_enabled,automatic_sync_next_at) values (?,true,true,?)",
+          entity, java.sql.Timestamp.from(NOW.minusSeconds(1)));
+      var repo = new GreenLineSyncRunRepository(jdbc, transaction.getTransactionManager());
+      assertThat(repo.claimDue(NOW)).containsExactly(entity);
+      jdbc.update("update public.green_line_entity_settings set automatic_sync_enabled=false where entity_id=?", entity);
+      assertThatThrownBy(() -> repo.begin(entity, "SCHEDULED", null, NOW))
+          .isInstanceOfSatisfying(ApiFailure.class, e -> assertThat(e.code()).isEqualTo("GREEN_LINE_DISABLED"));
+      tx.setRollbackOnly();
+    });
+  }
+
   @Test void gl02_gl07_gl08_mirrorIsIdempotentAndPreservesUserOwnedFields() {
     transaction.executeWithoutResult(tx -> {
       var entity = entity();

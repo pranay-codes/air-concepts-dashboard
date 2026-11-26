@@ -33,7 +33,8 @@ public class GreenLineSyncRunRepository {
     return tx.execute(status -> {
       jdbc.queryForList("select pg_advisory_xact_lock(hashtextextended(?,0))", "green-line-sync:" + system + ":" + entity);
       var enabled = jdbc.queryForList("select s.entity_id from public.green_line_entity_settings s join public.entities e on e.id=s.entity_id "
-          + "where s.entity_id=? and s.enabled and e.archived_at is null for share of s,e", entity);
+          + "where s.entity_id=? and s.enabled and e.archived_at is null "
+          + "and (? <> 'SCHEDULED' or s.automatic_sync_enabled) for share of s,e", entity, trigger);
       if (enabled.isEmpty()) throw failure("GREEN_LINE_DISABLED", "The workflow is not enabled for this entity.");
       Boolean running = jdbc.queryForObject("select exists(select 1 from public.green_line_sync_runs where entity_id=? and system=? "
           + "and status='RUNNING' and started_at>?)", Boolean.class, entity, system, Timestamp.from(started.minusSeconds(1800)));
@@ -52,10 +53,19 @@ public class GreenLineSyncRunRepository {
     });
   }
 
-  public List<UUID> enabledEntities() {
-    return jdbc.query("select s.entity_id from public.green_line_entity_settings s join public.entities e on e.id=s.entity_id "
-        + "join public.xero_entity_connections c on c.entity_id=e.id where s.enabled and e.archived_at is null order by s.entity_id",
-        (r, n) -> r.getObject(1, UUID.class));
+  public List<UUID> claimDue(Instant now) {
+    return jdbc.query("""
+        update public.green_line_entity_settings s
+        set automatic_sync_next_at = cast(? as timestamptz) + s.automatic_sync_interval_minutes * interval '1 minute'
+        where s.entity_id in (
+          select s2.entity_id from public.green_line_entity_settings s2
+          join public.entities e on e.id=s2.entity_id
+          join public.xero_entity_connections c on c.entity_id=e.id
+          where s2.enabled and s2.automatic_sync_enabled and e.archived_at is null
+            and s2.automatic_sync_next_at <= ?
+          for update of s2 skip locked
+        ) returning s.entity_id
+        """, (r, n) -> r.getObject(1, UUID.class), Timestamp.from(now), Timestamp.from(now));
   }
 
   public boolean isServiceManager(UUID entity, UUID actor) {

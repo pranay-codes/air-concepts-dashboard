@@ -37,6 +37,18 @@ class GreenLineSyncServiceTest {
   private final GreenLineSyncService service = new GreenLineSyncService(repository, sync, connections, entities,
       Clock.fixed(now, ZoneOffset.UTC));
 
+  @Test void glAutoSync01_aFailedEntityDoesNotPreventOtherDueEntities() {
+    UUID other = UUID.randomUUID();
+    when(repository.claimDue(now)).thenReturn(List.of(entity, other));
+    when(repository.begin(entity, "SCHEDULED", null, now)).thenThrow(new ApiFailure(HttpStatus.CONFLICT, "SYNC_IN_PROGRESS", "Busy"));
+    when(repository.begin(other, "SCHEDULED", null, now)).thenReturn(run);
+    when(connections.systemAccess(other)).thenReturn(new TenantAccess(other, tenant, grant, "synthetic", Set.of()));
+    when(sync.run(eq(other), any(), isNull())).thenReturn(new QuoteSync.Result(0, 0, 0, 0, 0, 0, true));
+    service.runScheduledDue();
+    verify(sync).run(eq(other), any(), isNull());
+    verify(repository).succeed(eq(other), eq(run), any(), any(), eq(now));
+  }
+
   @Test void gl25_successRecordsCountsAndFirstSyncAgainstTheSameMapping() {
     when(repository.begin(entity, "MANUAL", actor, now)).thenReturn(run);
     when(connections.authorisedAccess(user, entity)).thenReturn(access);
@@ -149,7 +161,7 @@ class GreenLineSyncServiceTest {
     when(repository.begin(entity, "MANUAL", actor, now)).thenReturn(run);
     when(repository.beginVwork(entity, "MANUAL", actor, now)).thenReturn(jobRun);
     when(connections.authorisedAccess(user, entity)).thenReturn(access);
-    when(vworkConnections.systemAccess()).thenReturn(jobAccess);
+    when(vworkConnections.syncAccess()).thenReturn(jobAccess);
     when(sync.run(eq(entity), any(), isNull())).thenThrow(new ApiFailure(HttpStatus.CONFLICT,
         "QUOTE_SYNC_COMPLETENESS_UNVERIFIED", "Not verified."));
     when(vwork.run(eq(entity), any())).thenReturn(new VworkSync.Result(1, 1, 0));
@@ -167,7 +179,7 @@ class GreenLineSyncServiceTest {
     when(repository.beginVwork(entity, "MANUAL", actor, now)).thenReturn(jobRun);
     when(connections.authorisedAccess(user, entity)).thenReturn(access);
     when(sync.run(eq(entity), any(), isNull())).thenReturn(new QuoteSync.Result(1, 1, 0, 0, 0, 0, true));
-    when(vworkConnections.systemAccess()).thenThrow(new VworkFailure("VWORK_PROVIDER_FAILED", "private body", 503, null));
+    when(vworkConnections.syncAccess()).thenThrow(new VworkFailure("VWORK_PROVIDER_FAILED", "private body", 503, null));
     assertThatThrownBy(() -> both.runManual(user, entity)).isInstanceOf(ApiFailure.class).hasMessageNotContaining("private body");
     verify(repository).succeed(eq(entity), eq(run), eq(access), any(), eq(now));
     verify(repository).failVwork(entity, jobRun, "VWORK_PROVIDER_FAILED", 503, now);

@@ -41,6 +41,23 @@ public class VworkConnectionService {
     return new Access(row.revision(), cipher.decrypt(row.ciphertext()), provider, provider instanceof MockVworkClient);
   }
 
+  public Access syncAccess() {
+    var access = systemAccess();
+    var row = repository.read().orElseThrow(() -> new ApiFailure(HttpStatus.CONFLICT, "VWORK_NOT_CONNECTED", "Ask a Director to check the vWork connection."));
+    if (!access.revision().equals(row.revision()))
+      throw new ApiFailure(HttpStatus.CONFLICT, "VWORK_CONNECTION_CHANGED", "The vWork connection changed. Retry sync.");
+    if (row.retryAt() != null && row.retryAt().isAfter(clock.instant()))
+      throw new ApiFailure(HttpStatus.TOO_MANY_REQUESTS, "VWORK_RATE_LIMITED", "vWork has limited requests. Wait before retrying.");
+    return access;
+  }
+
+  public void recordRateLimit(Access access, VworkFailure failure) {
+    if (access != null && failure.upstreamStatus() == 429) {
+      int seconds = failure.retryAfterSeconds() == null ? 60 : Math.max(1, failure.retryAfterSeconds());
+      repository.recordRateLimit(access.revision(), clock.instant().plusSeconds(seconds));
+    }
+  }
+
   public void connect(CurrentUser user, String value) {
     user.requireRole(Role.DIRECTOR);
     UUID actor = actor(user);

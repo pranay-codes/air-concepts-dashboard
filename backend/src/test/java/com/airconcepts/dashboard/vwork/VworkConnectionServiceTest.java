@@ -25,6 +25,16 @@ class VworkConnectionServiceTest {
       Clock.fixed(now, ZoneOffset.UTC));
   private final CurrentUser director = new CurrentUser(UUID.randomUUID().toString(), Role.DIRECTOR);
 
+  @Test void glAutoSync01_waitsForProviderRetryDeadline() {
+    var encrypted = cipher.encrypt(new VworkCredential("synthetic-secret"));
+    when(repository.read()).thenReturn(Optional.of(new VworkConnectionRepository.Stored("42", encrypted, "ACTIVE", null,
+        UUID.randomUUID(), now, now, now.plusSeconds(900))));
+    assertThatThrownBy(service::syncAccess).isInstanceOfSatisfying(ApiFailure.class,
+        failure -> assertThat(failure.code()).isEqualTo("VWORK_RATE_LIMITED"));
+    assertThat(service.systemAccess().revision()).isEqualTo("42");
+    verifyNoInteractions(client);
+  }
+
   @Test void gl26_successVerifiesBeforeSavingOnlyEncryptedMaterial() {
     when(repository.read()).thenReturn(Optional.empty());
     service.connect(director, "synthetic-secret");
