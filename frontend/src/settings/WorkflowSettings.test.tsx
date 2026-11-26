@@ -29,6 +29,78 @@ const initial = {
 };
 
 describe("GL workflow settings", () => {
+  it("GL-AUTO-SYNC-01 saves an automatic sync interval for the entity", async () => {
+    const saved = vi.fn();
+    const { api } = testApi((url, init) => {
+      if (url.pathname.endsWith("/users")) return staff;
+      if (url.pathname.endsWith("/vwork-templates")) return [];
+      if (url.pathname.endsWith("/vwork-connection")) return { status: "DISCONNECTED" };
+      if (init?.method === "PUT") {
+        const body = JSON.parse(String(init.body));
+        saved(body);
+        return { entityId: entities[0]!.id, ...body, automaticSyncAvailable: true };
+      }
+      return {
+        ...initial,
+        automaticSyncEnabled: false,
+        automaticSyncIntervalMinutes: 10,
+        automaticSyncAvailable: true,
+      };
+    });
+    render(
+      <WorkflowSettings
+        api={api}
+        entities={[entities[0]!]}
+        profile={profile}
+        onDirty={vi.fn()}
+        onAccessDenied={vi.fn()}
+      />,
+    );
+    const form = await screen.findByRole("form", {
+      name: `Workflow settings for ${entities[0]!.displayName}`,
+    });
+    fireEvent.click(within(form).getByLabelText("Enable automatic sync"));
+    fireEvent.change(within(form).getByLabelText("Sync interval in minutes"), {
+      target: { value: "30" },
+    });
+    fireEvent.submit(form);
+    await waitFor(() =>
+      expect(saved).toHaveBeenCalledWith(
+        expect.objectContaining({ automaticSyncEnabled: true, automaticSyncIntervalMinutes: 30 }),
+      ),
+    );
+  });
+
+  it("GL-AUTO-SYNC-01 rejects an interval below the minimum without saving", async () => {
+    const saved = vi.fn();
+    const { api } = testApi((url, init) => {
+      if (url.pathname.endsWith("/users")) return staff;
+      if (url.pathname.endsWith("/vwork-templates")) return [];
+      if (url.pathname.endsWith("/vwork-connection")) return { status: "DISCONNECTED" };
+      if (init?.method === "PUT") saved();
+      return initial;
+    });
+    render(
+      <WorkflowSettings
+        api={api}
+        entities={[entities[0]!]}
+        profile={profile}
+        onDirty={vi.fn()}
+        onAccessDenied={vi.fn()}
+      />,
+    );
+    const form = await screen.findByRole("form", {
+      name: `Workflow settings for ${entities[0]!.displayName}`,
+    });
+    fireEvent.change(within(form).getByLabelText("Sync interval in minutes"), {
+      target: { value: "1" },
+    });
+    fireEvent.submit(form);
+    expect(
+      await within(form).findByText("Enter a sync interval from 10 to 1440 minutes."),
+    ).toBeInTheDocument();
+    expect(saved).not.toHaveBeenCalled();
+  });
   it("GL-06 keeps template edits dirty when other workflow settings are saved", async () => {
     const dirty = vi.fn();
     const { api } = testApi((url, init) => {
@@ -106,6 +178,8 @@ describe("GL workflow settings", () => {
     await waitFor(() => expect(saved).toHaveBeenCalledOnce());
     expect(saved).toHaveBeenCalledWith({
       enabled: true,
+      automaticSyncEnabled: false,
+      automaticSyncIntervalMinutes: 10,
       defaultOwnerId: STAFF_A,
       serviceManagerId: manager,
       lateThresholdWorkingDays: 3,

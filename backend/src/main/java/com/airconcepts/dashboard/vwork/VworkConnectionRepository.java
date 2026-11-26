@@ -30,11 +30,23 @@ public class VworkConnectionRepository {
 
   public Optional<Stored> read() { return read(false); }
 
+  public void recordRateLimit(String revision, Instant retryAt) {
+    jdbc.update("""
+        insert into public.vwork_sync_rate_limit(connection_id,connection_revision,retry_at)
+        select id,xmin::text,? from public.vwork_connection where id=1 and status='ACTIVE' and xmin::text=?
+        on conflict (connection_id) do update set connection_revision=excluded.connection_revision,
+          retry_at=case when vwork_sync_rate_limit.connection_revision=excluded.connection_revision
+            then greatest(vwork_sync_rate_limit.retry_at,excluded.retry_at) else excluded.retry_at end
+        """, offset(retryAt), revision);
+  }
+
   private Optional<Stored> read(boolean lock) {
     return jdbc.query("""
-        select xmin::text as revision,key_ciphertext,status,error_code,configured_by,configured_at,verified_at,retry_at
-        from public.vwork_connection where id=1
-        """ + (lock ? " for update" : ""), (row, index) -> new Stored(row.getString("revision"),
+        select c.xmin::text as revision,c.key_ciphertext,c.status,c.error_code,c.configured_by,c.configured_at,c.verified_at,
+          greatest(c.retry_at, (select l.retry_at from public.vwork_sync_rate_limit l
+            where l.connection_id=c.id and l.connection_revision=c.xmin::text)) as retry_at
+        from public.vwork_connection c where c.id=1
+        """ + (lock ? " for update of c" : ""), (row, index) -> new Stored(row.getString("revision"),
         row.getString("key_ciphertext"), row.getString("status"), row.getString("error_code"),
         row.getObject("configured_by", UUID.class), instant(row.getObject("configured_at", OffsetDateTime.class)),
         instant(row.getObject("verified_at", OffsetDateTime.class)), instant(row.getObject("retry_at", OffsetDateTime.class))))

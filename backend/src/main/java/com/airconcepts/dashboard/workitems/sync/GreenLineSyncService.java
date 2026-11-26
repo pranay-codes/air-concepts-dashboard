@@ -57,10 +57,10 @@ public class GreenLineSyncService {
     return repository.status(entity);
   }
 
-  public void runScheduled() {
-    for (UUID entity : repository.enabledEntities()) {
+  public void runScheduledDue() {
+    for (UUID entity : repository.claimDue(clock.instant())) {
       try { runBoth(entity, "SCHEDULED", null, () -> connections.systemAccess(entity)); }
-      catch (RuntimeException failure) { /* Safe run diagnostics are persisted when the run has started. */ }
+      catch (RuntimeException failure) { /* Failures are recorded by the existing sync runs. */ }
     }
   }
 
@@ -84,14 +84,16 @@ public class GreenLineSyncService {
 
   private void runVwork(UUID entity, String trigger, UUID actor) {
     UUID run = repository.beginVwork(entity, trigger, actor, clock.instant());
+    VworkConnectionService.Access access = null;
     try {
-      var access = vworkConnections.systemAccess();
-      var result = vwork.run(entity, vworkConnections::systemAccess);
+      access = vworkConnections.syncAccess();
+      var result = vwork.run(entity, vworkConnections::syncAccess);
       repository.succeedVwork(entity, run, access, result, clock.instant());
     } catch (ApiFailure failure) {
       repository.failVwork(entity, run, failure.code(), null, clock.instant());
       throw failure;
     } catch (VworkFailure failure) {
+      vworkConnections.recordRateLimit(access, failure);
       String code = failure.code() != null && failure.code().matches("[A-Z0-9_]{1,80}") ? failure.code() : "VWORK_PROVIDER_FAILED";
       Integer upstream = failure.upstreamStatus() >= 100 && failure.upstreamStatus() <= 599 ? failure.upstreamStatus() : null;
       repository.failVwork(entity, run, code, upstream, clock.instant());

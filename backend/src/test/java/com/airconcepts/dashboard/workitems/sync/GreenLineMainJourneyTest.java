@@ -47,6 +47,7 @@ class GreenLineMainJourneyTest {
     var vwork=new MockVworkClient(); var credential=new VworkCredential("synthetic");
     var vworkAccess=new VworkConnectionService.Access("revision",credential,vwork,true);
     var vworkConnections=mock(VworkConnectionService.class);
+    when(vworkConnections.syncAccess()).thenReturn(vworkAccess);
     when(vworkConnections.systemAccess()).thenReturn(vworkAccess);
     var jobs=mock(VworkMirrorRepository.class);
     when(jobs.lock(entity,item,"revision")).thenAnswer(call -> Optional.of(new VworkMirrorRepository.Item(

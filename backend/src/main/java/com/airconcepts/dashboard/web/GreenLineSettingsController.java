@@ -26,22 +26,27 @@ import org.springframework.web.bind.annotation.*;
 public class GreenLineSettingsController {
   public record SettingsRequest(@NotNull Boolean enabled, UUID defaultOwnerId, UUID serviceManagerId,
       @NotNull @Min(1) @Max(30) Integer lateThresholdWorkingDays,
-      @NotNull @Min(0) @Max(365) Integer backfillDays) {}
+      @NotNull @Min(0) @Max(365) Integer backfillDays, Boolean automaticSyncEnabled,
+      @Min(10) @Max(1440) Integer automaticSyncIntervalMinutes) {}
 
   @JsonInclude(JsonInclude.Include.NON_NULL)
   @Schema(name = "GreenLineSettings", requiredProperties = {"entityId", "enabled"},
       description = "All active staff see entity and enabled status; only Directors receive the other settings.")
   public record SettingsResponse(UUID entityId, boolean enabled, UUID defaultOwnerId, UUID serviceManagerId,
-      Integer lateThresholdWorkingDays, Integer backfillDays) {
-    static SettingsResponse from(Settings value, boolean director) {
+      Integer lateThresholdWorkingDays, Integer backfillDays, Boolean automaticSyncEnabled,
+      Integer automaticSyncIntervalMinutes, Boolean automaticSyncAvailable) {
+    static SettingsResponse from(Settings value, boolean director, boolean available) {
       return new SettingsResponse(value.entityId(), value.enabled(), director ? value.defaultOwnerId() : null,
           director ? value.serviceManagerId() : null, director ? value.lateThresholdWorkingDays() : null,
-          director ? value.backfillDays() : null);
+          director ? value.backfillDays() : null, director ? value.automaticSyncEnabled() : null,
+          director ? value.automaticSyncIntervalMinutes() : null, director ? available : null);
     }
   }
 
   private final GreenLineSettingsService settings;
   private final CurrentUserResolver users;
+  @org.springframework.beans.factory.annotation.Value("${dashboard.green-line.sync.enabled:true}")
+  private boolean automaticSyncAvailable;
   public GreenLineSettingsController(GreenLineSettingsService settings, CurrentUserResolver users) {
     this.settings = settings;
     this.users = users;
@@ -53,7 +58,7 @@ public class GreenLineSettingsController {
     var user = users.from(jwt);
     user.requireRole(Role.DIRECTOR, Role.FINANCIAL_ADMIN, Role.STANDARD_USER);
     return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-        .body(SettingsResponse.from(settings.get(user, entityId), user.role() == Role.DIRECTOR));
+        .body(SettingsResponse.from(settings.get(user, entityId), user.role() == Role.DIRECTOR, automaticSyncAvailable));
   }
 
   @PutMapping
@@ -63,7 +68,7 @@ public class GreenLineSettingsController {
     var user = users.from(jwt);
     user.requireRole(Role.DIRECTOR);
     var input = new Settings(entityId, request.enabled(), request.defaultOwnerId(), request.serviceManagerId(),
-        request.lateThresholdWorkingDays(), request.backfillDays());
-    return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(SettingsResponse.from(settings.save(user, input), true));
+        request.lateThresholdWorkingDays(), request.backfillDays(), request.automaticSyncEnabled(), request.automaticSyncIntervalMinutes());
+    return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(SettingsResponse.from(settings.save(user, input), true, automaticSyncAvailable));
   }
 }

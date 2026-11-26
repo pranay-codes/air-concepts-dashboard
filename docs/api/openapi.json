@@ -3197,6 +3197,15 @@
             "format" : "int32",
             "maximum" : 365,
             "minimum" : 0
+          },
+          "automaticSyncEnabled" : {
+            "type" : "boolean"
+          },
+          "automaticSyncIntervalMinutes" : {
+            "type" : "integer",
+            "format" : "int32",
+            "maximum" : 1440,
+            "minimum" : 10
           }
         },
         "required" : [ "backfillDays", "enabled", "lateThresholdWorkingDays" ]
@@ -3227,6 +3236,16 @@
           "backfillDays" : {
             "type" : "integer",
             "format" : "int32"
+          },
+          "automaticSyncEnabled" : {
+            "type" : "boolean"
+          },
+          "automaticSyncIntervalMinutes" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "automaticSyncAvailable" : {
+            "type" : "boolean"
           }
         },
         "required" : [ "enabled", "entityId" ]

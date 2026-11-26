@@ -152,6 +152,10 @@ function WorkflowForm({
   const [manager, setManager] = useState(initial.serviceManagerId ?? "");
   const [threshold, setThreshold] = useState(String(initial.lateThresholdWorkingDays));
   const [backfill, setBackfill] = useState(String(initial.backfillDays));
+  const [autoSync, setAutoSync] = useState(initial.automaticSyncEnabled ?? false);
+  const [syncInterval, setSyncInterval] = useState(
+    String(initial.automaticSyncIntervalMinutes ?? 10),
+  );
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const action = useAction(`workflow-save:${profile.subject}:${entity.id}`);
@@ -163,6 +167,17 @@ function WorkflowForm({
     event.preventDefault();
     const days = Number(threshold),
       backfillWindow = Number(backfill);
+    const interval = Number(syncInterval);
+    if (
+      !/^\d+$/.test(syncInterval) ||
+      !Number.isSafeInteger(interval) ||
+      interval < 10 ||
+      interval > 1440
+    ) {
+      setError("Enter a sync interval from 10 to 1440 minutes.");
+      document.getElementById(`${prefix}-sync-interval`)?.focus();
+      return;
+    }
     if (!/^\d+$/.test(threshold) || !Number.isSafeInteger(days) || days < 1 || days > 30) {
       setError("Enter a whole number from 1 to 30.");
       document.getElementById(`${prefix}-threshold`)?.focus();
@@ -189,6 +204,8 @@ function WorkflowForm({
             ...(manager ? { serviceManagerId: manager } : {}),
             lateThresholdWorkingDays: days,
             backfillDays: backfillWindow,
+            automaticSyncEnabled: autoSync,
+            automaticSyncIntervalMinutes: interval,
           },
           signal,
         ),
@@ -210,6 +227,40 @@ function WorkflowForm({
       noValidate
     >
       <h3>{entity.displayName}</h3>
+      <label className="checkbox-label">
+        <input
+          type="checkbox"
+          checked={autoSync}
+          disabled={action.busy}
+          onChange={(event) => {
+            setAutoSync(event.target.checked);
+            changed();
+          }}
+        />{" "}
+        Enable automatic sync
+      </label>
+      <label htmlFor={`${prefix}-sync-interval`}>Sync interval in minutes</label>
+      <input
+        id={`${prefix}-sync-interval`}
+        type="number"
+        min="10"
+        max="1440"
+        value={syncInterval}
+        disabled={action.busy}
+        aria-invalid={error === "Enter a sync interval from 10 to 1440 minutes."}
+        aria-describedby={
+          error === "Enter a sync interval from 10 to 1440 minutes." ? `${prefix}-error` : undefined
+        }
+        onChange={(event) => {
+          setSyncInterval(event.target.value);
+          changed();
+        }}
+      />
+      {initial.automaticSyncAvailable === false ? (
+        <Notice tone="warning">
+          Automatic sync is unavailable on the server. Ask an administrator to enable it.
+        </Notice>
+      ) : null}
       <label className="checkbox-label">
         <input
           type="checkbox"
