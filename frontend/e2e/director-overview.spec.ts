@@ -42,7 +42,7 @@ for (const width of [320, 390, 768, 1024, 1440]) {
 }
 
 test("GL-24 Overview keeps usable targets and reflows with doubled text", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 320, height: 720 });
   await greenLane(page, "DIRECTOR");
   await signIn(page, "mywork");
   await page.getByRole("button", { name: "Overview", exact: true }).click();
@@ -57,7 +57,10 @@ test("GL-24 Overview keeps usable targets and reflows with doubled text", async 
     const box = (await target.boundingBox())!;
     expect(Math.min(box.width, box.height), await target.innerText()).toBeGreaterThanOrEqual(24);
   }
-  await page.addStyleTag({ content: "html { font-size: 200%; }" });
+  // A wide font as well, so a machine with a narrow default font still catches overflow.
+  await page.addStyleTag({
+    content: "html { font-size: 200%; } :root { --font-body: Verdana, 'DejaVu Sans', sans-serif; }",
+  });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
