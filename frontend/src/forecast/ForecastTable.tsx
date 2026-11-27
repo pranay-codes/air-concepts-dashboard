@@ -1,5 +1,6 @@
 import type { ForecastMonth, ForecastMonthState, OpeningSource } from "./contracts";
 import { amountSign, formatMoney } from "../ui/format";
+import { currentMonth } from "./ForecastHeader";
 import "./forecast.css";
 
 export function monthName(value: string) {
@@ -212,7 +213,7 @@ export function ForecastTable({
                 <td className="money">
                   <OpeningCell
                     month={month}
-                    onOpening={onOpening}
+                    onOpening={month.month >= currentMonth() ? onOpening : undefined}
                     provisional={isProvisional(months, index)}
                   />
                 </td>

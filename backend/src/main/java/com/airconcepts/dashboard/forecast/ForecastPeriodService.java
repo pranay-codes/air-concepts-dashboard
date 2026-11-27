@@ -7,11 +7,13 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 @Service
 public class ForecastPeriodService {
-  private final ForecastAssumptionRepository repository;private final ForecastAccess access;
-  public ForecastPeriodService(ForecastAssumptionRepository repository,ForecastAccess access){this.repository=repository;this.access=access;}
+  private final ForecastAssumptionRepository repository;private final ForecastAccess access;private final ForecastCalendar calendar;
+  public ForecastPeriodService(ForecastAssumptionRepository repository,ForecastAccess access,ForecastCalendar calendar){this.repository=repository;this.access=access;this.calendar=calendar;}
   public OpeningBalance get(CurrentUser user,UUID entity,LocalDate month){access.requireRead(user,entity);firstDay(month);return repository.opening(entity,month);}
   public OpeningBalance save(CurrentUser user,UUID entity,LocalDate month,BigDecimal balance,String source){
-    access.requireWrite(user,entity);firstDay(month);var value=ForecastValidation.money("openingBalance",balance,false);
+    access.requireWrite(user,entity);firstDay(month);
+    if(java.time.YearMonth.from(month).isBefore(calendar.currentMonth())) throw ForecastValidation.invalid("month","Past months cannot be edited.");
+    var value=ForecastValidation.money("openingBalance",balance,false);
     if(source!=null&&source.length()>500)throw ForecastValidation.invalid("source","Use at most 500 characters.");
     return repository.saveOpening(entity,UUID.fromString(user.subject()),month,value,source);
   }
