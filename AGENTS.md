@@ -1,6 +1,7 @@
 # Air Concepts Financial Admin Dashboard: Agent Rules
 
 ## Learned Rules
+- Forecast document and expanded sub-row labels should match company group rows in font weight and compact spacing (human correction, 27 November 2026).
 - Forecast manual-line changes apply to the current and future forecast; never modify previous months' forecasts (human instruction, 27 November 2026).
 - Service Jobs automatic sync must accept a minimum interval of one minute (human correction, 26 November 2026).
 - Treat fewer than 100 Xero quotes as a normal result, not an error in itself (human correction, 26 November 2026).
