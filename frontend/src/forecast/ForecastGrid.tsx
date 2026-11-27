@@ -500,6 +500,7 @@ function FragmentRows({
                 <th scope="row">
                   <button
                     type="button"
+                    className="forecast-grid-disclosure"
                     aria-expanded={expanded.has(key)}
                     onClick={() =>
                       setExpanded((old) => {
@@ -529,6 +530,7 @@ function FragmentRows({
               <tr key={`${row.documentId}:${row.contact}`}>
                 <th scope="row">
                   <div className="forecast-grid-item">
+                    <span>{row.contact}</span>
                     <TransactionNoteEditor
                       label={row.contact}
                       note={
@@ -557,7 +559,6 @@ function FragmentRows({
                         }
                       }}
                     />
-                    <span>{row.contact}</span>
                   </div>
                 </th>
                 {grid.months.map((month) => (
