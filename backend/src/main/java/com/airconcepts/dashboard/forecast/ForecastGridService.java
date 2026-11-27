@@ -37,6 +37,13 @@ public class ForecastGridService {
     var timestamps=store.months(id,chainStart,end); var old=legacy.generated(id); var oldLines=legacy.lines(id,chainStart,end);
     var all=new ArrayList<>(store.lines(id,chainStart,end));
     for(var entry:oldLines.entrySet()) if(!timestamps.containsKey(entry.getKey())) for(var c:entry.getValue()) if("DOCUMENT".equals(c.source())) all.add(new ForecastGridRepository.Line(c.bucket(),c.sourceId(),c.splitSequence(),c.direction(),c.label()==null?"Unknown contact":c.label(),c.amount(),c.number()));
+    var overrides=store.overrides(id,chainStart,end);
+    for(var change:overrides) if("DOCUMENT".equals(change.scope()) && all.stream().noneMatch(line->line.documentId()!=null&&line.documentId().toString().equals(change.key())&&line.direction().equals(change.direction()))) {
+      var template=store.documentTemplate(id,UUID.fromString(change.key()),change.direction(),change.month());
+      if(template!=null) all.add(template);
+    }
+    var adjusted=ForecastGridOverrides.apply(all,overrides);
+    all=new ArrayList<>(adjusted.rows());
     var available=new HashSet<>(timestamps.keySet());available.addAll(old.keySet());
     var staff=assumptions.staffing(id,false);Map<YearMonth,BigDecimal> staffingTotals=new HashMap<>();
     for(var month=chainStart;!month.isAfter(end);month=month.plusMonths(1)) {
@@ -49,15 +56,21 @@ public class ForecastGridService {
     var positions=assumptions.manualPositions(id);
     var currentMonth=calendar.currentMonth();
     var savedManual=store.manualLines(id,chainStart,end).stream().filter(line->line.month().isBefore(currentMonth)).toList();
-    var balanceLines=new ArrayList<>(all);
-    for(var line:savedManual) balanceLines.add(new ForecastGridRepository.Line(line.month(),line.itemId(),null,line.direction(),line.description(),line.amount()));
+    var balanceLines=new ArrayList<>(adjusted.balances());
+    var manualBalanceLines=new ArrayList<ForecastGridRepository.Line>();
+    for(var line:savedManual) manualBalanceLines.add(new ForecastGridRepository.Line(line.month(),line.itemId(),null,line.direction(),line.description(),line.amount()));
     for(var item:manualItems) if(item.active()) for(var month=chainStart;!month.isAfter(end);month=month.plusMonths(1)) {
       if(!month.isBefore(currentMonth) && ForecastCalculator.active(month,item.startMonth(),item.endMonth()) && (!"ONE_OFF".equals(item.recurrence()) || month.equals(item.startMonth())))
-        balanceLines.add(new ForecastGridRepository.Line(month,item.id(),null,item.direction(),item.description(),item.amount()));
+        manualBalanceLines.add(new ForecastGridRepository.Line(month,item.id(),null,item.direction(),item.description(),item.amount()));
     }
+    for(var change:overrides) if("MANUAL".equals(change.scope()) && (change.month().isBefore(currentMonth) || manualItems.stream().anyMatch(item->item.active()&&item.id().toString().equals(change.key())&&item.direction().equals(change.direction())))) {
+      manualBalanceLines.removeIf(line->line.month().equals(change.month())&&line.direction().equals(change.direction())&&line.documentId()!=null&&line.documentId().toString().equals(change.key()));
+      manualBalanceLines.add(new ForecastGridRepository.Line(change.month(),UUID.fromString(change.key()),null,change.direction(),"Manual override",change.amount()));
+    }
+    balanceLines.addAll(manualBalanceLines);
     staffingTotals.forEach((month,total)->balanceLines.add(new ForecastGridRepository.Line(month,null,null,"OUT","Staffing Expenses",total)));
     var balances=ForecastGridBalances.calculate(chainStart,end,available,balanceLines,anchors);
-    List<Month> months=new ArrayList<>(); for(int i=0;i<count;i++){var m=start.plusMonths(i);var ts=timestamps.get(m);var prior=old.get(m);var b=balances.get(m);var anchor=records.get(m);months.add(new Month(m.toString(),ts!=null||prior!=null,ts!=null?ts:prior==null?null:prior.generatedAt(),decimal(b.moneyIn()),decimal(b.moneyOut()),b.moneyOut()==null?null:decimal(staffingTotals.get(m)),decimal(b.opening()),decimal(b.closing()),anchor!=null?"ENTERED":b.opening()!=null?"CARRIED_FORWARD":null,anchor==null?null:anchor.source()));}
+    List<Month> months=new ArrayList<>(); for(int i=0;i<count;i++){var m=start.plusMonths(i);var ts=timestamps.get(m);var prior=old.get(m);var b=balances.get(m);var anchor=records.get(m);months.add(new Month(m.toString(),available.contains(m),ts!=null?ts:prior==null?null:prior.generatedAt(),decimal(b.moneyIn()),decimal(b.moneyOut()),b.moneyOut()==null?null:decimal(staffingTotals.get(m)),decimal(b.opening()),decimal(b.closing()),anchor!=null?"ENTERED":b.opening()!=null?"CARRIED_FORWARD":null,anchor==null?null:anchor.source()));}
     record RowKey(String direction,String contact,String number,UUID documentId) {}
     Map<RowKey,Map<String,BigDecimal>> groups=new HashMap<>();
     for(var line:all) if(!line.month().isBefore(start)) {
@@ -72,6 +85,7 @@ public class ForecastGridService {
     record CompanyKey(String direction,String contact) {}
     Map<CompanyKey,Map<String,BigDecimal>> companyTotals=new HashMap<>();
     groups.forEach((key,values)->values.forEach((month,amount)->companyTotals.computeIfAbsent(new CompanyKey(key.direction(),key.contact()),k->new TreeMap<>()).merge(month,amount,BigDecimal::add)));
+    for(var change:overrides) if("COMPANY".equals(change.scope())) companyTotals.computeIfAbsent(new CompanyKey(change.direction(),change.key()),k->new TreeMap<>()).put(change.month().toString(),change.amount());
     List<Row> rows=new ArrayList<>();
     groups.entrySet().stream().sorted(Comparator.comparing((Map.Entry<RowKey,Map<String,BigDecimal>> e)->e.getKey().direction())
         .thenComparing(e->e.getKey().contact()).thenComparing(e->Objects.toString(e.getKey().number(),""))
@@ -80,12 +94,27 @@ public class ForecastGridService {
       Map<String,String> totals=new TreeMap<>();companyTotals.getOrDefault(new CompanyKey(key.direction(),key.contact()),Map.of()).forEach((m,amount)->totals.put(m,amount.toPlainString()));
       rows.add(new Row(key.direction(),key.contact()+" - "+(key.number()==null||key.number().isBlank()?"Number unavailable":key.number()),key.contact(),values,totals,key.documentId(),documentNotes.get(key.documentId()),"DOCUMENT",null));
     });
+    // Keep an independently edited company visible if later refreshes leave fewer than two documents.
+    overrides.stream().filter(change->"COMPANY".equals(change.scope())&&!change.month().isBefore(start))
+        .map(change->new CompanyKey(change.direction(),change.key())).distinct().forEach(company->{
+          long documentCount=groups.keySet().stream().filter(row->row.direction().equals(company.direction())&&row.contact().equals(company.contact())).count();
+          if(documentCount>=2) return;
+          Map<String,String> values=new TreeMap<>();companyTotals.getOrDefault(company,Map.of()).forEach((m,amount)->values.put(m,amount.toPlainString()));
+          var synthetic=UUID.nameUUIDFromBytes((id+":"+company.direction()+":"+company.contact()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+          rows.add(new Row(company.direction(),company.contact(),company.contact(),Map.of(),values,synthetic,null,"COMPANY",null));
+        });
     record ManualKey(UUID id,String direction,String description) {}
     Map<ManualKey,Map<String,String>> manualGroups=new LinkedHashMap<>();
     for(var line:savedManual) if(!line.month().isBefore(start)) manualGroups.computeIfAbsent(new ManualKey(line.itemId(),line.direction(),line.description()),k->new TreeMap<>()).put(line.month().toString(),line.amount().toPlainString());
     for(var item:manualItems) if(item.active()) for(var m=start;!m.isAfter(end);m=m.plusMonths(1))
       if(!m.isBefore(currentMonth) && ForecastCalculator.active(m,item.startMonth(),item.endMonth()) && (!"ONE_OFF".equals(item.recurrence()) || m.equals(item.startMonth())))
         manualGroups.computeIfAbsent(new ManualKey(item.id(),item.direction(),item.description()),k->new TreeMap<>()).put(m.toString(),item.amount().toPlainString());
+    for(var change:overrides) if("MANUAL".equals(change.scope())&&!change.month().isBefore(start) && (change.month().isBefore(currentMonth) || manualItems.stream().anyMatch(item->item.active()&&item.id().toString().equals(change.key())&&item.direction().equals(change.direction())))) {
+      var key=manualGroups.entrySet().stream().filter(entry->entry.getKey().id().toString().equals(change.key())&&entry.getKey().direction().equals(change.direction())&&entry.getValue().containsKey(change.month().toString())).map(Map.Entry::getKey).findFirst().orElse(null);
+      if(key==null) key=manualItems.stream().filter(item->item.id().toString().equals(change.key())&&item.direction().equals(change.direction())).map(item->new ManualKey(item.id(),item.direction(),item.description())).findFirst().orElse(null);
+      if(key==null) key=assumptions.manualItems(id,true).stream().filter(item->item.id().toString().equals(change.key())&&item.direction().equals(change.direction())).map(item->new ManualKey(item.id(),item.direction(),item.description())).findFirst().orElse(null);
+      if(key!=null) manualGroups.computeIfAbsent(key,k->new TreeMap<>()).put(change.month().toString(),change.amount().toPlainString());
+    }
     manualGroups.forEach((key,values)->rows.add(new Row(key.direction(),key.description(),key.description(),values,Map.of(),key.id(),manualNotes.get(key.id()),"MANUAL",positions.get(key.id()))));
     Map<String,String> companyNotes=new HashMap<>(); for(var note:notes.companyNotes(id)) companyNotes.put(note.company(),note.note());
     return new Grid(id,List.copyOf(months),List.copyOf(rows),Map.copyOf(companyNotes));
@@ -102,10 +131,61 @@ public class ForecastGridService {
   }
 
   @Transactional
+  public void saveAmount(CurrentUser user,UUID id,String monthValue,String direction,String scope,String key,BigDecimal amount) {
+    access.requireWrite(user,id);
+    var month=ForecastMonths.parse(monthValue);
+    if(month.isBefore(calendar.currentMonth())) throw ForecastValidation.invalid("month","Past months cannot be edited.");
+    if(direction==null||scope==null||!Set.of("IN","OUT").contains(direction)||!Set.of("COMPANY","DOCUMENT","MANUAL").contains(scope)) throw ForecastValidation.invalid("scope","Choose a valid forecast row.");
+    var value=amount==null?null:ForecastValidation.money("amount",amount,false);
+    if(value!=null&&value.signum()<0) throw ForecastValidation.invalid("amount","Enter zero or a positive amount.");
+    var validatedKey=ForecastValidation.text("key",key,500);
+    if(key.length()>500) throw ForecastValidation.invalid("key","Choose a valid forecast row.");
+    if(!"COMPANY".equals(scope)) key=validatedKey;
+    boolean exists;
+    ForecastGridRepository.Line documentTemplate=null;
+    UUID documentId=null;
+    if("COMPANY".equals(scope)) {
+      var companyKey=key;
+      exists=store.companyExists(id,key,direction)||store.overrides(id,month,month).stream().anyMatch(item->item.scope().equals("COMPANY")&&item.direction().equals(direction)&&item.key().equals(companyKey));
+    }
+    else {
+      UUID sourceId;
+      try {sourceId=UUID.fromString(key);} catch(IllegalArgumentException failure) {throw ForecastValidation.invalid("key","Choose a valid forecast row.");}
+      key=sourceId.toString();
+      if("DOCUMENT".equals(scope)) {documentId=sourceId;documentTemplate=store.documentTemplate(id,sourceId,direction,month);exists=documentTemplate!=null;}
+      else exists=assumptions.manualItems(id,false).stream().anyMatch(item->item.active()&&item.id().equals(sourceId)&&item.direction().equals(direction));
+    }
+    if(!exists) throw ForecastValidation.missing();
+    legacy.lockEntity(id);
+    if(month.isBefore(calendar.currentMonth())) throw ForecastValidation.invalid("month","Past months cannot be edited.");
+    if(documentId!=null&&value!=null&&month.isAfter(calendar.currentMonth())&&!store.documentEligible(id,documentId)) throw ForecastValidation.missing();
+    var change=new ForecastGridOverrides.Override(month,direction,scope,key,value,documentTemplate==null?null:documentTemplate.contact(),documentTemplate==null?null:documentTemplate.number());
+    var changeKey=key;
+    var old=store.overrides(id,month,month).stream().filter(item->item.scope().equals(scope)&&item.direction().equals(direction)&&item.key().equals(changeKey)).findFirst();
+    var actor=UUID.fromString(user.subject());
+    if(value==null) {
+      if(old.isPresent()) {
+        store.deactivateOverride(id,actor,old.get());
+        legacy.audit(id,actor,month,"UPDATE",Map.of("amount",old.get().amount().toPlainString()),Map.of("scope",scope,"key",key,"direction",direction,"active",false));
+      }
+      return;
+    }
+    if(old.isPresent()&&"DOCUMENT".equals(scope)&&old.get().company()!=null) change=new ForecastGridOverrides.Override(month,direction,scope,key,value,old.get().company(),old.get().number());
+    store.saveOverride(id,actor,change);
+    legacy.audit(id,actor,month,"UPDATE",old.<Map<String,Object>>map(item->Map.of("amount",item.amount().toPlainString())).orElse(Map.of()),Map.of("scope",scope,"key",key,"direction",direction,"amount",value.toPlainString()));
+  }
+
+  @Transactional
   public Generation generate(CurrentUser user,UUID id){
     var entity=access.requireWrite(user,id);legacy.lockEntity(id);var now=calendar.currentMonth();var existing=store.months(id,now,now.plusMonths(6));var old=legacy.generated(id);
     var data=loader.load(entity,now);
     if(data.sync()==null||data.sync().lastSuccessfulSyncAt()==null) throw new ApiFailure(HttpStatus.UNPROCESSABLE_ENTITY,"FORECAST_SYNC_REQUIRED","Sync Xero before creating a forecast.");
+    var eligibleDocuments=data.documents().stream().filter(document->!document.excluded()).map(document->document.id().toString()).collect(java.util.stream.Collectors.toSet());
+    var actor=UUID.fromString(user.subject());
+    for(var change:store.overrides(id,now.plusMonths(1),now.plusMonths(6))) if("DOCUMENT".equals(change.scope())&&!eligibleDocuments.contains(change.key())) {
+      store.deactivateOverride(id,actor,change);
+      legacy.audit(id,actor,change.month(),"UPDATE",Map.of("amount",change.amount().toPlainString()),Map.of("scope","DOCUMENT","key",change.key(),"active",false,"reason","document no longer outstanding or excluded"));
+    }
     // A saved document/split in a protected month must not be placed again in a future revision.
     Map<UUID,Map<String,BigDecimal>> protectedLines=new HashMap<>();var first=YearMonth.of(1,1);
     var savedLines=store.lines(id,first,now);
@@ -137,7 +217,7 @@ public class ForecastGridService {
     var placedOverdue=monthEnd?carried:additions.stream().filter(Contribution::overdue).toList();
     int omitted=monthStart?0:(int)calculated.stream().filter(c->c.bucket().equals(now)&&!carried.contains(c)).map(Contribution::sourceId).distinct().count();
     int excludedChanged=(int)changed.stream().filter(doc->all.stream().anyMatch(c->c.sourceId().equals(doc)&&!placedOverdue.contains(c))).count();
-    var actor=UUID.fromString(user.subject());List<String> created=new ArrayList<>(),refreshed=new ArrayList<>(),preserved=new ArrayList<>();
+    List<String> created=new ArrayList<>(),refreshed=new ArrayList<>(),preserved=new ArrayList<>();
     if(monthStart&&!(existing.containsKey(now)&&additions.isEmpty())) {
       var lines=new ArrayList<>(kept);lines.addAll(additions);store.append(id,now,actor,lines);assumptions.captureManualMonth(id,now);
       Map<String,Object> detail=new HashMap<>(Map.of("grid_snapshot",true,"line_count",lines.size(),"added_count",additions.size()));

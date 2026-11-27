@@ -120,6 +120,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/entities/{entityId}/forecast/grid/amount": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["saveForecastGridAmount"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/entities/{entityId}/forecast/documents/{id}/splits": {
         parameters: {
             query?: never;
@@ -1126,6 +1142,18 @@ export interface components {
             /** Format: decimal */
             openingBalance?: string;
             source?: string;
+        };
+        AmountRequest: {
+            month?: string;
+            direction?: string;
+            scope?: string;
+            key?: string;
+            /** Format: decimal */
+            amount?: string | null;
+            reset?: boolean;
+        };
+        AmountSaved: {
+            saved?: boolean;
         };
         Split: {
             /** Format: int32 */
@@ -2306,6 +2334,32 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["OpeningBalance"];
+                };
+            };
+        };
+    };
+    saveForecastGridAmount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entityId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AmountRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AmountSaved"];
                 };
             };
         };

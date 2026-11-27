@@ -184,6 +184,12 @@ function OpeningCell(props: {
   const [amount, setAmount] = useState(month.opening ?? "");
   const [error, setError] = useState("");
   const action = useAction(`${props.subject}:${props.entityId}:${month.month}:grid-opening`);
+  if (month.month < currentMonth())
+    return (
+      <span className={signClass(month.opening)}>
+        {month.opening === null ? "Not recorded" : formatDecimal(month.opening, 2)}
+      </span>
+    );
   if (!editing)
     return (
       <>
@@ -277,6 +283,146 @@ function OpeningCell(props: {
           {error}
         </p>
       ) : null}
+      {action.error ? <Failure error={action.error} /> : null}
+    </form>
+  );
+}
+function AmountCell(props: {
+  api: DashboardApi;
+  entityId: string;
+  month: string;
+  direction: "IN" | "OUT";
+  scope: "COMPANY" | "DOCUMENT" | "MANUAL";
+  itemKey: string;
+  label: string;
+  amount: string | undefined;
+  onSaved(): void;
+  onAccessDenied(): void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [amount, setAmount] = useState(props.amount ?? "");
+  const [error, setError] = useState("");
+  const button = useRef<HTMLButtonElement>(null);
+  const action = useAction(`${props.entityId}:${props.month}:${props.scope}:${props.itemKey}`);
+  const label = `${props.label} for ${monthName(props.month)}`;
+  if (props.month < currentMonth())
+    return <>{props.amount === undefined ? "\u2014" : formatDecimal(props.amount, 2)}</>;
+  if (!editing)
+    return (
+      <>
+        <span>{props.amount === undefined ? "\u2014" : formatDecimal(props.amount, 2)}</span>{" "}
+        <button
+          ref={button}
+          type="button"
+          className="compact-button"
+          aria-label={`Edit ${label}`}
+          onClick={() => {
+            setAmount(props.amount ?? "");
+            setError("");
+            setEditing(true);
+          }}
+        >
+          Edit
+        </button>
+      </>
+    );
+  return (
+    <form
+      className="forecast-grid-opening"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const value = decimal(amount);
+        if (value === null || (cents(value) ?? -1n) < 0n) {
+          setError("Enter zero or a positive amount with at most two decimal places.");
+          return;
+        }
+        setError("");
+        void action
+          .run(
+            (signal) =>
+              props.api.saveForecastGridAmount(
+                props.entityId,
+                {
+                  month: props.month,
+                  direction: props.direction,
+                  scope: props.scope,
+                  key: props.itemKey,
+                  amount: value,
+                },
+                signal,
+              ),
+            (failure) => {
+              if (isAccessFailure(failure)) props.onAccessDenied();
+            },
+          )
+          .then((result) => {
+            if (result) {
+              setEditing(false);
+              props.onSaved();
+              requestAnimationFrame(() => button.current?.focus());
+            }
+          });
+      }}
+    >
+      <input
+        autoFocus
+        inputMode="decimal"
+        aria-label={label}
+        aria-invalid={Boolean(error)}
+        value={amount}
+        onChange={(event) => setAmount(event.target.value)}
+      />
+      <button className="compact-button" type="submit" disabled={action.busy}>
+        Save
+      </button>
+      <button
+        className="compact-button"
+        type="button"
+        disabled={action.busy}
+        onClick={() => {
+          setError("");
+          void action
+            .run(
+              (signal) =>
+                props.api.saveForecastGridAmount(
+                  props.entityId,
+                  {
+                    month: props.month,
+                    direction: props.direction,
+                    scope: props.scope,
+                    key: props.itemKey,
+                    amount: null,
+                    reset: true,
+                  },
+                  signal,
+                ),
+              (failure) => {
+                if (isAccessFailure(failure)) props.onAccessDenied();
+              },
+            )
+            .then((result) => {
+              if (result) {
+                setEditing(false);
+                props.onSaved();
+                requestAnimationFrame(() => button.current?.focus());
+              }
+            });
+        }}
+      >
+        Use calculated amount
+      </button>
+      <button
+        className="compact-button"
+        type="button"
+        disabled={action.busy}
+        onClick={() => {
+          setEditing(false);
+          requestAnimationFrame(() => button.current?.focus());
+        }}
+      >
+        Cancel
+      </button>
+      {error ? <p role="alert">{error}</p> : null}
       {action.error ? <Failure error={action.error} /> : null}
     </form>
   );
@@ -526,9 +672,18 @@ function FragmentRows({
                   const amount = group[0]?.companyAmounts[month.month];
                   return (
                     <td className="money" key={month.month}>
-                      {month.available && amount !== undefined
-                        ? formatDecimal(amount, 2)
-                        : "\u2014"}
+                      <AmountCell
+                        api={api}
+                        entityId={entityId}
+                        month={month.month}
+                        direction={direction}
+                        scope="COMPANY"
+                        itemKey={group[0]!.company}
+                        label={`${group[0]!.company} company amount`}
+                        amount={amount}
+                        onSaved={onSaved}
+                        onAccessDenied={onAccessDenied}
+                      />
                     </td>
                   );
                 })}
@@ -540,14 +695,21 @@ function FragmentRows({
                   <div className="forecast-grid-item">
                     <span>{row.contact}</span>
                     <TransactionNoteEditor
-                      label={row.contact}
+                      label={row.source === "COMPANY" ? `${row.company} company` : row.contact}
                       note={
-                        `${row.source}:${row.documentId}` in savedNotes
-                          ? (savedNotes[`${row.source}:${row.documentId}`] ?? null)
-                          : row.note
+                        row.source === "COMPANY"
+                          ? (grid.companyNotes[row.company] ?? null)
+                          : `${row.source}:${row.documentId}` in savedNotes
+                            ? (savedNotes[`${row.source}:${row.documentId}`] ?? null)
+                            : row.note
                       }
                       onSave={async (text) => {
                         try {
+                          if (row.source === "COMPANY") {
+                            await api.saveForecastCompanyNote(entityId, row.company, text);
+                            onSaved();
+                            return;
+                          }
                           const result = await api.saveForecastTransactionNote(
                             entityId,
                             row.source,
@@ -571,11 +733,22 @@ function FragmentRows({
                 </th>
                 {grid.months.map((month) => (
                   <td className="money" key={month.month}>
-                    {!month.available
-                      ? "\u2014"
-                      : row.amounts[month.month]
-                        ? formatDecimal(row.amounts[month.month], 2)
-                        : "\u2014"}
+                    <AmountCell
+                      api={api}
+                      entityId={entityId}
+                      month={month.month}
+                      direction={direction}
+                      scope={row.source}
+                      itemKey={row.source === "COMPANY" ? row.company : row.documentId}
+                      label={`${row.contact}${row.source === "COMPANY" ? " company" : ""} amount`}
+                      amount={
+                        row.source === "COMPANY"
+                          ? row.companyAmounts[month.month]
+                          : row.amounts[month.month]
+                      }
+                      onSaved={onSaved}
+                      onAccessDenied={onAccessDenied}
+                    />
                   </td>
                 ))}
               </tr>

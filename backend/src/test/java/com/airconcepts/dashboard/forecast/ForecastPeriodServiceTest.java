@@ -12,7 +12,7 @@ class ForecastPeriodServiceTest {
   private final ForecastAssumptionRepository repository=mock(ForecastAssumptionRepository.class);
   private final EntityService entities=mock(EntityService.class);
   private final ForecastAccess access=new ForecastAccess(entities);
-  private final ForecastPeriodService service=new ForecastPeriodService(repository,access);
+  private final ForecastPeriodService service=new ForecastPeriodService(repository,access,new ForecastCalendar(4,Clock.fixed(Instant.parse("2026-11-10T00:00:00Z"),ZoneOffset.UTC)));
   private final UUID entity=UUID.randomUUID();
   private final CurrentUser user=new CurrentUser(UUID.randomUUID().toString(),Role.FINANCIAL_ADMIN);
   @Test void frUc04_04_upsertOpeningBalanceWithAudit() {
@@ -21,6 +21,10 @@ class ForecastPeriodServiceTest {
   }
   @Test void frUc04_04_rejectsNonFirstDayMonth() {
     assertThatThrownBy(()->service.save(user,entity,LocalDate.of(2026,11,2),BigDecimal.ZERO,"Statement")).isInstanceOf(ApiFailure.class);
+    verifyNoInteractions(repository);
+  }
+  @Test void frUc04_04_rejectsPastOpeningEdits() {
+    assertThatThrownBy(()->service.save(user,entity,LocalDate.of(2026,10,1),BigDecimal.ZERO,null)).isInstanceOf(ApiFailure.class);
     verifyNoInteractions(repository);
   }
   @Test void frUc04_07_standardUserAndInactiveCannotReadOrWrite() {

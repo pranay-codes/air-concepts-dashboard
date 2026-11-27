@@ -184,6 +184,7 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
     changedProtectedSchedules: 0,
   });
   const save = vi.spyOn(api, "saveForecastOpening").mockResolvedValue({} as never);
+  const saveAmount = vi.spyOn(api, "saveForecastGridAmount").mockResolvedValue({ saved: true });
   const createManual = vi.spyOn(api, "createGridManual").mockResolvedValue({} as never);
   const saveNote = vi.spyOn(api, "saveForecastTransactionNote").mockResolvedValue({
     source: "DOCUMENT",
@@ -209,6 +210,19 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
     />,
   );
   const company = await screen.findByRole("button", { name: /Customer A \(2\)/ });
+  expect(screen.getAllByRole("button", { name: /Edit Customer A company amount/ })).toHaveLength(7);
+  const groupEdit = screen.getAllByRole("button", { name: /Edit Customer A company amount/ })[1]!;
+  fireEvent.click(groupEdit);
+  const groupAmount = screen.getByRole("textbox", { name: /Customer A company amount/ });
+  fireEvent.change(groupAmount, { target: { value: "77" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() =>
+    expect(saveAmount).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ scope: "COMPANY", key: "Customer A", amount: "77.00" }),
+      expect.any(AbortSignal),
+    ),
+  );
   expect(screen.queryByRole("button", { name: /Unknown contact \(2\)/ })).not.toBeInTheDocument();
   expect(screen.getByText("Unknown contact - INV-901")).toBeInTheDocument();
   expect(screen.getByText("Unknown contact - INV-902")).toBeInTheDocument();
@@ -278,7 +292,8 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
   for (const name of [/Customer A - INV-123/, /Supplier B - BILL-456/]) {
     const cells = screen.getByRole("row", { name }).querySelectorAll("td");
     expect(cells[0]).toHaveTextContent(/^—$/);
-    expect(cells[2]).toHaveTextContent(/^—$/);
+    expect(cells[2]).toHaveTextContent(/—/);
+    expect(cells[2]?.querySelector("button")).toBeEnabled();
   }
   expect(staffing.querySelectorAll("td")[0]).toHaveTextContent(/^—$/);
   expect(staffing).toHaveTextContent("300.00");
@@ -288,7 +303,7 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
   expect(screen.getByText("-10.00")).toHaveClass("amount-negative");
   expect(screen.getAllByText("200.00")[0]).toHaveClass("amount-positive");
   const openingButtons = screen.getAllByRole("button", { name: /Edit opening balance for/ });
-  fireEvent.click(openingButtons[1]!);
+  fireEvent.click(openingButtons[0]!);
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   const input = screen.getByRole("textbox", { name: /Opening balance for/ });
   expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
@@ -312,7 +327,7 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
   expect(screen.queryByText("Carried forward")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Create forecast" }));
   await screen.findByText(/Future months have been refreshed/);
-  await waitFor(() => expect(grid).toHaveBeenCalledTimes(3));
+  await waitFor(() => expect(grid).toHaveBeenCalledTimes(4));
   fireEvent.click(screen.getByRole("button", { name: "Add manual line to Money In" }));
   fireEvent.change(screen.getByLabelText("Description"), { target: { value: "Deposit" } });
   fireEvent.change(screen.getByLabelText("Amount (NZD)"), { target: { value: "75.00" } });
@@ -325,6 +340,18 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
       "10000000-0000-4000-8000-000000000001",
       expect.objectContaining({ description: "Deposit", amount: "75.00", direction: "IN" }),
       "company:Customer A",
+      expect.any(AbortSignal),
+    ),
+  );
+  const edit = (
+    await screen.findAllByRole("button", { name: /Edit Customer A company amount/ })
+  )[0]!;
+  fireEvent.click(edit);
+  fireEvent.click(screen.getByRole("button", { name: "Use calculated amount" }));
+  await waitFor(() =>
+    expect(saveAmount).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ scope: "COMPANY", key: "Customer A", amount: null, reset: true }),
       expect.any(AbortSignal),
     ),
   );

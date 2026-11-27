@@ -24,12 +24,12 @@ const base = (overrides: Partial<ForecastMonth>): ForecastMonth => ({
 describe("FR-UC04-04 / FR-UC04-05 opening balance column", () => {
   it("shows Not set with an Edit control when no opening balance exists", () => {
     const onOpening = vi.fn();
-    render(<ForecastTable months={[base({})]} onOpening={onOpening} />);
+    render(<ForecastTable months={[base({ month: "2099-04" })]} onOpening={onOpening} />);
     expect(screen.getAllByText("Not set").length).toBeGreaterThan(0);
     fireEvent.click(
-      screen.getAllByRole("button", { name: "Edit opening balance for April 2026" })[0]!,
+      screen.getAllByRole("button", { name: "Edit opening balance for April 2099" })[0]!,
     );
-    expect(onOpening).toHaveBeenCalledWith(expect.objectContaining({ month: "2026-04" }));
+    expect(onOpening).toHaveBeenCalledWith(expect.objectContaining({ month: "2099-04" }));
   });
 
   it("always shows Edit beside a recorded amount, labelled by its source", () => {
@@ -38,13 +38,13 @@ describe("FR-UC04-04 / FR-UC04-05 opening balance column", () => {
       <ForecastTable
         months={[
           base({
-            month: "2026-05",
+            month: "2099-05",
             opening: "25000.00",
             openingSource: "CARRIED_FORWARD",
             state: "GENERATED",
             generatable: false,
           }),
-          base({ month: "2026-11", opening: "12000.00", openingSource: "OVERRIDE" }),
+          base({ month: "2099-11", opening: "12000.00", openingSource: "OVERRIDE" }),
         ]}
         onOpening={onOpening}
       />,
@@ -53,13 +53,17 @@ describe("FR-UC04-04 / FR-UC04-05 opening balance column", () => {
     expect(screen.getAllByText("Carried forward").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Override").length).toBeGreaterThan(0);
     fireEvent.click(
-      screen.getAllByRole("button", { name: "Edit opening balance for November 2026" })[0]!,
+      screen.getAllByRole("button", { name: "Edit opening balance for November 2099" })[0]!,
     );
-    expect(onOpening).toHaveBeenLastCalledWith(expect.objectContaining({ month: "2026-11" }));
+    expect(onOpening).toHaveBeenLastCalledWith(expect.objectContaining({ month: "2099-11" }));
   });
 
   it("never shows Edit for a month when no edit handler is supplied", () => {
     render(<ForecastTable months={[base({ opening: "1.00" })]} />);
+    expect(screen.queryByRole("button", { name: /Edit opening balance/ })).toBeNull();
+  });
+  it("keeps past opening balances read-only even with an edit handler", () => {
+    render(<ForecastTable months={[base({ month: "2000-04" })]} onOpening={vi.fn()} />);
     expect(screen.queryByRole("button", { name: /Edit opening balance/ })).toBeNull();
   });
 });

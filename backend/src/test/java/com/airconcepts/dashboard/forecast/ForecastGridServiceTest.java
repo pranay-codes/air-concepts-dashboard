@@ -14,6 +14,50 @@ import java.util.*;
 import org.junit.jupiter.api.Test;
 
 class ForecastGridServiceTest {
+  @Test void frUc04_blankManualOverrideSurvivesMonthRollover() {
+    var access=mock(ForecastAccess.class);var store=mock(ForecastGridRepository.class);var assumptions=mock(ForecastAssumptionRepository.class);
+    var entity=UUID.randomUUID();var item=UUID.randomUUID();var month=YearMonth.of(2026,11);
+    var service=new ForecastGridService(access,mock(ForecastDatasetLoader.class),store,mock(ForecastMonthRepository.class),new ForecastCalendar(4,Clock.fixed(Instant.parse("2026-12-10T00:00:00Z"),ZoneOffset.UTC)),assumptions,mock(ForecastNoteRepository.class));
+    when(store.months(entity,month,month)).thenReturn(Map.of(month,Instant.EPOCH));
+    when(store.overrides(entity,month,month)).thenReturn(List.of(new ForecastGridOverrides.Override(month,"OUT","MANUAL",item.toString(),new BigDecimal("40.00"))));
+    when(assumptions.manualItems(entity,true)).thenReturn(List.of(new ForecastDataset.ManualItem(item,"OUT","OTHER_PAYMENT","Reserve",BigDecimal.ONE,"ONE_OFF",1,month,null,false)));
+    var result=service.grid(new CurrentUser(UUID.randomUUID().toString(),Role.DIRECTOR),entity,month.toString(),1);
+    assertThat(result.months().getFirst().moneyOut()).isEqualTo("40.00");
+    assertThat(result.rows()).singleElement().satisfies(row->assertThat(row.amounts()).containsEntry("2026-11","40.00"));
+  }
+  @Test void frUc04_inactiveManualOverrideDoesNotReappearInFuture() {
+    var access=mock(ForecastAccess.class);var store=mock(ForecastGridRepository.class);var assumptions=mock(ForecastAssumptionRepository.class);
+    var entity=UUID.randomUUID();var item=UUID.randomUUID();var month=YearMonth.of(2026,11);
+    var service=new ForecastGridService(access,mock(ForecastDatasetLoader.class),store,mock(ForecastMonthRepository.class),new ForecastCalendar(4,Clock.fixed(Instant.parse("2026-11-10T00:00:00Z"),ZoneOffset.UTC)),assumptions,mock(ForecastNoteRepository.class));
+    when(store.months(entity,month,month)).thenReturn(Map.of(month,Instant.EPOCH));
+    when(store.overrides(entity,month,month)).thenReturn(List.of(new ForecastGridOverrides.Override(month,"IN","MANUAL",item.toString(),new BigDecimal("50.00"))));
+    var result=service.grid(new CurrentUser(UUID.randomUUID().toString(),Role.DIRECTOR),entity,month.toString(),1);
+    assertThat(result.months().getFirst().moneyIn()).isEqualTo("0.00");
+    assertThat(result.rows()).isEmpty();
+  }
+  @Test void frUc04_companyOverrideRemainsVisibleWhenDocumentsDisappear() {
+    var access=mock(ForecastAccess.class);var store=mock(ForecastGridRepository.class);var assumptions=mock(ForecastAssumptionRepository.class);
+    var entity=UUID.randomUUID();var month=YearMonth.of(2026,11);
+    var service=new ForecastGridService(access,mock(ForecastDatasetLoader.class),store,mock(ForecastMonthRepository.class),new ForecastCalendar(4,Clock.fixed(Instant.parse("2026-11-10T00:00:00Z"),ZoneOffset.UTC)),assumptions,mock(ForecastNoteRepository.class));
+    when(store.months(entity,month,month)).thenReturn(Map.of(month,Instant.EPOCH));
+    when(store.overrides(entity,month,month)).thenReturn(List.of(new ForecastGridOverrides.Override(month,"IN","COMPANY","Acme",new BigDecimal("50.00"))));
+    var result=service.grid(new CurrentUser(UUID.randomUUID().toString(),Role.DIRECTOR),entity,month.toString(),1);
+    assertThat(result.months().getFirst().moneyIn()).isEqualTo("50.00");
+    assertThat(result.rows()).singleElement().satisfies(row->{assertThat(row.source()).isEqualTo("COMPANY");assertThat(row.companyAmounts()).containsEntry("2026-11","50.00");});
+  }
+  @Test void frUc04_companyOverrideDeterminesTotalWithoutChangingRows() {
+    var access=mock(ForecastAccess.class);var store=mock(ForecastGridRepository.class);var assumptions=mock(ForecastAssumptionRepository.class);
+    var entity=UUID.randomUUID();var first=UUID.randomUUID();var second=UUID.randomUUID();var month=YearMonth.of(2026,11);
+    var service=new ForecastGridService(access,mock(ForecastDatasetLoader.class),store,mock(ForecastMonthRepository.class),new ForecastCalendar(4,Clock.fixed(Instant.parse("2026-11-10T00:00:00Z"),ZoneOffset.UTC)),assumptions,mock(ForecastNoteRepository.class));
+    when(store.months(entity,month,month)).thenReturn(Map.of(month,Instant.EPOCH));
+    when(assumptions.openingAnchors(entity)).thenReturn(Map.of(month,new ForecastAssumptionRepository.OpeningBalance(new BigDecimal("100.00"),"Bank")));
+    when(store.lines(entity,month,month)).thenReturn(List.of(new ForecastGridRepository.Line(month,first,null,"IN","Acme",new BigDecimal("10.00"),"1"),new ForecastGridRepository.Line(month,second,null,"IN","Acme",new BigDecimal("20.00"),"2")));
+    when(store.overrides(entity,month,month)).thenReturn(List.of(new ForecastGridOverrides.Override(month,"IN","COMPANY","Acme",new BigDecimal("50.00"))));
+    var result=service.grid(new CurrentUser(UUID.randomUUID().toString(),Role.DIRECTOR),entity,month.toString(),1);
+    assertThat(result.months().getFirst().moneyIn()).isEqualTo("50.00");
+    assertThat(result.months().getFirst().closing()).isEqualTo("150.00");
+    assertThat(result.rows()).filteredOn(row->row.documentId().equals(first)).singleElement().satisfies(row->{assertThat(row.amounts()).containsEntry("2026-11","10.00");assertThat(row.companyAmounts()).containsEntry("2026-11","50.00");});
+  }
   @Test void frUc04_manualEditsAndDeactivationNeverChangePreviousMonths() {
     var access=mock(ForecastAccess.class);var store=mock(ForecastGridRepository.class);var assumptions=mock(ForecastAssumptionRepository.class);
     var clock=Clock.fixed(Instant.parse("2026-12-10T00:00:00Z"),ZoneOffset.UTC);
@@ -351,5 +395,16 @@ class ForecastGridServiceTest {
           new ForecastDataset.SyncInfo(Instant.EPOCH,"SUCCEEDED",false)));
       return new ForecastGridService(access,loader,store,legacy,new ForecastCalendar(4,clock),assumptions,mock(ForecastNoteRepository.class)).generate(user,entity.id());
     }
+  }
+  @Test void frUc04_refreshRetiresFutureOverridesForSettledDocuments() {
+    var access=mock(ForecastAccess.class);var loader=mock(ForecastDatasetLoader.class);var store=mock(ForecastGridRepository.class);var legacy=mock(ForecastMonthRepository.class);
+    var now=YearMonth.of(2026,11);var id=UUID.randomUUID();var entity=new Entity(id,"Synthetic");var user=new CurrentUser(UUID.randomUUID().toString(),Role.DIRECTOR);
+    var service=new ForecastGridService(access,loader,store,legacy,new ForecastCalendar(4,Clock.fixed(Instant.parse("2026-11-10T00:00:00Z"),ZoneOffset.UTC)),mock(ForecastAssumptionRepository.class),mock(ForecastNoteRepository.class));
+    var change=new ForecastGridOverrides.Override(now.plusMonths(1),"IN","DOCUMENT",UUID.randomUUID().toString(),new BigDecimal("50.00"));
+    when(access.requireWrite(user,id)).thenReturn(entity);
+    when(store.overrides(id,now.plusMonths(1),now.plusMonths(6))).thenReturn(List.of(change));
+    when(loader.load(entity,now)).thenReturn(new ForecastDataset(id,"Synthetic",now,LocalDate.of(2026,11,10),null,null,List.of(),List.of(),List.of(),new ForecastDataset.SyncInfo(Instant.EPOCH,"SUCCEEDED",false)));
+    service.generate(user,id);
+    verify(store).deactivateOverride(id,UUID.fromString(user.subject()),change);
   }
 }

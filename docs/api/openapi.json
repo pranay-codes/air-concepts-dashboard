@@ -463,6 +463,46 @@
         } ]
       }
     },
+    "/api/v1/entities/{entityId}/forecast/grid/amount" : {
+      "put" : {
+        "tags" : [ "forecast-grid-controller" ],
+        "operationId" : "saveForecastGridAmount",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AmountRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AmountSaved"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
     "/api/v1/entities/{entityId}/forecast/documents/{id}/splits" : {
       "put" : {
         "tags" : [ "forecast-adjustment-controller" ],
@@ -3378,6 +3418,38 @@
           },
           "source" : {
             "type" : "string"
+          }
+        }
+      },
+      "AmountRequest" : {
+        "type" : "object",
+        "properties" : {
+          "month" : {
+            "type" : "string"
+          },
+          "direction" : {
+            "type" : "string"
+          },
+          "scope" : {
+            "type" : "string"
+          },
+          "key" : {
+            "type" : "string"
+          },
+          "amount" : {
+            "type" : [ "string", "null" ],
+            "format" : "decimal"
+          },
+          "reset" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "AmountSaved" : {
+        "type" : "object",
+        "properties" : {
+          "saved" : {
+            "type" : "boolean"
           }
         }
       },

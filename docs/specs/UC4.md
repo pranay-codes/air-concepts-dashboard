@@ -179,3 +179,9 @@ Levels: U = unit, I = disposable PostgreSQL (Testcontainers), H = Spring MVC HTT
 ## Company group notes (human instruction, 27 November 2026)
 - Each forecast company group has an internal note independent of its invoice and bill notes. The note is shared between Money In and Money Out for the same company and entity, and persists across forecast periods. Saving a blank note clears it. Notes are not sent to Xero.
 - Company identity follows the exact company name used by the forecast grid. A changed name forms a different group until a stable contact identity is available. Forecast role and entity access checks apply.
+
+## Forecast amount editing (human instruction, 27 November 2026)
+- Current and future opening balances and company, document and manual-line amounts can be edited, including blank cells. Past months are read-only and the server rejects historical writes.
+- Monthly company amounts can be overridden independently of their individual invoice or bill rows. Where set, the company amount replaces the sum of those rows in Money In or Money Out; document edits do not change that company override. Totals and closing balances remain calculated.
+- Changes are internal forecast overrides scoped to the entity and month. They do not change Xero amounts and remain in place through forecast refreshes. An ungenerated month can retain an edit but does not display a calculated monthly total until forecast data is generated.
+- Users can restore a cell's calculated amount. When a future month is refreshed, a document override for an item that is no longer outstanding or is excluded is retired; current and past months remain preserved.

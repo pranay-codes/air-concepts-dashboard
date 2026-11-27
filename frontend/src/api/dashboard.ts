@@ -28,7 +28,7 @@ export type ForecastGrid = Omit<components["schemas"]["Grid"], "entityId" | "mon
     companyAmounts: Record<string, string>;
     documentId: string;
     note: string | null;
-    source: "DOCUMENT" | "MANUAL";
+    source: "DOCUMENT" | "MANUAL" | "COMPANY";
     positionBefore: string | null;
   }[];
 };
@@ -63,7 +63,7 @@ function isForecastGrid(value: unknown): value is ForecastGrid {
         typeof r.company === "string" &&
         typeof r.documentId === "string" &&
         (r.note === null || typeof r.note === "string") &&
-        (r.source === "DOCUMENT" || r.source === "MANUAL") &&
+        (r.source === "DOCUMENT" || r.source === "MANUAL" || r.source === "COMPANY") &&
         (r.positionBefore === null || typeof r.positionBefore === "string") &&
         isRecord(r.amounts) &&
         Object.values(r.amounts).every(f.money) &&
@@ -136,6 +136,25 @@ export class DashboardApi {
     return this.client.json(`${root(entity)}/forecast/grid/generate`, isGridGeneration, signal, {
       method: "POST",
     });
+  }
+  saveForecastGridAmount(
+    entity: string,
+    body: {
+      month: string;
+      direction: "IN" | "OUT";
+      scope: "COMPANY" | "DOCUMENT" | "MANUAL";
+      key: string;
+      amount: string | null;
+      reset?: boolean;
+    },
+    signal?: AbortSignal,
+  ) {
+    return this.client.json(
+      `${root(entity)}/forecast/grid/amount`,
+      (value): value is { saved: boolean } => isRecord(value) && value.saved === true,
+      signal,
+      { method: "PUT", body },
+    );
   }
   async greenLineSyncStatus(entity: string, signal?: AbortSignal): Promise<c.GreenLineSyncStatus> {
     const result = await this.client.json(
