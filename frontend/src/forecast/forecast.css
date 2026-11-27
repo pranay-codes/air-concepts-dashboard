@@ -551,15 +551,18 @@
 }
 .forecast-grid-scroll {
   max-width: 100%;
-  overflow-x: auto;
+  max-height: 75vh;
+  overflow: auto;
 }
 .forecast-grid-table {
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   min-width: 100%;
+  font-size: 0.875rem;
 }
 .forecast-grid-table th,
 .forecast-grid-table td {
-  padding: 0.65rem;
+  padding: 0.4rem;
   border-bottom: 1px solid var(--border, #d6d6d6);
   white-space: nowrap;
 }
@@ -568,11 +571,27 @@
   left: 0;
   background: var(--surface, white);
   text-align: left;
-  min-width: 14rem;
+  min-width: 12rem;
+  z-index: 1;
 }
 .forecast-grid-table td {
-  min-width: 8rem;
+  min-width: 7rem;
   text-align: right;
+}
+.forecast-grid-table tr > :where(:nth-child(even)) {
+  background: #f0f6f8;
+}
+.forecast-grid-table tr > :where(:nth-child(odd):not(:first-child)) {
+  background: #f7f4ee;
+}
+.forecast-grid-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface, white);
+}
+.forecast-grid-table thead th:first-child {
+  z-index: 3;
 }
 .forecast-grid-table .forecast-grid-summary > th,
 .forecast-grid-table .forecast-grid-summary > td {
@@ -590,11 +609,29 @@
 .forecast-grid-opening input {
   width: 8rem;
 }
+.forecast-grid-manual {
+  display: flex;
+  align-items: end;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  white-space: normal;
+}
+.forecast-grid-manual label {
+  display: grid;
+  gap: 0.2rem;
+}
 
 .forecast-grid-item {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  max-width: 18rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.forecast-grid-item .note-preview {
+  color: #a51c30;
 }
 .forecast-grid-item .note-cell,
 .forecast-grid-item .note-editor {

@@ -61,7 +61,7 @@ class ForecastEndpointTest {
         get(base()),get(base()+"/grid?startMonth=2026-11"),post(base()+"/grid/generate"),get(base()+"/months/2026-11/items"),post(base()+"/months/2026-11/generate"),get(base()+"/documents"),get(base()+"/documents/"+id),
         get("/api/v1/forecast/combined"),get(base()+"/sync"),post(base()+"/sync"),
         get(base()+"/periods/2026-11/opening-balance"),put(base()+"/periods/2026-11/opening-balance"),
-        get(base()+"/manual-items"),post(base()+"/manual-items"),patch(base()+"/manual-items/"+id),post(base()+"/manual-items/"+id+"/deactivate"),
+        get(base()+"/manual-items"),post(base()+"/manual-items"),post(base()+"/manual-items/grid"),patch(base()+"/manual-items/"+id),post(base()+"/manual-items/"+id+"/deactivate"),
         get(base()+"/staffing"),post(base()+"/staffing"),patch(base()+"/staffing/"+id),post(base()+"/staffing/"+id+"/deactivate"),
         get(base()+"/audit"),put(base()+"/documents/"+id+"/adjustment"),put(base()+"/documents/"+id+"/splits"),post(base()+"/documents/"+id+"/conflict"),
         put(base()+"/transactions/DOCUMENT/"+id+"/note"),

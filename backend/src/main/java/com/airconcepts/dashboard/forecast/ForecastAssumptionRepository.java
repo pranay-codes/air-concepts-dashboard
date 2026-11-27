@@ -36,6 +36,24 @@ public class ForecastAssumptionRepository {
     return anchors;
   }
   public List<ManualItem> manualItems(UUID entity,boolean inactive) {return jdbc.query("select * from public.forecast_manual_items where entity_id=? and (? or active) order by description,id",MANUAL,entity,inactive);}
+  public Map<UUID,String> manualPositions(UUID entity) {
+    Map<UUID,String> result=new HashMap<>();
+    jdbc.query("select id,grid_before_company from public.forecast_manual_items where entity_id=? and grid_before_company is not null",r->{result.put(r.getObject(1,UUID.class),r.getString(2));},entity);
+    return result;
+  }
+  public void setManualPosition(UUID entity,UUID item,String position) {
+    jdbc.update("update public.forecast_manual_items set grid_before_company=? where entity_id=? and id=?",position,entity,item);
+  }
+  public void captureManualMonth(UUID entity,YearMonth month) {
+    jdbc.update("""
+        insert into public.forecast_grid_manual_snapshots(entity_id,forecast_month,manual_item_id,direction,description,amount,active)
+        select entity_id,?,id,direction,description,amount,
+          active and ?>=start_month and (end_month is null or ?<=end_month) and (recurrence<>'ONE_OFF' or ?=start_month)
+        from public.forecast_manual_items where entity_id=? and ?>=date_trunc('month',now() at time zone 'Pacific/Auckland')::date
+        on conflict(entity_id,forecast_month,manual_item_id) do update set
+          direction=excluded.direction,description=excluded.description,amount=excluded.amount,active=excluded.active
+        """,month.atDay(1),month.atDay(1),month.atDay(1),month.atDay(1),entity,month.atDay(1));
+  }
   public Optional<ManualItem> manual(UUID entity,UUID id) {return jdbc.query("select * from public.forecast_manual_items where entity_id=? and id=?",MANUAL,entity,id).stream().findFirst();}
   @Transactional(propagation=org.springframework.transaction.annotation.Propagation.MANDATORY)
   public Optional<ManualItem> manualForUpdate(UUID entity,UUID id){lockEntity(entity);return jdbc.query("select * from public.forecast_manual_items where entity_id=? and id=? for update",MANUAL,entity,id).stream().findFirst();}
@@ -67,7 +85,21 @@ public class ForecastAssumptionRepository {
     var values=new LinkedHashMap<String,Object>();values.put("direction",item.direction());values.put("category",item.category());values.put("description",item.description());
     values.put("amount",item.amount());values.put("recurrence",item.recurrence());values.put("day_of_month",item.dayOfMonth());
     values.put("start_month",item.startMonth().atDay(1));values.put("end_month",item.endMonth()==null?null:item.endMonth().atDay(1));values.put("active",item.active());
-    save("forecast_manual_items",entity,item.id(),actor,values,old.isEmpty(),!item.active());return item;
+    save("forecast_manual_items",entity,item.id(),actor,values,old.isEmpty(),!item.active());
+    jdbc.update("""
+        insert into public.forecast_grid_manual_snapshots(entity_id,forecast_month,manual_item_id,direction,description,amount,active)
+        select item.entity_id,months.forecast_month,item.id,item.direction,item.description,item.amount,
+          item.active and months.forecast_month>=item.start_month and (item.end_month is null or months.forecast_month<=item.end_month)
+          and (item.recurrence<>'ONE_OFF' or months.forecast_month=item.start_month)
+        from public.forecast_manual_items item join (
+          select forecast_month from public.forecast_grid_revisions where entity_id=?
+          union select forecast_month from public.forecast_generated_months where entity_id=?
+        ) months on true
+        where item.entity_id=? and item.id=? and months.forecast_month>=date_trunc('month',now() at time zone 'Pacific/Auckland')::date
+        on conflict(entity_id,forecast_month,manual_item_id) do update set
+          direction=excluded.direction,description=excluded.description,amount=excluded.amount,active=excluded.active
+        """,entity,entity,entity,item.id());
+    return item;
   }
   @Transactional public StaffingLine saveStaff(UUID entity,UUID actor,StaffingLine item) {
     lockEntity(entity);var old=staff(entity,item.id());var values=new LinkedHashMap<String,Object>();

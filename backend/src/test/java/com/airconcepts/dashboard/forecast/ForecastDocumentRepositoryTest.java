@@ -61,4 +61,19 @@ class ForecastDocumentRepositoryTest {
     assertThatThrownBy(()->apply(List.of(source(id,"115.00",null),source(UUID.randomUUID(),"-1.00",null)),List.of())).isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
     assertThat(jdbc.queryForObject("select count(*) from public.forecast_documents where entity_id=?",Integer.class,entity)).isZero();
   }
+  @Test void frUc04_manualSnapshotsKeepPastAmountsOnEditAndDeactivation(){
+    var current=YearMonth.now(ForecastMonths.ZONE);var previous=current.minusMonths(1);var manualId=UUID.randomUUID();
+    for(var month:List.of(previous,current)) jdbc.update("insert into public.forecast_grid_revisions(entity_id,forecast_month,revision,created_by) values(?,?,1,?)",entity,month.atDay(1),actor);
+    var assumptions=new ForecastAssumptionRepository(jdbc,new tools.jackson.databind.ObjectMapper());
+    var initial=new com.airconcepts.dashboard.forecast.calc.ForecastDataset.ManualItem(manualId,"IN","OTHER_RECEIPT","Original",new BigDecimal("25.00"),"MONTHLY",1,previous,null,true);
+    assumptions.saveManual(entity,actor,initial);
+    jdbc.update("insert into public.forecast_grid_manual_snapshots(entity_id,forecast_month,manual_item_id,direction,description,amount,active) values(?,?,?,'IN','Original',25.00,true)",entity,previous.atDay(1),manualId);
+    var edited=new com.airconcepts.dashboard.forecast.calc.ForecastDataset.ManualItem(manualId,"IN","OTHER_RECEIPT","Revised",new BigDecimal("50.00"),"MONTHLY",1,previous,null,true);
+    assumptions.saveManual(entity,actor,edited);
+    var grid=new ForecastGridRepository(jdbc);
+    assertThat(grid.manualLines(entity,previous,current)).extracting(ForecastGridRepository.ManualLine::amount).containsExactly(new BigDecimal("25.00"),new BigDecimal("50.00"));
+    assertThat(grid.manualLines(UUID.randomUUID(),previous,current)).isEmpty();
+    assumptions.saveManual(entity,actor,new com.airconcepts.dashboard.forecast.calc.ForecastDataset.ManualItem(manualId,"IN","OTHER_RECEIPT","Revised",new BigDecimal("50.00"),"MONTHLY",1,previous,null,false));
+    assertThat(grid.manualLines(entity,previous,current)).singleElement().satisfies(line->{assertThat(line.month()).isEqualTo(previous);assertThat(line.amount()).isEqualByComparingTo("25.00");});
+  }
 }

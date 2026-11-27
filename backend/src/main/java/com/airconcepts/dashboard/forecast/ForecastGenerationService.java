@@ -55,6 +55,7 @@ public class ForecastGenerationService {
     int generation=existing==null?1:existing.generationCount()+1;
     int added=candidates.isEmpty()?0:months.insertLines(entity.id(),month,generation,actor,candidates);
     if(added!=candidates.size()) throw new IllegalStateException("Forecast placement conflict for "+month+"; no lines were kept.");
+    assumptions.captureManualMonth(entity.id(),month);
     int countAfter=existing==null?1:existing.generationCount();
     if(existing!=null&&added>0) {months.recordRegeneration(entity.id(),month,actor);countAfter=existing.generationCount()+1;}
     BigDecimal receipts=sum(candidates,"IN"),payments=sum(candidates,"OUT");

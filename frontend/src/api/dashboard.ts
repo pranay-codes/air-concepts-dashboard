@@ -22,9 +22,13 @@ export type ForecastGrid = Omit<components["schemas"]["Grid"], "entityId" | "mon
   rows: {
     direction: "IN" | "OUT";
     contact: string;
+    company: string;
     amounts: Record<string, string>;
+    companyAmounts: Record<string, string>;
     documentId: string;
     note: string | null;
+    source: "DOCUMENT" | "MANUAL";
+    positionBefore: string | null;
   }[];
 };
 function isForecastGrid(value: unknown): value is ForecastGrid {
@@ -53,10 +57,15 @@ function isForecastGrid(value: unknown): value is ForecastGrid {
         isRecord(r) &&
         (r.direction === "IN" || r.direction === "OUT") &&
         typeof r.contact === "string" &&
+        typeof r.company === "string" &&
         typeof r.documentId === "string" &&
         (r.note === null || typeof r.note === "string") &&
+        (r.source === "DOCUMENT" || r.source === "MANUAL") &&
+        (r.positionBefore === null || typeof r.positionBefore === "string") &&
         isRecord(r.amounts) &&
-        Object.values(r.amounts).every(f.money),
+        Object.values(r.amounts).every(f.money) &&
+        isRecord(r.companyAmounts) &&
+        Object.values(r.companyAmounts).every(f.money),
     )
   );
 }
@@ -503,6 +512,17 @@ export class DashboardApi {
       signal,
       { method: itemId ? "PATCH" : "POST", body: item },
     );
+  }
+  createGridManual(
+    entity: string,
+    item: f.ManualInput,
+    positionBefore: string | null,
+    signal?: AbortSignal,
+  ) {
+    return this.client.json(`${root(entity)}/forecast/manual-items/grid`, f.isManual, signal, {
+      method: "POST",
+      body: { item, positionBefore },
+    });
   }
   deactivateForecastManual(entity: string, itemId: string, signal?: AbortSignal) {
     return this.client.json(
