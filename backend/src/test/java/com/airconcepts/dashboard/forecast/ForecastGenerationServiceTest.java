@@ -43,6 +43,7 @@ class ForecastGenerationServiceTest {
     var first=service.generate(user,entityId,"2026-11");
     assertThat(first.addedLines()).isEqualTo(1);assertThat(first.generationCount()).isEqualTo(1);
     verify(months).createGeneration(eq(entityId),eq(NOV),any());
+    verify(assumptions).captureManualMonth(entityId,NOV);
     verify(months).insertLines(eq(entityId),eq(NOV),eq(1),any(),anyList());
     // The second request sees the stored month and the placed document: it adds nothing and touches nothing.
     when(months.generated(entityId)).thenReturn(Map.of(NOV,new GeneratedMonth(NOV,clock.instant(),1)));
@@ -51,6 +52,7 @@ class ForecastGenerationServiceTest {
     assertThat(second.addedLines()).isZero();assertThat(second.generationCount()).isEqualTo(1);
     verify(months,times(1)).insertLines(any(),any(),anyInt(),any(),anyList());
     verify(months,never()).recordRegeneration(any(),any(),any());
+    verify(assumptions,times(2)).captureManualMonth(entityId,NOV);
   }
 
   @Test void frUc04_24_placedDocumentIsNeverReplacedAndNewDocumentsAreAdded(){

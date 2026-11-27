@@ -22,6 +22,7 @@ public class ForecastAssumptionController {
   public record ManualRequest(String direction,String category,String description,@io.swagger.v3.oas.annotations.media.Schema(type="string",format="decimal") BigDecimal amount,String recurrence,Integer dayOfMonth,YearMonth startMonth,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) YearMonth endMonth,Boolean active) {
     ManualItem item(UUID id){return new ManualItem(id,direction,category,description,amount,recurrence,dayOfMonth,startMonth,endMonth,active==null||active);}
   }
+  public record GridManualRequest(ManualRequest item,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String positionBefore) {}
   public record StaffingRequest(String label,@io.swagger.v3.oas.annotations.media.Schema(type="string",format="decimal") BigDecimal monthlyCost,Integer payDayOfMonth,YearMonth startMonth,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) YearMonth endMonth,Boolean active,
       @io.swagger.v3.oas.annotations.media.Schema(types={"string","null"},format="decimal") BigDecimal hourlyRate,
       @io.swagger.v3.oas.annotations.media.Schema(types={"string","null"},format="decimal") BigDecimal weeklyHours,
@@ -45,6 +46,14 @@ public class ForecastAssumptionController {
   public ResponseEntity<List<ManualItem>> manual(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID entityId,@RequestParam(defaultValue="false") boolean includeInactive){return ok(manual.list(users.from(jwt),entityId,includeInactive));}
   @PostMapping("/manual-items") @Operation(operationId="createForecastManualItem")
   public ResponseEntity<ManualItem> createManual(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID entityId,@RequestBody ManualRequest body){return ok(manual.create(users.from(jwt),entityId,body.item(null)));}
+  @PostMapping("/manual-items/grid") @Operation(operationId="createForecastGridManualItem") @org.springframework.transaction.annotation.Transactional
+  public ResponseEntity<ManualItem> createGridManual(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID entityId,@RequestBody GridManualRequest body){
+    if(body==null||body.item()==null)throw ForecastValidation.invalid("item","Enter the manual item.");
+    var position=body.positionBefore()==null?null:ForecastValidation.text("positionBefore",body.positionBefore(),248);
+    var user=users.from(jwt);var created=manual.create(user,entityId,body.item().item(null));
+    if(position!=null){repository.setManualPosition(entityId,created.id(),position);repository.audit(entityId,UUID.fromString(user.subject()),"forecast_manual_items",created.id().toString(),"UPDATE",Map.of(),Map.of("grid_before_company",position));}
+    return ok(created);
+  }
   @PatchMapping("/manual-items/{id}") @Operation(operationId="updateForecastManualItem")
   public ResponseEntity<ManualItem> updateManual(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID entityId,@PathVariable UUID id,@io.swagger.v3.oas.annotations.parameters.RequestBody(content=@io.swagger.v3.oas.annotations.media.Content(schema=@io.swagger.v3.oas.annotations.media.Schema(implementation=ManualRequest.class))) @RequestBody Map<String,Object> body){return ok(manual.patch(users.from(jwt),entityId,id,body));}
   @PostMapping("/manual-items/{id}/deactivate") @Operation(operationId="deactivateForecastManualItem")

@@ -18,8 +18,8 @@ public class ForecastGridService {
       @io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String moneyIn,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String moneyOut,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String staffingExpenses,
       @io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String opening,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String closing,
       @io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String openingSource,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String openingNote) {}
-  @io.swagger.v3.oas.annotations.media.Schema(requiredProperties={"direction","contact","amounts","documentId","note"})
-  public record Row(@io.swagger.v3.oas.annotations.media.Schema(allowableValues={"IN","OUT"}) String direction,String contact,Map<String,String> amounts,UUID documentId,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String note) {}
+  @io.swagger.v3.oas.annotations.media.Schema(requiredProperties={"direction","contact","company","amounts","companyAmounts","documentId","note","source","positionBefore"})
+  public record Row(@io.swagger.v3.oas.annotations.media.Schema(allowableValues={"IN","OUT"}) String direction,String contact,String company,Map<String,String> amounts,Map<String,String> companyAmounts,UUID documentId,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String note,String source,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String positionBefore) {}
   @io.swagger.v3.oas.annotations.media.Schema(requiredProperties={"entityId","months","rows"})
   public record Grid(UUID entityId,List<Month> months,List<Row> rows) {}
   @io.swagger.v3.oas.annotations.media.Schema(requiredProperties={"created","refreshed","preserved","omittedCurrentItems","changedProtectedSchedules"})
@@ -45,7 +45,16 @@ public class ForecastGridService {
         total=total.add(item.paymentFrequency()==null?item.monthlyCost():StaffingSchedule.monthly(item.hourlyRate(),item.weeklyHours(),item.paymentFrequency(),item.firstPayday(),item.employmentStart(),item.employmentEnd(),month));
       staffingTotals.put(month,total);
     }
+    var manualItems=assumptions.manualItems(id,false);
+    var positions=assumptions.manualPositions(id);
+    var currentMonth=calendar.currentMonth();
+    var savedManual=store.manualLines(id,chainStart,end).stream().filter(line->line.month().isBefore(currentMonth)).toList();
     var balanceLines=new ArrayList<>(all);
+    for(var line:savedManual) balanceLines.add(new ForecastGridRepository.Line(line.month(),line.itemId(),null,line.direction(),line.description(),line.amount()));
+    for(var item:manualItems) if(item.active()) for(var month=chainStart;!month.isAfter(end);month=month.plusMonths(1)) {
+      if(!month.isBefore(currentMonth) && ForecastCalculator.active(month,item.startMonth(),item.endMonth()) && (!"ONE_OFF".equals(item.recurrence()) || month.equals(item.startMonth())))
+        balanceLines.add(new ForecastGridRepository.Line(month,item.id(),null,item.direction(),item.description(),item.amount()));
+    }
     staffingTotals.forEach((month,total)->balanceLines.add(new ForecastGridRepository.Line(month,null,null,"OUT","Staffing Expenses",total)));
     var balances=ForecastGridBalances.calculate(chainStart,end,available,balanceLines,anchors);
     List<Month> months=new ArrayList<>(); for(int i=0;i<count;i++){var m=start.plusMonths(i);var ts=timestamps.get(m);var prior=old.get(m);var b=balances.get(m);var anchor=records.get(m);months.add(new Month(m.toString(),ts!=null||prior!=null,ts!=null?ts:prior==null?null:prior.generatedAt(),decimal(b.moneyIn()),decimal(b.moneyOut()),b.moneyOut()==null?null:decimal(staffingTotals.get(m)),decimal(b.opening()),decimal(b.closing()),anchor!=null?"ENTERED":b.opening()!=null?"CARRIED_FORWARD":null,anchor==null?null:anchor.source()));}
@@ -55,15 +64,28 @@ public class ForecastGridService {
       var key=new RowKey(line.direction(),line.contact(),line.number(),line.documentId());
       groups.computeIfAbsent(key,k->new TreeMap<>()).merge(line.month().toString(),line.amount(),BigDecimal::add);
     }
-    Map<UUID,String> documentNotes=new HashMap<>();
-    for(var note:notes.notes(id)) if("DOCUMENT".equals(note.source())) documentNotes.put(note.sourceId(),note.note());
+    Map<UUID,String> documentNotes=new HashMap<>(), manualNotes=new HashMap<>();
+    for(var note:notes.notes(id)) {
+      if("DOCUMENT".equals(note.source())) documentNotes.put(note.sourceId(),note.note());
+      if("MANUAL".equals(note.source())) manualNotes.put(note.sourceId(),note.note());
+    }
+    Map<String,Map<String,BigDecimal>> companyTotals=new HashMap<>();
+    groups.forEach((key,values)->{if("IN".equals(key.direction())) values.forEach((month,amount)->companyTotals.computeIfAbsent(key.contact(),k->new TreeMap<>()).merge(month,amount,BigDecimal::add));});
     List<Row> rows=new ArrayList<>();
     groups.entrySet().stream().sorted(Comparator.comparing((Map.Entry<RowKey,Map<String,BigDecimal>> e)->e.getKey().direction())
         .thenComparing(e->e.getKey().contact()).thenComparing(e->Objects.toString(e.getKey().number(),""))
         .thenComparing(e->Objects.toString(e.getKey().documentId(),""))).forEach(entry->{
       var key=entry.getKey();Map<String,String> values=new TreeMap<>();entry.getValue().forEach((m,amount)->values.put(m,amount.toPlainString()));
-      rows.add(new Row(key.direction(),key.contact()+" - "+(key.number()==null||key.number().isBlank()?"Number unavailable":key.number()),values,key.documentId(),documentNotes.get(key.documentId())));
+      Map<String,String> totals=new TreeMap<>();companyTotals.getOrDefault(key.contact(),Map.of()).forEach((m,amount)->totals.put(m,amount.toPlainString()));
+      rows.add(new Row(key.direction(),key.contact()+" - "+(key.number()==null||key.number().isBlank()?"Number unavailable":key.number()),key.contact(),values,totals,key.documentId(),documentNotes.get(key.documentId()),"DOCUMENT",null));
     });
+    record ManualKey(UUID id,String direction,String description) {}
+    Map<ManualKey,Map<String,String>> manualGroups=new LinkedHashMap<>();
+    for(var line:savedManual) if(!line.month().isBefore(start)) manualGroups.computeIfAbsent(new ManualKey(line.itemId(),line.direction(),line.description()),k->new TreeMap<>()).put(line.month().toString(),line.amount().toPlainString());
+    for(var item:manualItems) if(item.active()) for(var m=start;!m.isAfter(end);m=m.plusMonths(1))
+      if(!m.isBefore(currentMonth) && ForecastCalculator.active(m,item.startMonth(),item.endMonth()) && (!"ONE_OFF".equals(item.recurrence()) || m.equals(item.startMonth())))
+        manualGroups.computeIfAbsent(new ManualKey(item.id(),item.direction(),item.description()),k->new TreeMap<>()).put(m.toString(),item.amount().toPlainString());
+    manualGroups.forEach((key,values)->rows.add(new Row(key.direction(),key.description(),key.description(),values,Map.of(),key.id(),manualNotes.get(key.id()),"MANUAL",positions.get(key.id()))));
     return new Grid(id,List.copyOf(months),List.copyOf(rows));
   }
   private static String decimal(BigDecimal amount){return amount==null?null:amount.toPlainString();}
@@ -91,8 +113,8 @@ public class ForecastGridService {
     int omitted=(existing.containsKey(now)||old.containsKey(now))?(int)calculated.stream().filter(c->c.bucket().equals(now)).map(Contribution::sourceId).distinct().count():0;
     var actor=UUID.fromString(user.subject());List<String> created=new ArrayList<>(),refreshed=new ArrayList<>(),preserved=new ArrayList<>();
     for(int i=0;i<=6;i++) {var month=now.plusMonths(i);if(i==0&&existing.containsKey(month)){preserved.add(month.toString());continue;}
-      if(i==0&&old.containsKey(month)) {var frozen=legacy.lines(id,month,month).getOrDefault(month,List.of()).stream().filter(c->"DOCUMENT".equals(c.source())).toList();store.append(id,month,actor,frozen);legacy.audit(id,actor,month,"INSERT",Map.of(),Map.of("grid_snapshot",true,"legacy_copy",true,"line_count",frozen.size()));preserved.add(month.toString());continue;}
-      var lines=calculated.stream().filter(c->c.bucket().equals(month)).toList();store.append(id,month,actor,lines);
+      if(i==0&&old.containsKey(month)) {var frozen=legacy.lines(id,month,month).getOrDefault(month,List.of()).stream().filter(c->"DOCUMENT".equals(c.source())).toList();store.append(id,month,actor,frozen);assumptions.captureManualMonth(id,month);legacy.audit(id,actor,month,"INSERT",Map.of(),Map.of("grid_snapshot",true,"legacy_copy",true,"line_count",frozen.size()));preserved.add(month.toString());continue;}
+      var lines=calculated.stream().filter(c->c.bucket().equals(month)).toList();store.append(id,month,actor,lines);assumptions.captureManualMonth(id,month);
       legacy.audit(id,actor,month,"INSERT",Map.of(),Map.of("grid_snapshot",true,"line_count",lines.size()));
       if(existing.containsKey(month))refreshed.add(month.toString());else created.add(month.toString());
     }

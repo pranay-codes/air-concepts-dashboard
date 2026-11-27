@@ -14,6 +14,39 @@ import java.util.*;
 import org.junit.jupiter.api.Test;
 
 class ForecastGridServiceTest {
+  @Test void frUc04_manualEditsAndDeactivationNeverChangePreviousMonths() {
+    var access=mock(ForecastAccess.class);var store=mock(ForecastGridRepository.class);var assumptions=mock(ForecastAssumptionRepository.class);
+    var clock=Clock.fixed(Instant.parse("2026-12-10T00:00:00Z"),ZoneOffset.UTC);
+    var service=new ForecastGridService(access,mock(ForecastDatasetLoader.class),store,mock(ForecastMonthRepository.class),new ForecastCalendar(4,clock),assumptions,mock(ForecastNoteRepository.class));
+    var entity=UUID.randomUUID();var item=UUID.randomUUID();var nov=YearMonth.of(2026,11);var dec=nov.plusMonths(1);
+    when(store.months(entity,nov,dec)).thenReturn(Map.of(nov,Instant.EPOCH,dec,Instant.EPOCH));
+    when(assumptions.openingAnchors(entity)).thenReturn(Map.of(nov,new ForecastAssumptionRepository.OpeningBalance(new BigDecimal("100.00"),"Bank")));
+    when(store.manualLines(entity,nov,dec)).thenReturn(List.of(new ForecastGridRepository.ManualLine(nov,item,"IN","Original",new BigDecimal("25.00"))));
+    when(assumptions.manualItems(entity,false)).thenReturn(List.of(new ForecastDataset.ManualItem(item,"IN","OTHER_RECEIPT","Revised",new BigDecimal("50.00"),"MONTHLY",1,nov,null,true)),List.of());
+    var user=new CurrentUser(UUID.randomUUID().toString(),Role.DIRECTOR);
+    var edited=service.grid(user,entity,nov.toString(),2);var deactivated=service.grid(user,entity,nov.toString(),2);
+    assertThat(edited.months().getFirst().closing()).isEqualTo("125.00");
+    assertThat(deactivated.months().getFirst().closing()).isEqualTo("125.00");
+    assertThat(edited.months().get(1).closing()).isEqualTo("175.00");
+    assertThat(edited.rows()).filteredOn(row->row.contact().equals("Original")).singleElement().satisfies(row->assertThat(row.amounts()).containsOnlyKeys(nov.toString()));
+    assertThat(edited.rows()).filteredOn(row->row.contact().equals("Revised")).singleElement().satisfies(row->assertThat(row.amounts()).containsOnlyKeys(dec.toString()));
+    assertThat(deactivated.months().get(1).closing()).isEqualTo("125.00");
+    assertThat(deactivated.rows()).singleElement().satisfies(row->assertThat(row.amounts()).containsEntry(nov.toString(),"25.00"));
+  }
+  @Test void frUc04_03_manualItemsAreIncludedOnceInBalancesAndKeepPosition() {
+    var access=mock(ForecastAccess.class);var store=mock(ForecastGridRepository.class);var assumptions=mock(ForecastAssumptionRepository.class);
+    var service=new ForecastGridService(access,mock(ForecastDatasetLoader.class),store,mock(ForecastMonthRepository.class),new ForecastCalendar(4,Clock.fixed(Instant.parse("2026-11-10T00:00:00Z"),ZoneOffset.UTC)),assumptions,mock(ForecastNoteRepository.class));
+    var entity=UUID.randomUUID();var item=UUID.randomUUID();var month=YearMonth.of(2026,11);var next=month.plusMonths(1);
+    when(store.months(entity,month,next)).thenReturn(Map.of(month,Instant.EPOCH,next,Instant.EPOCH));
+    when(assumptions.openingAnchors(entity)).thenReturn(Map.of(month,new ForecastAssumptionRepository.OpeningBalance(new BigDecimal("100.00"),"Bank")));
+    when(assumptions.manualItems(entity,false)).thenReturn(List.of(new ForecastDataset.ManualItem(item,"IN","OTHER_RECEIPT","Manual",new BigDecimal("25.00"),"ONE_OFF",1,month,null,true)));
+    when(assumptions.manualPositions(entity)).thenReturn(Map.of(item,"City Limousines"));
+    var grid=service.grid(new CurrentUser(UUID.randomUUID().toString(),Role.DIRECTOR),entity,month.toString(),2);
+    assertThat(grid.months().getFirst().moneyIn()).isEqualTo("25.00");
+    assertThat(grid.months().getFirst().closing()).isEqualTo("125.00");
+    assertThat(grid.months().get(1).opening()).isEqualTo("125.00");
+    assertThat(grid.rows()).singleElement().satisfies(row->{assertThat(row.source()).isEqualTo("MANUAL");assertThat(row.positionBefore()).isEqualTo("City Limousines");assertThat(row.amounts()).containsOnlyKeys(month.toString());});
+  }
   @Test void frUc04_20_gridNotesBelongToIndividualDocuments() {
     var access=mock(ForecastAccess.class); var store=mock(ForecastGridRepository.class);
     var notes=mock(ForecastNoteRepository.class); var entity=UUID.randomUUID(); var first=UUID.randomUUID(); var second=UUID.randomUUID();
@@ -88,6 +121,7 @@ class ForecastGridServiceTest {
     var result=service.grid(user,id,"2026-11",8);
     assertThat(result.months().getFirst().available()).isTrue();assertThat(result.months().get(1).available()).isFalse();
     assertThat(result.rows()).hasSize(3);
+    assertThat(result.rows().stream().filter(row->row.direction().equals("IN"))).allSatisfy(row->assertThat(row.companyAmounts()).containsEntry(nov.toString(),"20.00"));
     assertThat(result.months().getFirst().moneyIn()).isEqualTo("20.00");
     verify(access).requireRead(user,id);
   }

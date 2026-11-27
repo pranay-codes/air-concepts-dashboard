@@ -1492,6 +1492,46 @@
         } ]
       }
     },
+    "/api/v1/entities/{entityId}/forecast/manual-items/grid" : {
+      "post" : {
+        "tags" : [ "forecast-assumption-controller" ],
+        "operationId" : "createForecastGridManualItem",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/GridManualRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ManualItem"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
     "/api/v1/entities/{entityId}/forecast/grid/generate" : {
       "post" : {
         "tags" : [ "forecast-grid-controller" ],
@@ -4281,6 +4321,17 @@
           }
         }
       },
+      "GridManualRequest" : {
+        "type" : "object",
+        "properties" : {
+          "item" : {
+            "$ref" : "#/components/schemas/ManualRequest"
+          },
+          "positionBefore" : {
+            "type" : [ "string", "null" ]
+          }
+        }
+      },
       "Generation" : {
         "type" : "object",
         "properties" : {
@@ -5447,7 +5498,16 @@
           "contact" : {
             "type" : "string"
           },
+          "company" : {
+            "type" : "string"
+          },
           "amounts" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            }
+          },
+          "companyAmounts" : {
             "type" : "object",
             "additionalProperties" : {
               "type" : "string"
@@ -5459,9 +5519,15 @@
           },
           "note" : {
             "type" : [ "string", "null" ]
+          },
+          "source" : {
+            "type" : "string"
+          },
+          "positionBefore" : {
+            "type" : [ "string", "null" ]
           }
         },
-        "required" : [ "amounts", "contact", "direction", "documentId", "note" ]
+        "required" : [ "amounts", "company", "companyAmounts", "contact", "direction", "documentId", "note", "positionBefore", "source" ]
       },
       "DocumentPage" : {
         "type" : "object",

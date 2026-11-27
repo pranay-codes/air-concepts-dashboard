@@ -457,6 +457,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/entities/{entityId}/forecast/manual-items/grid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createForecastGridManualItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/entities/{entityId}/forecast/grid/generate": {
         parameters: {
             query?: never;
@@ -1467,6 +1483,10 @@ export interface components {
             endMonth?: string;
             active?: boolean;
         };
+        GridManualRequest: {
+            item?: components["schemas"]["ManualRequest"];
+            positionBefore?: string | null;
+        };
         Generation: {
             created: string[];
             refreshed: string[];
@@ -1894,12 +1914,18 @@ export interface components {
             /** @enum {string} */
             direction: "IN" | "OUT";
             contact: string;
+            company: string;
             amounts: {
+                [key: string]: string;
+            };
+            companyAmounts: {
                 [key: string]: string;
             };
             /** Format: uuid */
             documentId: string;
             note: string | null;
+            source: string;
+            positionBefore: string | null;
         };
         DocumentPage: {
             items?: components["schemas"]["StoredDocument"][];
@@ -2880,6 +2906,32 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ManualItem"];
+                };
+            };
+        };
+    };
+    createForecastGridManualItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entityId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GridManualRequest"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {

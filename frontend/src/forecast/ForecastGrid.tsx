@@ -1,11 +1,11 @@
-import { useCallback, useRef, useState } from "react";
+import { Fragment, useCallback, useRef, useState } from "react";
 import type { DashboardApi } from "../api/dashboard";
 import { isAccessFailure } from "../api/client";
 import { useResource } from "../api/useResource";
 import { useAction } from "../api/useAction";
 import { Failure, Loading } from "../ui/Feedback";
 import { formatDecimal } from "../ui/format";
-import { decimal } from "./contracts";
+import { cents, decimal } from "./contracts";
 import { TransactionNoteEditor } from "./TransactionNoteEditor";
 import { currentMonth } from "./ForecastHeader";
 import { monthName, signClass } from "./ForecastTable";
@@ -87,11 +87,11 @@ export function ForecastGrid(props: {
         </button>
       </div>
       <p className="supporting">
-        Current and past forecasts are preserved. Creating a forecast refreshes the next six months
-        from the latest synced Xero data. Each row shows a company and its invoice or bill number.
-        Balances include the staffing estimate shown below. A dash means no amount for that invoice
-        or bill, or a month that has not been created. An entered opening overrides the carried
-        balance.
+        Current and past invoice and bill snapshots are preserved. Creating a forecast refreshes the
+        next six months from the latest synced Xero data. Expand a company to see its invoices and
+        notes. Past months use saved manual-item amounts; staffing uses its current settings. A dash
+        means no amount for that item, or a month that has not been created. An entered opening
+        overrides the carried balance.
       </p>
       {success ? (
         <p role="status">
@@ -126,9 +126,7 @@ export function ForecastGrid(props: {
                   </th>
                 ))}
               </tr>
-            </thead>
-            <tbody>
-              <tr>
+              <tr className="forecast-grid-opening-row">
                 <th scope="row">Opening balance</th>
                 {resource.data.months.map((month) => (
                   <td className="money" key={month.month}>
@@ -144,6 +142,8 @@ export function ForecastGrid(props: {
                   </td>
                 ))}
               </tr>
+            </thead>
+            <tbody>
               {(["IN", "OUT"] as const).map((direction) => (
                 <FragmentRows
                   key={`${props.subject}:${entityId}:${direction}`}
@@ -152,6 +152,10 @@ export function ForecastGrid(props: {
                   api={api}
                   entityId={entityId}
                   onAccessDenied={onAccessDenied}
+                  onSaved={() => {
+                    resource.refresh();
+                    props.onChanged();
+                  }}
                 />
               ))}
               <tr className="forecast-grid-summary">
@@ -290,12 +294,14 @@ function FragmentRows({
   api,
   entityId,
   onAccessDenied,
+  onSaved,
 }: {
   direction: "IN" | "OUT";
   grid: import("../api/dashboard").ForecastGrid;
   api: DashboardApi;
   entityId: string;
   onAccessDenied(): void;
+  onSaved(): void;
 }) {
   const [saves, setSaves] = useState<{
     base: typeof grid | null;
@@ -303,61 +309,269 @@ function FragmentRows({
   }>({ base: null, notes: {} });
   const savedNotes = saves.base === grid ? saves.notes : {};
   const rows = grid.rows.filter((row) => row.direction === direction);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [adding, setAdding] = useState(false);
+  const [description, setDescription] = useState("");
+  const [amount, setAmount] = useState("");
+  const [startMonth, setStartMonth] = useState(currentMonth());
+  const [recurrence, setRecurrence] = useState("ONE_OFF");
+  const [before, setBefore] = useState("");
+  const [validation, setValidation] = useState("");
+  const manualAction = useAction(`${entityId}:${direction}:grid-manual`);
+  const groups = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const key =
+      row.source === "DOCUMENT" && direction === "IN" && row.company !== "Unknown contact"
+        ? `company:${row.company}`
+        : `${row.source}:${row.documentId}:${row.contact}`;
+    groups.set(key, [...(groups.get(key) ?? []), row]);
+  }
+  const orderedGroups = [...groups.entries()].filter(([, group]) => group[0]?.source !== "MANUAL");
+  const companies = [...new Set(orderedGroups.map(([, group]) => group[0]!.company))];
+  const pending = [...groups.entries()].filter(([, group]) => group[0]?.source === "MANUAL");
+  const manualOptions = pending.map(([, group]) => group[0]!);
+  while (pending.length) {
+    let inserted = false;
+    for (let i = pending.length - 1; i >= 0; i--) {
+      const entry = pending[i]!;
+      const anchor = entry[1][0]?.positionBefore;
+      let position = orderedGroups.findIndex(([, group]) =>
+        anchor?.startsWith("manual:")
+          ? `manual:${group[0]?.documentId}:${group[0]?.contact}` === anchor &&
+            group[0]?.source === "MANUAL"
+          : group[0]?.source === "DOCUMENT" && `company:${group[0]?.company}` === anchor,
+      );
+      const exactTargetPending = pending.some(
+        ([, group]) => `manual:${group[0]?.documentId}:${group[0]?.contact}` === anchor,
+      );
+      if (position < 0 && anchor?.startsWith("manual:") && !exactTargetPending) {
+        const id = anchor.slice(7, 43);
+        position = orderedGroups.findIndex(
+          ([, group]) => group[0]?.source === "MANUAL" && group[0]?.documentId === id,
+        );
+      }
+      if (!anchor || position >= 0) {
+        if (position < 0) orderedGroups.push(entry);
+        else orderedGroups.splice(position, 0, entry);
+        pending.splice(i, 1);
+        inserted = true;
+      }
+    }
+    if (!inserted) {
+      orderedGroups.push(...pending);
+      break;
+    }
+  }
   return (
     <>
       <tr>
         <th colSpan={9} scope="colgroup">
-          {direction === "IN" ? "Money In" : "Money Out"}
+          {direction === "IN" ? "Money In" : "Money Out"}{" "}
+          <button
+            type="button"
+            aria-label={`Add manual line to ${direction === "IN" ? "Money In" : "Money Out"}`}
+            onClick={() => setAdding(true)}
+          >
+            Add manual line
+          </button>
         </th>
       </tr>
+      {adding ? (
+        <tr>
+          <td colSpan={9}>
+            <form
+              className="forecast-grid-manual"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const value = decimal(amount);
+                if (!description.trim() || value === null || (cents(value) ?? 0n) <= 0n) {
+                  setValidation("Enter a description and an amount greater than zero.");
+                  return;
+                }
+                setValidation("");
+                void manualAction
+                  .run(
+                    (signal) =>
+                      api.createGridManual(
+                        entityId,
+                        {
+                          description: description.trim(),
+                          amount: value,
+                          direction,
+                          category: direction === "IN" ? "OTHER_RECEIPT" : "OTHER_PAYMENT",
+                          recurrence,
+                          startMonth,
+                          endMonth: null,
+                          dayOfMonth: 1,
+                          active: true,
+                        },
+                        before || null,
+                        signal,
+                      ),
+                    (error) => {
+                      if (isAccessFailure(error)) onAccessDenied();
+                    },
+                  )
+                  .then((result) => {
+                    if (result) {
+                      setAdding(false);
+                      setDescription("");
+                      setAmount("");
+                      onSaved();
+                    }
+                  });
+              }}
+            >
+              <label>
+                Description{" "}
+                <input
+                  required
+                  maxLength={200}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
+              </label>
+              <label>
+                Amount (NZD){" "}
+                <input
+                  required
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                />
+              </label>
+              <label>
+                Start month{" "}
+                <input
+                  required
+                  type="month"
+                  min={currentMonth()}
+                  value={startMonth}
+                  onChange={(e) => setStartMonth(e.target.value)}
+                />
+              </label>
+              <label>
+                Frequency{" "}
+                <select value={recurrence} onChange={(e) => setRecurrence(e.target.value)}>
+                  <option value="ONE_OFF">One-off</option>
+                  <option value="MONTHLY">Monthly</option>
+                </select>
+              </label>
+              <label>
+                Place before{" "}
+                <select value={before} onChange={(e) => setBefore(e.target.value)}>
+                  <option value="">End of section</option>
+                  {companies.map((company) => (
+                    <option key={company} value={`company:${company}`}>
+                      {company}
+                    </option>
+                  ))}
+                  {manualOptions.map((item) => (
+                    <option
+                      key={`${item.documentId}:${item.contact}`}
+                      value={`manual:${item.documentId}:${item.contact}`}
+                    >
+                      {item.contact} (manual)
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button type="submit" disabled={manualAction.busy}>
+                Save line
+              </button>
+              <button type="button" onClick={() => setAdding(false)}>
+                Cancel
+              </button>
+              {validation ? <p role="alert">{validation}</p> : null}
+              {manualAction.error ? <Failure error={manualAction.error} /> : null}
+            </form>
+          </td>
+        </tr>
+      ) : null}
       {rows.length === 0 ? (
         <tr>
           <td colSpan={9}>No {direction === "IN" ? "invoices" : "bills"} in saved months.</td>
         </tr>
       ) : (
-        rows.map((row) => (
-          <tr key={`${row.documentId}:${row.contact}`}>
-            <th scope="row">
-              <div className="forecast-grid-item">
-                <span>{row.contact}</span>
-                <TransactionNoteEditor
-                  label={row.contact}
-                  note={
-                    row.documentId in savedNotes ? (savedNotes[row.documentId] ?? null) : row.note
-                  }
-                  onSave={async (text) => {
-                    try {
-                      const result = await api.saveForecastTransactionNote(
-                        entityId,
-                        "DOCUMENT",
-                        row.documentId,
-                        text,
-                      );
-                      setSaves((current) => ({
-                        base: grid,
-                        notes: {
-                          ...(current.base === grid ? current.notes : {}),
-                          [row.documentId]: result.note ?? null,
-                        },
-                      }));
-                    } catch (error) {
-                      if (isAccessFailure(error)) onAccessDenied();
-                      throw error;
+        orderedGroups.map(([key, group]) => (
+          <Fragment key={key}>
+            {group.length > 1 ? (
+              <tr>
+                <th scope="row">
+                  <button
+                    type="button"
+                    aria-expanded={expanded.has(key)}
+                    onClick={() =>
+                      setExpanded((old) => {
+                        const next = new Set(old);
+                        if (next.has(key)) next.delete(key);
+                        else next.add(key);
+                        return next;
+                      })
                     }
-                  }}
-                />
-              </div>
-            </th>
-            {grid.months.map((month) => (
-              <td className="money" key={month.month}>
-                {!month.available
-                  ? "\u2014"
-                  : row.amounts[month.month]
-                    ? formatDecimal(row.amounts[month.month], 2)
-                    : "\u2014"}
-              </td>
+                  >
+                    {expanded.has(key) ? "−" : "+"} {group[0]?.company} ({group.length})
+                  </button>
+                </th>
+                {grid.months.map((month) => {
+                  const amount = group[0]?.companyAmounts[month.month];
+                  return (
+                    <td className="money" key={month.month}>
+                      {month.available && amount !== undefined
+                        ? formatDecimal(amount, 2)
+                        : "\u2014"}
+                    </td>
+                  );
+                })}
+              </tr>
+            ) : null}
+            {(group.length === 1 || expanded.has(key) ? group : []).map((row) => (
+              <tr key={`${row.documentId}:${row.contact}`}>
+                <th scope="row">
+                  <div className="forecast-grid-item">
+                    <TransactionNoteEditor
+                      label={row.contact}
+                      note={
+                        `${row.source}:${row.documentId}` in savedNotes
+                          ? (savedNotes[`${row.source}:${row.documentId}`] ?? null)
+                          : row.note
+                      }
+                      onSave={async (text) => {
+                        try {
+                          const result = await api.saveForecastTransactionNote(
+                            entityId,
+                            row.source,
+                            row.documentId,
+                            text,
+                          );
+                          setSaves((current) => ({
+                            base: grid,
+                            notes: {
+                              ...(current.base === grid ? current.notes : {}),
+                              [`${row.source}:${row.documentId}`]: result.note ?? null,
+                            },
+                          }));
+                        } catch (error) {
+                          if (isAccessFailure(error)) onAccessDenied();
+                          throw error;
+                        }
+                      }}
+                    />
+                    <span>{row.contact}</span>
+                  </div>
+                </th>
+                {grid.months.map((month) => (
+                  <td className="money" key={month.month}>
+                    {!month.available
+                      ? "\u2014"
+                      : row.amounts[month.month]
+                        ? formatDecimal(row.amounts[month.month], 2)
+                        : "\u2014"}
+                  </td>
+                ))}
+              </tr>
             ))}
-          </tr>
+          </Fragment>
         ))
       )}
       {direction === "OUT" ? (
