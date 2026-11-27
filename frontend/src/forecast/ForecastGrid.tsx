@@ -86,13 +86,6 @@ export function ForecastGrid(props: {
           {action.busy ? "Creating forecast…" : "Create forecast"}
         </button>
       </div>
-      <p className="supporting">
-        Current and past invoice and bill snapshots are preserved. Creating a forecast refreshes the
-        next six months from the latest synced Xero data. Expand a company to see its invoices and
-        notes. Past months use saved manual-item amounts; staffing uses its current settings. A dash
-        means no amount for that item, or a month that has not been created. An entered opening
-        overrides the carried balance.
-      </p>
       {success ? (
         <p role="status">
           Forecast created. Future months have been refreshed.{" "}
