@@ -143,6 +143,7 @@ public class ForecastGridService {
     if(!"COMPANY".equals(scope)) key=validatedKey;
     boolean exists;
     ForecastGridRepository.Line documentTemplate=null;
+    UUID documentId=null;
     if("COMPANY".equals(scope)) {
       var companyKey=key;
       exists=store.companyExists(id,key,direction)||store.overrides(id,month,month).stream().anyMatch(item->item.scope().equals("COMPANY")&&item.direction().equals(direction)&&item.key().equals(companyKey));
@@ -151,12 +152,13 @@ public class ForecastGridService {
       UUID sourceId;
       try {sourceId=UUID.fromString(key);} catch(IllegalArgumentException failure) {throw ForecastValidation.invalid("key","Choose a valid forecast row.");}
       key=sourceId.toString();
-      if("DOCUMENT".equals(scope)) {documentTemplate=store.documentTemplate(id,sourceId,direction,month);exists=documentTemplate!=null&&(month.equals(calendar.currentMonth())||store.documentEligible(id,sourceId));}
+      if("DOCUMENT".equals(scope)) {documentId=sourceId;documentTemplate=store.documentTemplate(id,sourceId,direction,month);exists=documentTemplate!=null;}
       else exists=assumptions.manualItems(id,false).stream().anyMatch(item->item.active()&&item.id().equals(sourceId)&&item.direction().equals(direction));
     }
     if(!exists) throw ForecastValidation.missing();
     legacy.lockEntity(id);
     if(month.isBefore(calendar.currentMonth())) throw ForecastValidation.invalid("month","Past months cannot be edited.");
+    if(documentId!=null&&value!=null&&month.isAfter(calendar.currentMonth())&&!store.documentEligible(id,documentId)) throw ForecastValidation.missing();
     var change=new ForecastGridOverrides.Override(month,direction,scope,key,value,documentTemplate==null?null:documentTemplate.contact(),documentTemplate==null?null:documentTemplate.number());
     var changeKey=key;
     var old=store.overrides(id,month,month).stream().filter(item->item.scope().equals(scope)&&item.direction().equals(direction)&&item.key().equals(changeKey)).findFirst();

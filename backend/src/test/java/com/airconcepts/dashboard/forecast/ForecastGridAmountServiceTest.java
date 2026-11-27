@@ -46,4 +46,14 @@ class ForecastGridAmountServiceTest {
     verify(store).deactivateOverride(entity,UUID.fromString(user.subject()),existing);
     verify(store,never()).saveOverride(any(),any(),any());
   }
+  @Test void frUc04_canRestoreFutureSettledDocumentButCannotSetNewAmount() {
+    var month=YearMonth.of(2026,12);var document=UUID.randomUUID();
+    var existing=new ForecastGridOverrides.Override(month,"IN","DOCUMENT",document.toString(),new BigDecimal("50.00"));
+    when(store.documentTemplate(entity,document,"IN",month)).thenReturn(new ForecastGridRepository.Line(month,document,null,"IN","Acme",BigDecimal.ZERO));
+    when(store.overrides(entity,month,month)).thenReturn(List.of(existing));
+    service.saveAmount(user,entity,month.toString(),"IN","DOCUMENT",document.toString(),null);
+    verify(store).deactivateOverride(entity,UUID.fromString(user.subject()),existing);
+    assertThatThrownBy(()->service.saveAmount(user,entity,month.toString(),"IN","DOCUMENT",document.toString(),BigDecimal.ONE)).isInstanceOf(ApiFailure.class);
+    verify(store,never()).saveOverride(any(),any(),any());
+  }
 }
