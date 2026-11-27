@@ -69,14 +69,15 @@ public class ForecastGridService {
       if("DOCUMENT".equals(note.source())) documentNotes.put(note.sourceId(),note.note());
       if("MANUAL".equals(note.source())) manualNotes.put(note.sourceId(),note.note());
     }
-    Map<String,Map<String,BigDecimal>> companyTotals=new HashMap<>();
-    groups.forEach((key,values)->{if("IN".equals(key.direction())) values.forEach((month,amount)->companyTotals.computeIfAbsent(key.contact(),k->new TreeMap<>()).merge(month,amount,BigDecimal::add));});
+    record CompanyKey(String direction,String contact) {}
+    Map<CompanyKey,Map<String,BigDecimal>> companyTotals=new HashMap<>();
+    groups.forEach((key,values)->values.forEach((month,amount)->companyTotals.computeIfAbsent(new CompanyKey(key.direction(),key.contact()),k->new TreeMap<>()).merge(month,amount,BigDecimal::add)));
     List<Row> rows=new ArrayList<>();
     groups.entrySet().stream().sorted(Comparator.comparing((Map.Entry<RowKey,Map<String,BigDecimal>> e)->e.getKey().direction())
         .thenComparing(e->e.getKey().contact()).thenComparing(e->Objects.toString(e.getKey().number(),""))
         .thenComparing(e->Objects.toString(e.getKey().documentId(),""))).forEach(entry->{
       var key=entry.getKey();Map<String,String> values=new TreeMap<>();entry.getValue().forEach((m,amount)->values.put(m,amount.toPlainString()));
-      Map<String,String> totals=new TreeMap<>();companyTotals.getOrDefault(key.contact(),Map.of()).forEach((m,amount)->totals.put(m,amount.toPlainString()));
+      Map<String,String> totals=new TreeMap<>();companyTotals.getOrDefault(new CompanyKey(key.direction(),key.contact()),Map.of()).forEach((m,amount)->totals.put(m,amount.toPlainString()));
       rows.add(new Row(key.direction(),key.contact()+" - "+(key.number()==null||key.number().isBlank()?"Number unavailable":key.number()),key.contact(),values,totals,key.documentId(),documentNotes.get(key.documentId()),"DOCUMENT",null));
     });
     record ManualKey(UUID id,String direction,String description) {}

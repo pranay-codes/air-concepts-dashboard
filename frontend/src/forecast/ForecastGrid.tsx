@@ -314,7 +314,7 @@ function FragmentRows({
   const groups = new Map<string, typeof rows>();
   for (const row of rows) {
     const key =
-      row.source === "DOCUMENT" && direction === "IN" && row.company !== "Unknown contact"
+      row.source === "DOCUMENT" && row.company !== "Unknown contact"
         ? `company:${row.company}`
         : `${row.source}:${row.documentId}:${row.contact}`;
     groups.set(key, [...(groups.get(key) ?? []), row]);

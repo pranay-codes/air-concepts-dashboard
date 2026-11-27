@@ -57,7 +57,7 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
         documentId: "22222222-2222-4222-8222-222222222222",
         note: "Pay Friday",
         amounts: { [stepMonth(start, 1)]: "25.00" },
-        companyAmounts: {},
+        companyAmounts: { [stepMonth(start, 1)]: "40.00" },
       },
       {
         direction: "IN",
@@ -69,6 +69,17 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
         note: null,
         amounts: { [stepMonth(start, 1)]: "25.00" },
         companyAmounts: { [stepMonth(start, 1)]: "150.00" },
+      },
+      {
+        direction: "OUT",
+        contact: "Supplier B - BILL-457",
+        company: "Supplier B",
+        source: "DOCUMENT",
+        positionBefore: null,
+        documentId: "88888888-8888-4888-8888-888888888888",
+        note: null,
+        amounts: { [stepMonth(start, 1)]: "15.00" },
+        companyAmounts: { [stepMonth(start, 1)]: "40.00" },
       },
       {
         direction: "IN",
@@ -170,6 +181,13 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
   fireEvent.click(company);
   expect(company).toHaveAttribute("aria-expanded", "true");
   expect(await screen.findByText("Customer A - INV-123")).toBeInTheDocument();
+  const supplier = screen.getByRole("button", { name: /Supplier B \(2\)/ });
+  expect(supplier).toHaveAttribute("aria-expanded", "false");
+  expect(supplier.closest("tr")).toHaveTextContent("40.00");
+  expect(screen.queryByText("Supplier B - BILL-456")).not.toBeInTheDocument();
+  fireEvent.click(supplier);
+  expect(supplier).toHaveAttribute("aria-expanded", "true");
+  expect(screen.getByText("Supplier B - BILL-457")).toBeInTheDocument();
   expect(screen.getByText("Supplier B - BILL-456")).toBeInTheDocument();
   expect(
     screen.getByRole("button", { name: /Edit note for Supplier B.*Pay Friday/ }),
