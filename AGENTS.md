@@ -1,6 +1,7 @@
 # Air Concepts Financial Admin Dashboard: Agent Rules
 
 ## Learned Rules
+- Forecast grid values and blank dashes are the edit targets; do not show separate Edit buttons beside amounts (human correction, 28 November 2026).
 - Forecast amounts, including blanks, are editable for current and future months; past months are read-only. Company overrides are independent of individual rows and determine the company contribution to totals (human clarification, 27 November 2026).
 - Forecast document and expanded sub-row labels should match company group rows in font weight and compact spacing (human correction, 27 November 2026).
 - Forecast manual-line changes apply to the current and future forecast; never modify previous months' forecasts (human instruction, 27 November 2026).

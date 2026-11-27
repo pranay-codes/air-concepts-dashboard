@@ -47,10 +47,12 @@ test("FR-UC04-04 grid opening edit refreshes the saved amount", async ({ page })
     .getByRole("button", { name: "Forecast", exact: true })
     .click();
   const grid = page.getByRole("region", { name: "Cash forecast table" });
-  await grid
-    .getByRole("button", { name: /^Edit opening balance for / })
-    .first()
-    .click();
+  const openingValue = grid.getByRole("button", { name: /^Edit opening balance for / }).first();
+  await expect(openingValue).not.toHaveText("Edit");
+  expect((await openingValue.boundingBox())?.height).toBeLessThan(32);
+  await openingValue.focus();
+  await expect(openingValue).toBeFocused();
+  await page.keyboard.press("Enter");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await grid.getByRole("textbox", { name: /^Opening balance for / }).fill("500.00");
   await grid.getByRole("button", { name: "Save", exact: true }).click();

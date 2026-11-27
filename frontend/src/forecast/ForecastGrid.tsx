@@ -192,24 +192,19 @@ function OpeningCell(props: {
     );
   if (!editing)
     return (
-      <>
-        <span className={signClass(month.opening)}>
-          {month.opening === null ? "Not recorded" : formatDecimal(month.opening, 2)}
-        </span>{" "}
-        <button
-          type="button"
-          ref={editButton}
-          className="compact-button"
-          aria-label={`Edit opening balance for ${monthName(month.month)}`}
-          onClick={() => {
-            setAmount(month.opening ?? "");
-            setError("");
-            setEditing(true);
-          }}
-        >
-          Edit
-        </button>
-      </>
+      <button
+        type="button"
+        ref={editButton}
+        className={`forecast-grid-value ${signClass(month.opening) ?? ""}`.trim()}
+        aria-label={`Edit opening balance for ${monthName(month.month)}: ${month.opening === null ? "Not recorded" : formatDecimal(month.opening, 2)}`}
+        onClick={() => {
+          setAmount(month.opening ?? "");
+          setError("");
+          setEditing(true);
+        }}
+      >
+        {month.opening === null ? "Not recorded" : formatDecimal(month.opening, 2)}
+      </button>
     );
   return (
     <form
@@ -309,22 +304,19 @@ function AmountCell(props: {
     return <>{props.amount === undefined ? "\u2014" : formatDecimal(props.amount, 2)}</>;
   if (!editing)
     return (
-      <>
-        <span>{props.amount === undefined ? "\u2014" : formatDecimal(props.amount, 2)}</span>{" "}
-        <button
-          ref={button}
-          type="button"
-          className="compact-button"
-          aria-label={`Edit ${label}`}
-          onClick={() => {
-            setAmount(props.amount ?? "");
-            setError("");
-            setEditing(true);
-          }}
-        >
-          Edit
-        </button>
-      </>
+      <button
+        ref={button}
+        type="button"
+        className="forecast-grid-value"
+        aria-label={`Edit ${label}: ${props.amount === undefined ? "\u2014" : formatDecimal(props.amount, 2)}`}
+        onClick={() => {
+          setAmount(props.amount ?? "");
+          setError("");
+          setEditing(true);
+        }}
+      >
+        {props.amount === undefined ? "\u2014" : formatDecimal(props.amount, 2)}
+      </button>
     );
   return (
     <form

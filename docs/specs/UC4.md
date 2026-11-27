@@ -181,6 +181,7 @@ Levels: U = unit, I = disposable PostgreSQL (Testcontainers), H = Spring MVC HTT
 - Company identity follows the exact company name used by the forecast grid. A changed name forms a different group until a stable contact identity is available. Forecast role and entity access checks apply.
 
 ## Forecast amount editing (human instruction, 27 November 2026)
+- Select the displayed value or blank dash to edit; do not show a separate Edit button beside each amount (human correction, 28 November 2026).
 - Current and future opening balances and company, document and manual-line amounts can be edited, including blank cells. Past months are read-only and the server rejects historical writes.
 - Monthly company amounts can be overridden independently of their individual invoice or bill rows. Where set, the company amount replaces the sum of those rows in Money In or Money Out; document edits do not change that company override. Totals and closing balances remain calculated.
 - Changes are internal forecast overrides scoped to the entity and month. They do not change Xero amounts and remain in place through forecast refreshes. An ungenerated month can retain an edit but does not display a calculated monthly total until forecast data is generated.
