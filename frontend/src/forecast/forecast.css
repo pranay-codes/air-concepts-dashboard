@@ -627,7 +627,9 @@
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
+  min-height: 24px;
   max-width: 18rem;
+  font-weight: 600;
   white-space: normal;
   overflow-wrap: anywhere;
 }
@@ -650,6 +652,10 @@
 }
 .forecast-grid-item .note-preview {
   color: #a51c30;
+}
+.forecast-grid-item :is(.note-add, .note-preview) {
+  min-height: 24px;
+  font-size: inherit;
 }
 .forecast-grid-item .note-cell,
 .forecast-grid-item .note-editor {
