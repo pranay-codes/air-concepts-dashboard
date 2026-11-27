@@ -105,6 +105,7 @@ export async function forecastBoundary(page: Page) {
         }));
         result = {
           entityId: entity,
+          companyNotes: {},
           months,
           rows: [
             {

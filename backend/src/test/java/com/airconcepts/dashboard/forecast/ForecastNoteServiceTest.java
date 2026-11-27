@@ -110,6 +110,19 @@ class ForecastNoteServiceTest {
     verifyNoInteractions(repository);
   }
 
+  @Test void frUc04_companyNotesAreScopedAndIndependent() {
+    when(repository.companyExists(entity, "Bayside Club")).thenReturn(true);
+    service.saveCompany(director, entity, "Bayside Club", " Call them ");
+    verify(repository).upsertCompany(entity, "Bayside Club", "Call them", actor);
+    service.saveCompany(director, entity, "Bayside Club", " ");
+    verify(repository).deleteCompany(entity, "Bayside Club");
+    verify(repository, never()).upsert(any(), any(), any(), any(), any());
+    assertThatThrownBy(() -> service.saveCompany(director, entity, "Other", "x")).isInstanceOf(ApiFailure.class);
+    var standard = new CurrentUser(actor.toString(), Role.STANDARD_USER);
+    when(entities.get(standard, entity)).thenReturn(new Entity(entity, "Synthetic"));
+    assertThatThrownBy(() -> service.saveCompany(standard, entity, "Bayside Club", "x")).isInstanceOf(AccessDeniedException.class);
+  }
+
   private static void assertInvalid(org.assertj.core.api.ThrowableAssert.ThrowingCallable call) {
     assertThatThrownBy(call).isInstanceOfSatisfying(ApiFailure.class, e -> {
       assertThat(e.status()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);

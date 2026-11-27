@@ -22,8 +22,10 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
       onSessionChange: () => () => {},
     }),
   );
+  let companyNote: string | null = null;
   const grid = vi.spyOn(api, "forecastGrid").mockImplementation(async (entityId, start) => ({
     entityId,
+    companyNotes: companyNote ? { "Customer A": companyNote } : {},
     months: Array.from({ length: 8 }, (_, i) => ({
       month: stepMonth(start, i),
       available: i > 0,
@@ -153,6 +155,12 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
     note: "Call Monday",
     updatedAt: null,
   });
+  const saveCompanyNote = vi
+    .spyOn(api, "saveForecastCompanyNote")
+    .mockImplementation(async (_entity, company, note) => {
+      companyNote = note || null;
+      return { company, note: companyNote };
+    });
   const onChanged = vi.fn();
   render(
     <ForecastGrid
@@ -175,6 +183,22 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
   expect(screen.getByRole("row", { name: /Earlier manual/ }).nextElementSibling).toBe(
     screen.getByRole("row", { name: /Existing manual/ }),
   );
+  fireEvent.click(screen.getByRole("button", { name: "Add note for Customer A company" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Note for Customer A company" }), {
+    target: { value: "Group note" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() =>
+    expect(saveCompanyNote).toHaveBeenCalledWith(
+      "10000000-0000-4000-8000-000000000001",
+      "Customer A",
+      "Group note",
+    ),
+  );
+  expect(
+    await screen.findByRole("button", { name: "Edit note for Customer A company: Group note" }),
+  ).toBeInTheDocument();
+  onChanged.mockClear();
   expect(company).toHaveAttribute("aria-expanded", "false");
   expect(screen.queryByText("Customer A - INV-123")).not.toBeInTheDocument();
   expect(company.closest("tr")).toHaveTextContent("150.00");
@@ -252,7 +276,7 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
   expect(screen.queryByText("Carried forward")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Create forecast" }));
   await screen.findByText(/Future months have been refreshed/);
-  await waitFor(() => expect(grid).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(grid).toHaveBeenCalledTimes(3));
   fireEvent.click(screen.getByRole("button", { name: "Add manual line to Money In" }));
   fireEvent.change(screen.getByLabelText("Description"), { target: { value: "Deposit" } });
   fireEvent.change(screen.getByLabelText("Amount (NZD)"), { target: { value: "75.00" } });
@@ -268,4 +292,4 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
       expect.any(AbortSignal),
     ),
   );
-});
+}, 15000);

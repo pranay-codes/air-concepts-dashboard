@@ -39,6 +39,19 @@ public class ForecastNoteService {
     return repository.upsert(authorised.id(), source, sourceId, normalised, UUID.fromString(user.subject()));
   }
 
+  public ForecastNoteRepository.CompanyNote saveCompany(CurrentUser user, UUID entity, String company, String text) {
+    var authorised = access.requireWrite(user, entity);
+    if (company == null || company.isBlank() || company.length() > 500 || "Unknown contact".equals(company))
+      throw ForecastValidation.invalid("company", "Choose a company.");
+    var normalised = normalise(text);
+    if (!repository.companyExists(authorised.id(), company)) throw ForecastValidation.missing();
+    if (normalised == null) {
+      repository.deleteCompany(authorised.id(), company);
+      return new ForecastNoteRepository.CompanyNote(company, null);
+    }
+    return repository.upsertCompany(authorised.id(), company, normalised, UUID.fromString(user.subject()));
+  }
+
   /** Strips surrounding whitespace, returns null for blank input, and rejects control characters other than line breaks and tabs. */
   static String normalise(String text) {
     if (text == null) throw ForecastValidation.invalid("note", "Enter a note of up to 2000 characters.");

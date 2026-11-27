@@ -559,6 +559,46 @@
         } ]
       }
     },
+    "/api/v1/entities/{entityId}/forecast/company-note" : {
+      "put" : {
+        "tags" : [ "forecast-controller" ],
+        "operationId" : "saveForecastCompanyNote",
+        "parameters" : [ {
+          "name" : "entityId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CompanyNoteRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CompanyNote"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ]
+      }
+    },
     "/api/v1/users" : {
       "get" : {
         "tags" : [ "staff-controller" ],
@@ -3421,6 +3461,30 @@
           }
         }
       },
+      "CompanyNoteRequest" : {
+        "type" : "object",
+        "properties" : {
+          "company" : {
+            "type" : "string"
+          },
+          "note" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "company", "note" ]
+      },
+      "CompanyNote" : {
+        "type" : "object",
+        "properties" : {
+          "company" : {
+            "type" : "string"
+          },
+          "note" : {
+            "type" : [ "string", "null" ]
+          }
+        },
+        "required" : [ "company", "note" ]
+      },
       "CreateStaff" : {
         "type" : "object",
         "properties" : {
@@ -5447,9 +5511,15 @@
             "items" : {
               "$ref" : "#/components/schemas/Row"
             }
+          },
+          "companyNotes" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            }
           }
         },
-        "required" : [ "entityId", "months", "rows" ]
+        "required" : [ "companyNotes", "entityId", "months", "rows" ]
       },
       "Month" : {
         "type" : "object",
