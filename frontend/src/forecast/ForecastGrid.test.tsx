@@ -212,6 +212,14 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
   const company = await screen.findByRole("button", { name: /Customer A \(2\)/ });
   expect(screen.getAllByRole("button", { name: /Edit Customer A company amount/ })).toHaveLength(7);
   const groupEdit = screen.getAllByRole("button", { name: /Edit Customer A company amount/ })[1]!;
+  expect(groupEdit).toHaveTextContent(/^—$/);
+  expect(groupEdit).toHaveAccessibleName(/—$/);
+  expect(
+    screen.getAllByRole("button", { name: /Edit Customer A company amount/ })[0],
+  ).toHaveTextContent(/^150\.00$/);
+  expect(screen.getAllByRole("button", { name: /Edit opening balance for/ })[0]).toHaveTextContent(
+    /^100\.00$/,
+  );
   fireEvent.click(groupEdit);
   const groupAmount = screen.getByRole("textbox", { name: /Customer A company amount/ });
   fireEvent.change(groupAmount, { target: { value: "77" } });
@@ -292,6 +300,7 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
   for (const name of [/Customer A - INV-123/, /Supplier B - BILL-456/]) {
     const cells = screen.getByRole("row", { name }).querySelectorAll("td");
     expect(cells[0]).toHaveTextContent(/^—$/);
+    expect(cells[0]?.querySelector("button")).toBeNull();
     expect(cells[2]).toHaveTextContent(/—/);
     expect(cells[2]?.querySelector("button")).toBeEnabled();
   }

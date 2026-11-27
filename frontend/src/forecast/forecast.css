@@ -625,6 +625,27 @@
 .forecast-grid-opening input {
   width: 8rem;
 }
+.forecast-grid-value {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  color: inherit;
+  cursor: text;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  min-height: 1.5rem;
+  padding: 0;
+  text-align: right;
+  width: 100%;
+}
+.forecast-grid-value:hover {
+  box-shadow: inset 0 0 0 1px var(--boundary, #7b8790);
+}
+.forecast-grid-value:focus-visible {
+  outline: 2px solid var(--accent, #0f6b7f);
+  outline-offset: 2px;
+}
 .forecast-grid-manual {
   display: flex;
   align-items: end;
