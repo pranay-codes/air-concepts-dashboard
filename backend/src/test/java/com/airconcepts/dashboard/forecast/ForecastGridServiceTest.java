@@ -122,6 +122,7 @@ class ForecastGridServiceTest {
     assertThat(result.months().getFirst().available()).isTrue();assertThat(result.months().get(1).available()).isFalse();
     assertThat(result.rows()).hasSize(3);
     assertThat(result.rows().stream().filter(row->row.direction().equals("IN"))).allSatisfy(row->assertThat(row.companyAmounts()).containsEntry(nov.toString(),"20.00"));
+    assertThat(result.rows().stream().filter(row->row.direction().equals("OUT"))).allSatisfy(row->assertThat(row.companyAmounts()).containsEntry(nov.toString(),"5.00"));
     assertThat(result.months().getFirst().moneyIn()).isEqualTo("20.00");
     verify(access).requireRead(user,id);
   }
