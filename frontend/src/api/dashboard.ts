@@ -7,6 +7,7 @@ import type { components } from "./generated/schema";
 
 export type ForecastGrid = Omit<components["schemas"]["Grid"], "entityId" | "months" | "rows"> & {
   entityId: string;
+  companyNotes: Record<string, string>;
   months: {
     month: string;
     available: boolean;
@@ -35,6 +36,8 @@ function isForecastGrid(value: unknown): value is ForecastGrid {
   return (
     isRecord(value) &&
     typeof value.entityId === "string" &&
+    isRecord(value.companyNotes) &&
+    Object.values(value.companyNotes).every((note) => typeof note === "string") &&
     Array.isArray(value.months) &&
     value.months.length === 8 &&
     value.months.every(
@@ -392,6 +395,19 @@ export class DashboardApi {
     );
     if (result.month !== month || result.items.some((item) => item.bucket !== month))
       throw new ApiError(502, "INVALID_RESPONSE");
+    return result;
+  }
+  async saveForecastCompanyNote(entity: string, company: string, note: string) {
+    const result = await this.client.json(
+      `${root(entity)}/forecast/company-note`,
+      (value): value is { company: string; note: string | null } =>
+        isRecord(value) &&
+        typeof value.company === "string" &&
+        (value.note === null || typeof value.note === "string"),
+      undefined,
+      { method: "PUT", body: { company, note } },
+    );
+    if (result.company !== company) throw new ApiError(502, "INVALID_RESPONSE");
     return result;
   }
   /** Saves the internal note for one forecast transaction; a blank note removes it. Notes stay in this application. */

@@ -152,6 +152,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/entities/{entityId}/forecast/company-note": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["saveForecastCompanyNote"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users": {
         parameters: {
             query?: never;
@@ -1143,6 +1159,14 @@ export interface components {
             excluded?: boolean;
             exclusionReason?: string;
         };
+        CompanyNoteRequest: {
+            company: string;
+            note: string;
+        };
+        CompanyNote: {
+            company: string;
+            note: string | null;
+        };
         CreateStaff: {
             /** Format: email */
             email: string;
@@ -1896,6 +1920,9 @@ export interface components {
             entityId: string;
             months: components["schemas"]["Month"][];
             rows: components["schemas"]["Row"][];
+            companyNotes: {
+                [key: string]: string;
+            };
         };
         Month: {
             month: string;
@@ -2333,6 +2360,32 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["AdjustmentState"];
+                };
+            };
+        };
+    };
+    saveForecastCompanyNote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entityId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompanyNoteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CompanyNote"];
                 };
             };
         };
