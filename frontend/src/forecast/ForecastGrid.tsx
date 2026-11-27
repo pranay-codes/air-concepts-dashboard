@@ -90,7 +90,7 @@ export function ForecastGrid(props: {
         <p role="status">
           Forecast created. Future months have been refreshed.{" "}
           {success.omittedCurrentItems
-            ? `${success.omittedCurrentItems} new current-month items were not added because that month is preserved.`
+            ? `${success.omittedCurrentItems} new current-month items were not added because that month is not updated.`
             : ""}{" "}
           {success.changedProtectedSchedules
             ? `${success.changedProtectedSchedules} documents have changed schedules and were excluded from the refresh to prevent double-counting; review them in Xero items.`

@@ -12,6 +12,42 @@ describe("forecast grid month navigation", () => {
   });
 });
 
+it("frUc04_15 explains why current-month items were not added", async () => {
+  const api = new DashboardApi(
+    new ApiClient("", {
+      getAccessToken: async () => null,
+      requestCode: vi.fn(),
+      verifyCode: vi.fn(),
+      signOut: vi.fn(),
+      onSessionChange: () => () => {},
+    }),
+  );
+  vi.spyOn(api, "forecastGrid").mockImplementation(() => new Promise(() => {}));
+  vi.spyOn(api, "generateForecastGrid").mockResolvedValue({
+    created: [],
+    refreshed: ["2026-12"],
+    preserved: [],
+    omittedCurrentItems: 2,
+    changedProtectedSchedules: 0,
+  });
+  render(
+    <ForecastGrid
+      api={api}
+      entityId="10000000-0000-4000-8000-000000000001"
+      subject="user"
+      revision={0}
+      onAccessDenied={vi.fn()}
+      onChanged={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Create forecast" }));
+  expect(
+    await screen.findByText(
+      /2 new current-month items were not added because that month is not updated\./,
+    ),
+  ).toBeInTheDocument();
+});
+
 it("shows customer and supplier rows and refreshes only after creation succeeds", async () => {
   const api = new DashboardApi(
     new ApiClient("", {
