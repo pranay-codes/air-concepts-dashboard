@@ -20,8 +20,8 @@ public class ForecastGridService {
       @io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String openingSource,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String openingNote) {}
   @io.swagger.v3.oas.annotations.media.Schema(requiredProperties={"direction","contact","company","amounts","companyAmounts","documentId","note","source","positionBefore"})
   public record Row(@io.swagger.v3.oas.annotations.media.Schema(allowableValues={"IN","OUT"}) String direction,String contact,String company,Map<String,String> amounts,Map<String,String> companyAmounts,UUID documentId,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String note,String source,@io.swagger.v3.oas.annotations.media.Schema(types={"string","null"}) String positionBefore) {}
-  @io.swagger.v3.oas.annotations.media.Schema(requiredProperties={"entityId","months","rows"})
-  public record Grid(UUID entityId,List<Month> months,List<Row> rows) {}
+  @io.swagger.v3.oas.annotations.media.Schema(requiredProperties={"entityId","months","rows","companyNotes"})
+  public record Grid(UUID entityId,List<Month> months,List<Row> rows,Map<String,String> companyNotes) {}
   @io.swagger.v3.oas.annotations.media.Schema(requiredProperties={"created","refreshed","preserved","omittedCurrentItems","changedProtectedSchedules"})
   public record Generation(List<String> created,List<String> refreshed,List<String> preserved,int omittedCurrentItems,int changedProtectedSchedules) {}
   private final ForecastAccess access; private final ForecastDatasetLoader loader; private final ForecastGridRepository store;
@@ -87,7 +87,8 @@ public class ForecastGridService {
       if(!m.isBefore(currentMonth) && ForecastCalculator.active(m,item.startMonth(),item.endMonth()) && (!"ONE_OFF".equals(item.recurrence()) || m.equals(item.startMonth())))
         manualGroups.computeIfAbsent(new ManualKey(item.id(),item.direction(),item.description()),k->new TreeMap<>()).put(m.toString(),item.amount().toPlainString());
     manualGroups.forEach((key,values)->rows.add(new Row(key.direction(),key.description(),key.description(),values,Map.of(),key.id(),manualNotes.get(key.id()),"MANUAL",positions.get(key.id()))));
-    return new Grid(id,List.copyOf(months),List.copyOf(rows));
+    Map<String,String> companyNotes=new HashMap<>(); for(var note:notes.companyNotes(id)) companyNotes.put(note.company(),note.note());
+    return new Grid(id,List.copyOf(months),List.copyOf(rows),Map.copyOf(companyNotes));
   }
   private static String decimal(BigDecimal amount){return amount==null?null:amount.toPlainString();}
   /** The current month may be written only on its first days; overdue items move forward in its last days. */

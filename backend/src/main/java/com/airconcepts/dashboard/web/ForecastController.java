@@ -25,6 +25,10 @@ public class ForecastController {
   /** Internal note for one forecast transaction. A blank note removes it. Never sent to Xero. */
   @PutMapping("/entities/{entityId}/forecast/transactions/{source}/{sourceId}/note") @Operation(operationId="saveForecastTransactionNote")
   public ResponseEntity<ForecastNoteRepository.TransactionNote> note(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID entityId,@PathVariable String source,@PathVariable UUID sourceId,@RequestBody ForecastNoteService.NoteRequest body){return ok(notes.save(users.from(jwt),entityId,source,sourceId,body.note()));}
+  @io.swagger.v3.oas.annotations.media.Schema(requiredProperties={"company","note"})
+  public record CompanyNoteRequest(String company, String note) {}
+  @PutMapping("/entities/{entityId}/forecast/company-note") @Operation(operationId="saveForecastCompanyNote")
+  public ResponseEntity<ForecastNoteRepository.CompanyNote> companyNote(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID entityId,@RequestBody CompanyNoteRequest body){return ok(notes.saveCompany(users.from(jwt),entityId,body.company(),body.note()));}
   @PostMapping("/entities/{entityId}/forecast/months/{month}/generate") @Operation(operationId="generateForecastMonth")
   public ResponseEntity<GenerationResult> generate(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID entityId,@PathVariable String month){return ok(generation.generate(users.from(jwt),entityId,month));}
   @GetMapping("/entities/{entityId}/forecast/documents") @Operation(operationId="listForecastDocuments")

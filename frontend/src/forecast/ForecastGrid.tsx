@@ -491,21 +491,36 @@ function FragmentRows({
             {group.length > 1 ? (
               <tr>
                 <th scope="row">
-                  <button
-                    type="button"
-                    className="forecast-grid-disclosure"
-                    aria-expanded={expanded.has(key)}
-                    onClick={() =>
-                      setExpanded((old) => {
-                        const next = new Set(old);
-                        if (next.has(key)) next.delete(key);
-                        else next.add(key);
-                        return next;
-                      })
-                    }
-                  >
-                    {expanded.has(key) ? "−" : "+"} {group[0]?.company} ({group.length})
-                  </button>
+                  <div className="forecast-grid-item">
+                    <button
+                      type="button"
+                      className="forecast-grid-disclosure"
+                      aria-expanded={expanded.has(key)}
+                      onClick={() =>
+                        setExpanded((old) => {
+                          const next = new Set(old);
+                          if (next.has(key)) next.delete(key);
+                          else next.add(key);
+                          return next;
+                        })
+                      }
+                    >
+                      {expanded.has(key) ? "−" : "+"} {group[0]?.company} ({group.length})
+                    </button>
+                    <TransactionNoteEditor
+                      label={`${group[0]!.company} company`}
+                      note={grid.companyNotes[group[0]!.company] ?? null}
+                      onSave={async (text) => {
+                        try {
+                          await api.saveForecastCompanyNote(entityId, group[0]!.company, text);
+                          onSaved();
+                        } catch (error) {
+                          if (isAccessFailure(error)) onAccessDenied();
+                          throw error;
+                        }
+                      }}
+                    />
+                  </div>
                 </th>
                 {grid.months.map((month) => {
                   const amount = group[0]?.companyAmounts[month.month];

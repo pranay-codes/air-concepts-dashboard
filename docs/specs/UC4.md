@@ -175,3 +175,7 @@ Levels: U = unit, I = disposable PostgreSQL (Testcontainers), H = Spring MVC HTT
 | AC-27 | `ForecastReconciliationTest.frUc04_21_populatedFixtureMatchesCalculator`, `..._injectedMismatchSetsHeaderAndFlag` | U |
 | AC-28 | `ForecastExportEndpointTest.frUc04_19_headersFilenameAndSingleAuditWrite`; `ExcelExportDialog.test.tsx` prompt only after success, never auto-downloads | H, I, V |
 | AC-29 | `Forecast.test.tsx`, `ForecastTable.test.tsx`, `ForecastHeader.test.tsx` (entity switch aborts and clears); Playwright `uc4-forecast.spec.ts` journey at five widths; SU has no Forecast destination | V, P |
+
+## Company group notes (human instruction, 27 November 2026)
+- Each forecast company group has an internal note independent of its invoice and bill notes. The note is shared between Money In and Money Out for the same company and entity, and persists across forecast periods. Saving a blank note clears it. Notes are not sent to Xero.
+- Company identity follows the exact company name used by the forecast grid. A changed name forms a different group until a stable contact identity is available. Forecast role and entity access checks apply.
