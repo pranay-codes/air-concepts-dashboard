@@ -22,10 +22,10 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
       onSessionChange: () => () => {},
     }),
   );
-  let companyNote: string | null = null;
+  let companyNotes: Record<string, string> = {};
   const grid = vi.spyOn(api, "forecastGrid").mockImplementation(async (entityId, start) => ({
     entityId,
-    companyNotes: companyNote ? { "Customer A": companyNote } : {},
+    companyNotes,
     months: Array.from({ length: 8 }, (_, i) => ({
       month: stepMonth(start, i),
       available: i > 0,
@@ -158,8 +158,8 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
   const saveCompanyNote = vi
     .spyOn(api, "saveForecastCompanyNote")
     .mockImplementation(async (_entity, company, note) => {
-      companyNote = note || null;
-      return { company, note: companyNote };
+      companyNotes = note ? { [company]: note } : {};
+      return { company, note: note || null };
     });
   const onChanged = vi.fn();
   render(
