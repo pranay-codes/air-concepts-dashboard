@@ -341,12 +341,17 @@ function EntityForecast(props: Props & { entity: Entity }) {
         <p>
           Money in and money out use outstanding Xero balances and the forecast dates shown in each
           month. Split schedules replace the single document amount. Excluded items contribute
-          nothing. Overdue cash is placed in the month that is current when that month is generated.
+          nothing. In the financial year summary, overdue cash is placed in the month that is
+          current when that month is generated.
         </p>
         <p>
-          The invoice and bill grid keeps current and past snapshots unchanged and refreshes future
-          snapshots when you create a forecast. The financial year summary uses its existing
-          separately generated monthly forecasts.
+          The invoice and bill grid keeps past snapshots unchanged and refreshes future snapshots
+          when you create a forecast. On days 1 to 10, it also updates the current month: saved
+          items stay as they are, and unpaid items due that month or overdue are added. From day 11,
+          the current month is not created or changed. In the last 10 days, everything still overdue
+          is also added to the next month. An item can then appear in both months and count in both
+          balances; enter the next month&apos;s opening bank balance to avoid counting it twice. The
+          financial year summary uses its existing separately generated monthly forecasts.
         </p>
         <p>
           Manual cash amounts and gross staffing costs are GST-inclusive where GST applies; tax is

@@ -90,6 +90,15 @@ public class ForecastGridService {
     return new Grid(id,List.copyOf(months),List.copyOf(rows));
   }
   private static String decimal(BigDecimal amount){return amount==null?null:amount.toPlainString();}
+  /** The current month may be written only on its first days; overdue items move forward in its last days. */
+  private static final int MONTH_START_DAYS=10, MONTH_END_DAYS=10;
+  private static Contribution contribution(ForecastGridRepository.Line line){
+    return new Contribution(line.documentId(),"DOCUMENT",line.direction(),null,line.number(),line.contact(),null,line.month(),line.amount(),null,false,line.splitSequence(),null);
+  }
+  /** Whether a saved line already covers a calculated one. An unsplit line covers every split of its document, and the reverse. */
+  private static boolean covers(Contribution saved,Contribution line){
+    return saved.sourceId().equals(line.sourceId())&&(saved.splitSequence()==null||line.splitSequence()==null||saved.splitSequence().equals(line.splitSequence()));
+  }
 
   @Transactional
   public Generation generate(CurrentUser user,UUID id){
@@ -98,9 +107,10 @@ public class ForecastGridService {
     if(data.sync()==null||data.sync().lastSuccessfulSyncAt()==null) throw new ApiFailure(HttpStatus.UNPROCESSABLE_ENTITY,"FORECAST_SYNC_REQUIRED","Sync Xero before creating a forecast.");
     // A saved document/split in a protected month must not be placed again in a future revision.
     Map<UUID,Map<String,BigDecimal>> protectedLines=new HashMap<>();var first=YearMonth.of(1,1);
-    for(var line:store.lines(id,first,now)) protectedLines.computeIfAbsent(line.documentId(),k->new HashMap<>()).put(String.valueOf(line.splitSequence()),line.amount());
-    var gridMonths=store.months(id,first,now);
-    for(var entry:legacy.lines(id,first,now).entrySet()) if(!gridMonths.containsKey(entry.getKey()))
+    var savedLines=store.lines(id,first,now);
+    for(var line:savedLines) protectedLines.computeIfAbsent(line.documentId(),k->new HashMap<>()).put(String.valueOf(line.splitSequence()),line.amount());
+    var gridMonths=store.months(id,first,now);var legacyLines=legacy.lines(id,first,now);
+    for(var entry:legacyLines.entrySet()) if(!gridMonths.containsKey(entry.getKey()))
       for(var line:entry.getValue()) if("DOCUMENT".equals(line.source())) protectedLines.computeIfAbsent(line.sourceId(),k->new HashMap<>()).put(String.valueOf(line.splitSequence()),line.amount());
     var all=new ForecastCalculator().calculate(data).contributions().stream().filter(c->"DOCUMENT".equals(c.source())).toList();
     Set<UUID> changed=new HashSet<>();
@@ -111,14 +121,36 @@ public class ForecastGridService {
     for(var entry:protectedLines.entrySet()) if(all.stream().anyMatch(c->c.sourceId().equals(entry.getKey())))
       for(var seq:entry.getValue().keySet()) if(all.stream().noneMatch(c->c.sourceId().equals(entry.getKey())&&String.valueOf(c.splitSequence()).equals(seq))) changed.add(entry.getKey());
     var calculated=all.stream().filter(c->!changed.contains(c.sourceId())).filter(c->!protectedLines.getOrDefault(c.sourceId(),Map.of()).containsKey(String.valueOf(c.splitSequence()))).toList();
-    int omitted=(existing.containsKey(now)||old.containsKey(now))?(int)calculated.stream().filter(c->c.bucket().equals(now)).map(Contribution::sourceId).distinct().count():0;
+    int day=data.today().getDayOfMonth();
+    boolean monthStart=day<=MONTH_START_DAYS, monthEnd=day>data.today().lengthOfMonth()-MONTH_END_DAYS;
+    boolean currentSaved=existing.containsKey(now)||old.containsKey(now);
+    // The current month is only added to, and only on its first days: saved lines stay as they are, and unpaid
+    // documents due this month or overdue that it does not list yet are added (FR-UC04-15).
+    List<Contribution> kept=!monthStart?List.of()
+        :existing.containsKey(now)?savedLines.stream().filter(line->line.month().equals(now)).map(ForecastGridService::contribution).toList()
+        :legacyLines.getOrDefault(now,List.of()).stream().filter(c->"DOCUMENT".equals(c.source())).toList();
+    List<Contribution> additions=!monthStart?List.of():all.stream()
+        .filter(c->c.bucket().equals(now)&&(c.overdue()||calculated.contains(c))&&kept.stream().noneMatch(line->covers(line,c))).toList();
+    // At month end everything still overdue is planned into next month, even if an earlier month already lists it.
+    List<Contribution> carried=monthEnd?all.stream().filter(Contribution::overdue).toList():List.of();
+    var placedOverdue=monthEnd?carried:additions.stream().filter(Contribution::overdue).toList();
+    int omitted=monthStart?0:(int)calculated.stream().filter(c->c.bucket().equals(now)&&!carried.contains(c)).map(Contribution::sourceId).distinct().count();
+    int excludedChanged=(int)changed.stream().filter(doc->all.stream().anyMatch(c->c.sourceId().equals(doc)&&!placedOverdue.contains(c))).count();
     var actor=UUID.fromString(user.subject());List<String> created=new ArrayList<>(),refreshed=new ArrayList<>(),preserved=new ArrayList<>();
-    for(int i=0;i<=6;i++) {var month=now.plusMonths(i);if(i==0&&existing.containsKey(month)){preserved.add(month.toString());continue;}
-      if(i==0&&old.containsKey(month)) {var frozen=legacy.lines(id,month,month).getOrDefault(month,List.of()).stream().filter(c->"DOCUMENT".equals(c.source())).toList();store.append(id,month,actor,frozen);assumptions.captureManualMonth(id,month);legacy.audit(id,actor,month,"INSERT",Map.of(),Map.of("grid_snapshot",true,"legacy_copy",true,"line_count",frozen.size()));preserved.add(month.toString());continue;}
-      var lines=calculated.stream().filter(c->c.bucket().equals(month)).toList();store.append(id,month,actor,lines);assumptions.captureManualMonth(id,month);
+    if(monthStart&&!(existing.containsKey(now)&&additions.isEmpty())) {
+      var lines=new ArrayList<>(kept);lines.addAll(additions);store.append(id,now,actor,lines);assumptions.captureManualMonth(id,now);
+      Map<String,Object> detail=new HashMap<>(Map.of("grid_snapshot",true,"line_count",lines.size(),"added_count",additions.size()));
+      if(!existing.containsKey(now)&&old.containsKey(now)) detail.put("legacy_copy",true);
+      legacy.audit(id,actor,now,"INSERT",Map.of(),detail);
+      (!currentSaved?created:additions.isEmpty()?preserved:refreshed).add(now.toString());
+    } else if(currentSaved) preserved.add(now.toString());
+    for(int i=1;i<=6;i++) {var month=now.plusMonths(i);
+      var lines=new ArrayList<>(calculated.stream().filter(c->c.bucket().equals(month)).toList());
+      if(i==1) lines.addAll(carried);
+      store.append(id,month,actor,lines);assumptions.captureManualMonth(id,month);
       legacy.audit(id,actor,month,"INSERT",Map.of(),Map.of("grid_snapshot",true,"line_count",lines.size()));
       if(existing.containsKey(month))refreshed.add(month.toString());else created.add(month.toString());
     }
-    return new Generation(List.copyOf(created),List.copyOf(refreshed),List.copyOf(preserved),omitted,changed.size());
+    return new Generation(List.copyOf(created),List.copyOf(refreshed),List.copyOf(preserved),omitted,excludedChanged);
   }
 }

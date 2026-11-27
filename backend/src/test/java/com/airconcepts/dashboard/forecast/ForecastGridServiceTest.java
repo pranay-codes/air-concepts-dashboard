@@ -158,4 +158,198 @@ class ForecastGridServiceTest {
     verify(store,never()).append(eq(id),eq(current),any(),anyList());
     verify(store,times(6)).append(eq(id),any(),any(),anyList());
   }
+
+  private static final YearMonth NOV=YearMonth.of(2026,11), DEC=NOV.plusMonths(1);
+
+  @Test void frUc04_15_monthEndAddsOverdueToNextMonthAndLeavesCurrentMonthUntouched() {
+    var run=new Generator();
+    var unpaid=document("ACCREC","2026-10-10","100.00");
+    var partPaid=document("ACCREC","2026-11-05","150.00");
+    var bill=document("ACCPAY","2026-11-20","40.00");
+    var unplaced=document("ACCREC","2026-09-30","7.00");
+    run.save(NOV,unpaid.id(),null,"100.00");run.save(NOV,partPaid.id(),null,"200.00");run.save(NOV,bill.id(),null,"40.00");
+    var result=run.click("2026-11-26",unpaid,partPaid,bill,unplaced);
+    assertThat(run.amounts(DEC)).containsOnly(
+        org.assertj.core.api.Assertions.entry(unpaid.id(),"100.00"),org.assertj.core.api.Assertions.entry(partPaid.id(),"150.00"),
+        org.assertj.core.api.Assertions.entry(bill.id(),"40.00"),org.assertj.core.api.Assertions.entry(unplaced.id(),"7.00"));
+    assertThat(run.appended).doesNotContainKey(NOV);
+    verify(run.assumptions,never()).captureManualMonth(run.entity.id(),NOV);
+    assertThat(result.preserved()).containsExactly("2026-11");
+    assertThat(result.omittedCurrentItems()).isZero();
+    assertThat(result.changedProtectedSchedules()).isZero();
+  }
+
+  @Test void frUc04_15_unpaidItemRollsForwardAtEachMonthEnd() {
+    var run=new Generator();var invoice=document("ACCREC","2026-10-10","100.00");
+    run.click("2026-10-25",invoice);
+    assertThat(run.amounts(NOV)).containsOnlyKeys(invoice.id());
+    run.click("2026-11-26",invoice);
+    assertThat(run.amounts(NOV)).containsOnlyKeys(invoice.id());
+    assertThat(run.amounts(DEC)).containsOnlyKeys(invoice.id());
+    assertThat(run.appended.get(NOV)).isEqualTo(1);
+  }
+
+  @Test void frUc04_15_itemsNotYetOverdueAreNotCarried() {
+    var run=new Generator();run.save(NOV,UUID.randomUUID(),null,"1.00");
+    var dueToday=document("ACCREC","2026-11-26","10.00");
+    var dueLater=document("ACCREC","2026-11-28","20.00");
+    var december=document("ACCREC","2026-12-15","30.00");
+    var result=run.click("2026-11-26",dueToday,dueLater,december);
+    assertThat(run.amounts(DEC)).containsOnlyKeys(december.id());
+    assertThat(result.omittedCurrentItems()).isEqualTo(2);
+  }
+
+  @Test void frUc04_15_itemPastDueOnTheClickDayIsCarried() {
+    var run=new Generator();var invoice=document("ACCREC","2026-11-27","20.00");
+    run.save(NOV,invoice.id(),null,"20.00");
+    run.click("2026-11-30",invoice);
+    assertThat(run.amounts(DEC)).containsOnlyKeys(invoice.id());
+  }
+
+  @Test void frUc04_15_unsavedCurrentMonthIsNotCreatedAtMonthEnd() {
+    var run=new Generator();
+    var overdue=document("ACCREC","2026-11-10","10.00");var dueLater=document("ACCREC","2026-11-28","20.00");
+    var result=run.click("2026-11-26",overdue,dueLater);
+    assertThat(run.appended).doesNotContainKey(NOV);
+    assertThat(result.created()).hasSize(6).doesNotContain("2026-11");
+    assertThat(result.preserved()).isEmpty();
+    assertThat(result.omittedCurrentItems()).isEqualTo(1);
+    assertThat(run.amounts(DEC)).containsOnlyKeys(overdue.id());
+  }
+
+  @Test void frUc04_15_legacyCurrentMonthIsNotCopiedAtMonthEnd() {
+    var run=new Generator();
+    when(run.legacy.generated(run.entity.id())).thenReturn(Map.of(NOV,new ForecastMonthRepository.GeneratedMonth(NOV,Instant.EPOCH,1)));
+    var result=run.click("2026-11-26");
+    assertThat(run.appended).doesNotContainKey(NOV);
+    assertThat(result.preserved()).containsExactly("2026-11");
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+      "2026-11-02,true,false","2026-11-10,true,false","2026-11-11,false,false","2026-11-20,false,false","2026-11-21,false,true",
+      "2026-12-21,false,false","2026-12-22,false,true","2027-02-18,false,false","2027-02-19,false,true"})
+  void frUc04_15_currentMonthIsWrittenOnDaysOneToTenAndOverdueCarriesInTheLastTenDays(String today,boolean writesCurrent,boolean carries) {
+    var run=new Generator();var now=YearMonth.from(LocalDate.parse(today));
+    var overdue=document("ACCREC",now.atDay(1).minusDays(5).toString(),"10.00");
+    var result=run.click(today,overdue);
+    if(writesCurrent) assertThat(run.amounts(now)).containsOnlyKeys(overdue.id());
+    else assertThat(run.appended).doesNotContainKey(now);
+    if(carries) assertThat(run.amounts(now.plusMonths(1))).containsOnlyKeys(overdue.id());
+    else assertThat(run.amounts(now.plusMonths(1))).isEmpty();
+    assertThat(result.omittedCurrentItems()).isEqualTo(writesCurrent||carries?0:1);
+  }
+
+  @Test void frUc04_15_earlyMonthUpdateKeepsSavedLinesAndAddsUnlistedUnpaidItems() {
+    var run=new Generator();
+    var paid=UUID.randomUUID();
+    var partPaid=document("ACCREC","2026-11-20","30.00");
+    var missedCarry=document("ACCPAY","2026-11-15","15.00");
+    var newThisMonth=document("ACCREC","2026-12-20","50.00");
+    run.save(NOV,partPaid.id(),null,"80.00");run.save(NOV,missedCarry.id(),null,"15.00");
+    run.save(DEC,paid,null,"100.00");run.save(DEC,partPaid.id(),null,"80.00");
+    var result=run.click("2026-12-05",partPaid,missedCarry,newThisMonth);
+    assertThat(run.amounts(DEC)).containsOnly(
+        org.assertj.core.api.Assertions.entry(paid,"100.00"),org.assertj.core.api.Assertions.entry(partPaid.id(),"80.00"),
+        org.assertj.core.api.Assertions.entry(missedCarry.id(),"15.00"),org.assertj.core.api.Assertions.entry(newThisMonth.id(),"50.00"));
+    assertThat(run.appended).doesNotContainKey(NOV).containsEntry(DEC,1);
+    verify(run.assumptions).captureManualMonth(run.entity.id(),DEC);
+    assertThat(result.refreshed()).containsExactly("2026-12");
+    assertThat(result.preserved()).isEmpty();
+    assertThat(result.omittedCurrentItems()).isZero();
+  }
+
+  @Test void frUc04_15_earlyMonthWithNothingToAddKeepsTheSavedRevision() {
+    var run=new Generator();var saved=document("ACCREC","2026-12-20","50.00");run.save(DEC,saved.id(),null,"50.00");
+    var result=run.click("2026-12-05",saved);
+    assertThat(run.appended).doesNotContainKey(DEC);
+    assertThat(result.preserved()).containsExactly("2026-12");
+  }
+
+  @Test void frUc04_15_savedUnsplitDocumentIsNotAddedAgainAsAnOverdueSplit() {
+    var run=new Generator();var id=UUID.randomUUID();run.save(DEC,id,null,"100.00");
+    var split=new ForecastDataset.Document(id,"ACCREC","1","A",LocalDate.of(2026,11,1),LocalDate.of(2026,11,10),null,null,new BigDecimal("100.00"),false,null,
+        List.of(new ForecastDataset.Split(1,LocalDate.of(2026,11,20),new BigDecimal("100.00"))),false);
+    var result=run.click("2026-12-05",split);
+    assertThat(run.appended).doesNotContainKey(DEC);
+    assertThat(result.changedProtectedSchedules()).isEqualTo(1);
+  }
+
+  @Test void frUc04_15_earlyMonthLegacyCopyAlsoReceivesUnlistedItems() {
+    var run=new Generator();var legacyDocument=UUID.randomUUID();var added=document("ACCREC","2026-12-20","50.00");
+    when(run.legacy.generated(run.entity.id())).thenReturn(Map.of(DEC,new ForecastMonthRepository.GeneratedMonth(DEC,Instant.EPOCH,1)));
+    var frozen=new com.airconcepts.dashboard.forecast.calc.ForecastResult.Contribution(legacyDocument,"DOCUMENT","IN","ACCREC","1","Synthetic contact",
+        LocalDate.of(2026,12,1),DEC,new BigDecimal("9.00"),com.airconcepts.dashboard.forecast.calc.DateRule.DUE_DATE,false,null,null);
+    when(run.legacy.lines(eq(run.entity.id()),any(),any())).thenReturn(Map.of(DEC,List.of(frozen)));
+    var result=run.click("2026-12-05",added);
+    assertThat(run.amounts(DEC)).containsOnly(org.assertj.core.api.Assertions.entry(legacyDocument,"9.00"),org.assertj.core.api.Assertions.entry(added.id(),"50.00"));
+    assertThat(result.refreshed()).containsExactly("2026-12");
+  }
+
+  @Test void frUc04_15_excludedAndRescheduledItemsAreNotCarriedAsOverdue() {
+    var run=new Generator();var base=document("ACCREC","2026-10-10","10.00");
+    var excluded=new ForecastDataset.Document(base.id(),"ACCREC","1","A",base.issueDate(),base.dueDate(),null,null,base.amountDue(),true,"Disputed",List.of(),false);
+    var rescheduled=new ForecastDataset.Document(UUID.randomUUID(),"ACCREC","2","B",base.issueDate(),base.dueDate(),null,LocalDate.of(2027,1,15),new BigDecimal("20.00"),false,null,List.of(),false);
+    run.click("2026-11-26",excluded,rescheduled);
+    assertThat(run.amounts(DEC)).isEmpty();
+    assertThat(run.amounts(DEC.plusMonths(1))).containsOnlyKeys(rescheduled.id());
+  }
+
+  @Test void frUc04_15_overdueSplitIsCarriedOnceAndRemainingChangedScheduleIsReported() {
+    var run=new Generator();var id=UUID.randomUUID();run.save(NOV,id,null,"100.00");
+    var split=new ForecastDataset.Document(id,"ACCREC","1","A",LocalDate.of(2026,10,1),LocalDate.of(2026,10,10),null,null,new BigDecimal("100.00"),false,null,
+        List.of(new ForecastDataset.Split(1,LocalDate.of(2026,11,1),new BigDecimal("60.00")),new ForecastDataset.Split(2,LocalDate.of(2027,1,10),new BigDecimal("40.00"))),false);
+    var result=run.click("2026-11-26",split);
+    assertThat(run.amounts(DEC)).containsExactly(org.assertj.core.api.Assertions.entry(id,"60.00"));
+    assertThat(run.amounts(DEC.plusMonths(1))).isEmpty();
+    assertThat(result.changedProtectedSchedules()).isEqualTo(1);
+  }
+
+  private static ForecastDataset.Document document(String type,String due,String amount) {
+    var dueDate=LocalDate.parse(due);
+    return new ForecastDataset.Document(UUID.randomUUID(),type,"1","Synthetic contact",dueDate.minusDays(20),dueDate,null,null,new BigDecimal(amount),false,null,List.of(),false);
+  }
+
+  /** In-memory stand-in for the grid store so consecutive Create forecast clicks can be followed. */
+  private static final class Generator {
+    final Entity entity=new Entity(UUID.randomUUID(),"Synthetic");
+    final CurrentUser user=new CurrentUser(UUID.randomUUID().toString(),Role.FINANCIAL_ADMIN);
+    final ForecastMonthRepository legacy=mock(ForecastMonthRepository.class);
+    final ForecastAssumptionRepository assumptions=mock(ForecastAssumptionRepository.class);
+    final Map<YearMonth,List<ForecastGridRepository.Line>> saved=new TreeMap<>();
+    /** Number of revisions written by clicks, per month. */
+    final Map<YearMonth,Integer> appended=new HashMap<>();
+
+    void save(YearMonth month,UUID document,Integer sequence,String amount) {
+      saved.computeIfAbsent(month,m->new ArrayList<>()).add(new ForecastGridRepository.Line(month,document,sequence,"IN","Synthetic contact",new BigDecimal(amount)));
+    }
+    Map<UUID,String> amounts(YearMonth month) {
+      var result=new HashMap<UUID,String>();
+      for(var line:saved.getOrDefault(month,List.of()))
+        assertThat(result.put(line.documentId(),line.amount().toPlainString())).as("one line per document in "+month).isNull();
+      return result;
+    }
+    @SuppressWarnings("unchecked")
+    ForecastGridService.Generation click(String today,ForecastDataset.Document... documents) {
+      var access=mock(ForecastAccess.class);var loader=mock(ForecastDatasetLoader.class);var store=mock(ForecastGridRepository.class);
+      var clock=Clock.fixed(Instant.parse(today+"T00:00:00Z"),ZoneOffset.UTC);var now=YearMonth.from(LocalDate.parse(today));
+      when(access.requireWrite(user,entity.id())).thenReturn(entity);
+      when(store.months(eq(entity.id()),any(),any())).thenAnswer(call->{
+        YearMonth from=call.getArgument(1),to=call.getArgument(2);var result=new HashMap<YearMonth,Instant>();
+        saved.keySet().stream().filter(m->!m.isBefore(from)&&!m.isAfter(to)).forEach(m->result.put(m,Instant.EPOCH));return result;
+      });
+      when(store.lines(eq(entity.id()),any(),any())).thenAnswer(call->{
+        YearMonth from=call.getArgument(1),to=call.getArgument(2);
+        return saved.entrySet().stream().filter(e->!e.getKey().isBefore(from)&&!e.getKey().isAfter(to)).flatMap(e->e.getValue().stream()).toList();
+      });
+      doAnswer(call->{
+        YearMonth month=call.getArgument(1);List<com.airconcepts.dashboard.forecast.calc.ForecastResult.Contribution> lines=call.getArgument(3);
+        saved.put(month,new ArrayList<>(lines.stream().map(c->new ForecastGridRepository.Line(month,c.sourceId(),c.splitSequence(),c.direction(),c.label(),c.amount())).toList()));
+        appended.merge(month,1,Integer::sum);return null;
+      }).when(store).append(eq(entity.id()),any(),any(),anyList());
+      when(loader.load(entity,now)).thenReturn(new ForecastDataset(entity.id(),"Synthetic",now,LocalDate.parse(today),null,null,List.of(documents),List.of(),List.of(),
+          new ForecastDataset.SyncInfo(Instant.EPOCH,"SUCCEEDED",false)));
+      return new ForecastGridService(access,loader,store,legacy,new ForecastCalendar(4,clock),assumptions,mock(ForecastNoteRepository.class)).generate(user,entity.id());
+    }
+  }
 }
