@@ -47,6 +47,64 @@ async function openMonth(month: string) {
   fireEvent.change(screen.getByLabelText("Forecast month"), { target: { value: month } });
   fireEvent.click(screen.getByRole("button", { name: "View month" }));
 }
+it("FR-UC04-05 shows only the rolling grid and keeps forecast tabs", async () => {
+  const api = new DashboardApi(
+    new ApiClient("", {
+      getAccessToken: async () => null,
+      requestCode: vi.fn(),
+      verifyCode: vi.fn(),
+      signOut: vi.fn(),
+      onSessionChange: () => () => {},
+    }),
+  );
+  vi.spyOn(api, "forecast").mockImplementation(async (entity, year) => data(entity, year, "0.00"));
+  render(
+    <Forecast
+      api={api}
+      profile={{ subject: a.id, displayName: "Admin", role: "FINANCIAL_ADMIN" }}
+      entities={[a]}
+      combined={false}
+      entity={a}
+      onDirty={vi.fn()}
+      onAccessDenied={vi.fn()}
+    />,
+  );
+  await screen.findByRole("button", { name: "Create forecast" });
+  for (const name of ["Forecast", "Xero items", "Manual items", "Staffing", "History"])
+    expect(screen.getByRole("tab", { name })).toBeTruthy();
+  for (const text of [
+    /Monthly forecast actions/,
+    /Beyond this financial year/,
+    /How this is calculated/,
+    /Excluded documents/,
+  ])
+    expect(screen.queryByText(text)).toBeNull();
+});
+
+it("FR-UC04-13 asks for an entity instead of displaying combined forecasts", () => {
+  const api = new DashboardApi(
+    new ApiClient("", {
+      getAccessToken: async () => null,
+      requestCode: vi.fn(),
+      verifyCode: vi.fn(),
+      signOut: vi.fn(),
+      onSessionChange: () => () => {},
+    }),
+  );
+  render(
+    <Forecast
+      api={api}
+      profile={{ subject: a.id, displayName: "Admin", role: "FINANCIAL_ADMIN" }}
+      entities={[a]}
+      combined
+      entity={null}
+      onDirty={vi.fn()}
+      onAccessDenied={vi.fn()}
+    />,
+  );
+  expect(screen.getByText(/Select an entity to view its forecast/)).toBeTruthy();
+});
+
 it("FR-UC04-13 clears the previous entity synchronously while the next entity is loading", async () => {
   const api = new DashboardApi(
     new ApiClient("", {
