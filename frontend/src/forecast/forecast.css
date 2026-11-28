@@ -710,12 +710,24 @@
   gap: 0.75rem;
   box-sizing: border-box;
   width: min(100%, 55rem, calc(100vw - 2rem));
-  padding: 0.75rem;
+  padding: 1rem;
   text-align: left;
   white-space: normal;
-  background: var(--surface, #fff);
+  background: var(--selected, #e7f2f5);
   border: 1px solid var(--border, #d6d6d6);
-  border-radius: 4px;
+  border-left: 4px solid var(--accent, #0f6b7f);
+  border-radius: 6px;
+}
+.forecast-grid-manual-heading {
+  grid-column: 1 / -1;
+}
+.forecast-grid-manual-heading h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.forecast-grid-manual-heading p {
+  margin: 0.25rem 0 0;
+  font-weight: 400;
 }
 .forecast-grid-manual label {
   display: grid;

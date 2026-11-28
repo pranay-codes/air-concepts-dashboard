@@ -639,6 +639,10 @@ function FragmentRows({
                   });
               }}
             >
+              <div className="forecast-grid-manual-heading">
+                <h3>Add a manual {direction === "IN" ? "receipt" : "payment"}</h3>
+                <p>Enter the amount and choose where the line appears in the forecast.</p>
+              </div>
               <label>
                 Description{" "}
                 <input
@@ -694,8 +698,8 @@ function FragmentRows({
                 </select>
               </label>
               <div className="forecast-grid-manual-actions">
-                <button type="submit" disabled={manualAction.busy}>
-                  Save line
+                <button type="submit" className="primary" disabled={manualAction.busy}>
+                  {manualAction.busy ? "Saving…" : "Save line"}
                 </button>
                 <button type="button" onClick={() => setAdding(false)}>
                   Cancel
