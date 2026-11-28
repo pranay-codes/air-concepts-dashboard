@@ -1,6 +1,7 @@
 # Air Concepts Financial Admin Dashboard: Agent Rules
 
 ## Learned Rules
+- Forecast displays the per-entity rolling grid and retains Forecast, Xero items, Manual items, Staffing and History tabs; do not display combined forecasts or separate monthly forecast actions (human clarification, 28 November 2026).
 - Manual forecast row edit and remove actions should be visually subtle while remaining visible and accessible (human correction, 28 November 2026).
 - The forecast manual-line form should stand out from the grid while retaining a compact, consistent layout (human correction, 28 November 2026).
 - Forecast cell editing should use compact controls and support Enter to save and Escape to cancel (human correction, 28 November 2026).

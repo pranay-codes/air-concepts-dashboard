@@ -130,22 +130,11 @@ for (const width of [320, 390, 768, 1024, 1440]) {
     await expect.poll(() => state.opening.get(ENTITY_A)).toBe("1000.00");
     await expect(page.getByText("Financial year summary", { exact: true })).toHaveCount(0);
     await expect(grid).toBeVisible();
-    await page.getByText("Monthly forecast actions", { exact: true }).click();
-    await page
-      .getByRole("combobox", { name: "Forecast month", exact: true })
-      .selectOption("2026-11");
-    await page.getByRole("button", { name: "Edit opening balance", exact: true }).click();
-    await page.getByLabel("Opening cash balance (NZD)").fill("1200.00");
-    await page.getByLabel("Balance source (optional)").fill("Synthetic statement");
-    await page.getByRole("button", { name: "Save opening balance", exact: true }).click();
-    await expect.poll(() => state.opening.get(ENTITY_A)).toBe("1200.00");
-    const monthTrigger = page.getByRole("button", { name: "View month", exact: true });
-    await monthTrigger.click();
-    await expect(page.getByRole("heading", { name: /cash forecast$/ })).toBeVisible();
-    await expect(page.getByRole("region", { name: "Money In" }).getByText(/INV-001/)).toBeVisible();
-    await page.screenshot({ path: testInfo.outputPath(`uc4-detail-${width}.png`), fullPage: true });
-    await page.getByRole("button", { name: "Back to forecast", exact: true }).click();
-    await expect(monthTrigger).toBeFocused();
+    await expect(page.getByText("Monthly forecast actions", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("How this is calculated", { exact: true })).toHaveCount(0);
+    for (const name of ["Forecast", "Xero items", "Manual items", "Staffing", "History"]) {
+      await expect(page.getByRole("tab", { name, exact: true })).toBeVisible();
+    }
     // Exclusion is an invoice-level action on the Xero items tab.
     await page
       .getByRole("tablist", { name: "Forecast sections" })
@@ -155,12 +144,8 @@ for (const width of [320, 390, 768, 1024, 1440]) {
     await page.getByLabel("Reason for exclusion").fill("No cash expected in this period");
     await page.getByRole("button", { name: "Exclude from forecast", exact: true }).click();
     await expect.poll(() => state.excluded.get(ENTITY_A)).toBe("No cash expected in this period");
-    await page
-      .getByRole("tablist", { name: "Forecast sections" })
-      .getByRole("tab", { name: "Forecast", exact: true })
-      .click();
-    await page.getByText("Excluded documents (1)", { exact: true }).click();
-    await expect(page.getByRole("button", { name: "Include again", exact: true })).toHaveCount(1);
+    await expect(page.getByText("Excluded: No cash expected in this period")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Include", exact: true })).toBeVisible();
     let downloads = 0;
     page.on("download", () => downloads++);
     await page.getByRole("button", { name: "Export to Excel", exact: true }).click();
@@ -214,7 +199,7 @@ test("FR-UC04-06_07 failed forecast load retains context and Retry recovers", as
   await expect(page.getByRole("alert")).toHaveCount(0);
   await expect(page.getByRole("group", { name: "Financial year" })).toBeVisible();
 });
-test("FR-UC04-03_13 manual and staffing edits, deactivation and combined view", async ({
+test("FR-UC04-03_13 manual and staffing edits, deactivation and entity selection", async ({
   page,
 }) => {
   await greenLane(page, "FINANCIAL_ADMIN");
@@ -269,8 +254,8 @@ test("FR-UC04-03_13 manual and staffing edits, deactivation and combined view", 
     ).toBeVisible();
   }
   await page.locator("#entity-select").selectOption("__all__");
-  await expect(page.getByRole("heading", { name: "All entities", exact: true })).toBeVisible();
-  await expect(page.getByText(/Incomplete totals:/)).toBeVisible();
+  await expect(page.getByText("Select an entity to view its forecast.")).toBeVisible();
+  await expect(page.getByText(/Incomplete totals:/)).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Add staffing line", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Export to Excel", exact: true })).toHaveCount(0);
 });

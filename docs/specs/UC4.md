@@ -47,7 +47,7 @@ Forecast retains FR-UC04-01 to 21. The human delegated the numbering decision on
 
 ## 28 November 2026 interface update
 
-The single-entity Forecast page removes the financial-year summary table at the user's request. The rolling grid remains the main forecast view; monthly detail, eligible monthly generation, and current or future opening-balance editing remain available under Monthly forecast actions. The combined forecast retains its existing tables.
+The Forecast page shows only the per-entity rolling forecast grid, retaining the Forecast, Xero items, Manual items, Staffing and History tabs. Remove separate monthly forecast actions and other forecast summaries; the combined forecast is not displayed. Users select an entity to view its forecast.
 
 ## Acceptance criteria
 Roles: D = DIRECTOR, FA = FINANCIAL_ADMIN, SU = STANDARD_USER. Design detail (schema, algorithm, API shape) is in the plan; the criteria below are what must be observed.
