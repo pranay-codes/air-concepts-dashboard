@@ -48,17 +48,52 @@ test("FR-UC04-04 grid opening edit refreshes the saved amount", async ({ page })
     .click();
   const grid = page.getByRole("region", { name: "Cash forecast table" });
   const openingValue = grid.getByRole("button", { name: /^Edit opening balance for / }).first();
+  const openingRow = openingValue.locator("xpath=ancestor::tr");
+  const rowHeight = (await openingRow.boundingBox())?.height;
   await expect(openingValue).not.toHaveText("Edit");
   expect((await openingValue.boundingBox())?.height).toBeLessThan(32);
   await openingValue.focus();
   await expect(openingValue).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await grid.getByRole("textbox", { name: /^Opening balance for / }).fill("500.00");
-  await grid.getByRole("button", { name: "Save", exact: true }).click();
+  const input = grid.getByRole("textbox", { name: /^Opening balance for / });
+  await input.fill("500.00");
+  const save = grid.getByRole("button", { name: "Save", exact: true });
+  expect((await openingRow.boundingBox())?.height).toBe(rowHeight);
+  expect((await save.boundingBox())?.width).toBeLessThan(32);
+  expect((await save.boundingBox())?.height).toBeLessThan(32);
+  await input.press("Enter");
   await expect.poll(() => state.opening.get(ENTITY_A)).toBe("500.00");
   await expect(grid.getByText(/500\.00/).first()).toBeVisible();
   await expect(grid.getByText(/615\.00/).first()).toBeVisible();
+});
+test("FR-UC04-04 compact editor keeps a failed value visible and cancellable", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 900 });
+  await greenLane(page, "FINANCIAL_ADMIN");
+  await forecastBoundary(page);
+  await page.route("**/opening-balance", async (route) => {
+    if (route.request().method() === "PUT")
+      await route.fulfill({ status: 500, json: { code: "FAILED" } });
+    else await route.fallback();
+  });
+  await signIn(page);
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Forecast", exact: true })
+    .click();
+  const grid = page.getByRole("region", { name: "Cash forecast table" });
+  const value = grid.getByRole("button", { name: /^Edit opening balance for / }).first();
+  await value.click();
+  const input = grid.getByRole("textbox", { name: /^Opening balance for / });
+  await input.fill("500.00");
+  await grid.getByRole("button", { name: "Save", exact: true }).click();
+  const error = grid.getByRole("alert");
+  await expect(error).toBeVisible();
+  await expect(error).toBeInViewport();
+  await expect(input).toHaveValue("500.00");
+  await expect(input).toBeFocused();
+  await input.press("Escape");
+  await expect(value).toBeFocused();
 });
 const fixture = fileURLToPath(
   new URL("../../backend/src/test/resources/forecast/template-v1.xlsx", import.meta.url),
@@ -80,6 +115,17 @@ for (const width of [320, 390, 768, 1024, 1440]) {
     ).toBeVisible();
     await expect(page.getByRole("region", { name: "Cash forecast table" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Create forecast" })).toBeVisible();
+    const grid = page.getByRole("region", { name: "Cash forecast table" });
+    await grid
+      .getByRole("button", { name: /^Edit opening balance for / })
+      .first()
+      .click();
+    const editor = grid.getByRole("textbox", { name: /^Opening balance for / });
+    await expect(editor).toBeVisible();
+    await expect(grid.getByRole("button", { name: "Cancel", exact: true })).toBeVisible();
+    await expect(editor).toBeInViewport();
+    await expect(grid.getByRole("button", { name: "Cancel", exact: true })).toBeInViewport();
+    await editor.press("Escape");
     const summary = page.locator("details").filter({ hasText: "Financial year summary" });
     await summary
       .getByRole("button", { name: /^Edit opening balance for / })

@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useRef, useState } from "react";
+import { Fragment, useCallback, useId, useRef, useState } from "react";
 import type { DashboardApi } from "../api/dashboard";
 import { isAccessFailure } from "../api/client";
 import { useResource } from "../api/useResource";
@@ -13,6 +13,9 @@ import { monthName, signClass } from "./ForecastTable";
 export function stepMonth(month: string, offset: number) {
   const [year = "0", value = "1"] = month.split("-");
   return new Date(Date.UTC(Number(year), Number(value) - 1 + offset, 1)).toISOString().slice(0, 7);
+}
+function revealEditorError(node: HTMLElement | null) {
+  node?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
 }
 export function ForecastGrid(props: {
   api: DashboardApi;
@@ -180,9 +183,11 @@ function OpeningCell(props: {
 }) {
   const { month } = props;
   const editButton = useRef<HTMLButtonElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState(false);
   const [amount, setAmount] = useState(month.opening ?? "");
   const [error, setError] = useState("");
+  const [attempted, setAttempted] = useState(false);
   const action = useAction(`${props.subject}:${props.entityId}:${month.month}:grid-opening`);
   if (month.month < currentMonth())
     return (
@@ -200,6 +205,7 @@ function OpeningCell(props: {
         onClick={() => {
           setAmount(month.opening ?? "");
           setError("");
+          setAttempted(false);
           setEditing(true);
         }}
       >
@@ -209,6 +215,14 @@ function OpeningCell(props: {
   return (
     <form
       className="forecast-grid-opening"
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && !event.nativeEvent.isComposing && !action.busy) {
+          event.preventDefault();
+          event.stopPropagation();
+          setEditing(false);
+          requestAnimationFrame(() => editButton.current?.focus());
+        }
+      }}
       onSubmit={(event) => {
         event.preventDefault();
         const value = decimal(amount);
@@ -216,9 +230,13 @@ function OpeningCell(props: {
           setError("Enter a cash balance with at most two decimal places.");
           return;
         }
-        if (month.openingSource === "CARRIED_FORWARD" && value === decimal(month.opening ?? ""))
+        if (month.openingSource === "CARRIED_FORWARD" && value === decimal(month.opening ?? "")) {
+          setEditing(false);
+          requestAnimationFrame(() => editButton.current?.focus());
           return;
+        }
         setError("");
+        setAttempted(true);
         void action
           .run(
             (signal) =>
@@ -231,6 +249,7 @@ function OpeningCell(props: {
               ),
             (failure) => {
               if (isAccessFailure(failure)) props.onAccessDenied();
+              requestAnimationFrame(() => inputRef.current?.focus());
             },
           )
           .then((result) => {
@@ -244,26 +263,36 @@ function OpeningCell(props: {
     >
       <input
         autoFocus
+        ref={inputRef}
         inputMode="decimal"
         aria-label={`Opening balance for ${monthName(month.month)}`}
         aria-invalid={Boolean(error)}
-        aria-describedby={error ? `opening-error-${month.month}` : undefined}
+        aria-describedby={
+          error
+            ? `opening-error-${month.month}`
+            : attempted && action.error
+              ? `opening-failure-${month.month}`
+              : undefined
+        }
         value={amount}
+        onFocus={(event) => event.currentTarget.select()}
         onChange={(event) => setAmount(event.target.value)}
       />
       <button
-        className="compact-button"
+        className="forecast-grid-editor-action"
+        aria-label={action.busy ? "Saving" : "Save"}
+        aria-keyshortcuts="Enter"
+        title="Save (Enter)"
         type="submit"
-        disabled={
-          action.busy ||
-          (month.openingSource === "CARRIED_FORWARD" &&
-            decimal(amount) === decimal(month.opening ?? ""))
-        }
+        disabled={action.busy}
       >
-        {action.busy ? "Saving..." : "Save"}
+        {action.busy ? "…" : "✓"}
       </button>
       <button
-        className="compact-button"
+        className="forecast-grid-editor-action"
+        aria-label="Cancel"
+        aria-keyshortcuts="Escape"
+        title="Cancel (Escape)"
         type="button"
         disabled={action.busy}
         onClick={() => {
@@ -271,14 +300,22 @@ function OpeningCell(props: {
           requestAnimationFrame(() => editButton.current?.focus());
         }}
       >
-        Cancel
+        ×
       </button>
       {error ? (
-        <p id={`opening-error-${month.month}`} role="alert">
+        <p ref={revealEditorError} id={`opening-error-${month.month}`} role="alert">
           {error}
         </p>
       ) : null}
-      {action.error ? <Failure error={action.error} /> : null}
+      {attempted && action.error ? (
+        <div
+          ref={revealEditorError}
+          id={`opening-failure-${month.month}`}
+          className="forecast-grid-editor-error"
+        >
+          <Failure error={action.error} />
+        </div>
+      ) : null}
     </form>
   );
 }
@@ -297,7 +334,10 @@ function AmountCell(props: {
   const [editing, setEditing] = useState(false);
   const [amount, setAmount] = useState(props.amount ?? "");
   const [error, setError] = useState("");
+  const [attempted, setAttempted] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const errorId = useId();
   const action = useAction(`${props.entityId}:${props.month}:${props.scope}:${props.itemKey}`);
   const label = `${props.label} for ${monthName(props.month)}`;
   if (props.month < currentMonth())
@@ -312,6 +352,7 @@ function AmountCell(props: {
         onClick={() => {
           setAmount(props.amount ?? "");
           setError("");
+          setAttempted(false);
           setEditing(true);
         }}
       >
@@ -321,6 +362,14 @@ function AmountCell(props: {
   return (
     <form
       className="forecast-grid-opening"
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && !event.nativeEvent.isComposing && !action.busy) {
+          event.preventDefault();
+          event.stopPropagation();
+          setEditing(false);
+          requestAnimationFrame(() => button.current?.focus());
+        }
+      }}
       onSubmit={(event) => {
         event.preventDefault();
         const value = decimal(amount);
@@ -329,6 +378,7 @@ function AmountCell(props: {
           return;
         }
         setError("");
+        setAttempted(true);
         void action
           .run(
             (signal) =>
@@ -345,6 +395,7 @@ function AmountCell(props: {
               ),
             (failure) => {
               if (isAccessFailure(failure)) props.onAccessDenied();
+              requestAnimationFrame(() => inputRef.current?.focus());
             },
           )
           .then((result) => {
@@ -358,21 +409,36 @@ function AmountCell(props: {
     >
       <input
         autoFocus
+        ref={inputRef}
         inputMode="decimal"
         aria-label={label}
         aria-invalid={Boolean(error)}
+        aria-describedby={
+          error ? errorId : attempted && action.error ? `${errorId}-failure` : undefined
+        }
         value={amount}
+        onFocus={(event) => event.currentTarget.select()}
         onChange={(event) => setAmount(event.target.value)}
       />
-      <button className="compact-button" type="submit" disabled={action.busy}>
-        Save
+      <button
+        className="forecast-grid-editor-action"
+        type="submit"
+        aria-label={action.busy ? "Saving" : "Save"}
+        aria-keyshortcuts="Enter"
+        title="Save (Enter)"
+        disabled={action.busy}
+      >
+        {action.busy ? "…" : "✓"}
       </button>
       <button
-        className="compact-button"
+        className="forecast-grid-editor-action"
+        aria-label="Use calculated amount"
+        title="Use calculated amount"
         type="button"
         disabled={action.busy}
         onClick={() => {
           setError("");
+          setAttempted(true);
           void action
             .run(
               (signal) =>
@@ -390,6 +456,7 @@ function AmountCell(props: {
                 ),
               (failure) => {
                 if (isAccessFailure(failure)) props.onAccessDenied();
+                requestAnimationFrame(() => inputRef.current?.focus());
               },
             )
             .then((result) => {
@@ -401,10 +468,13 @@ function AmountCell(props: {
             });
         }}
       >
-        Use calculated amount
+        ↺
       </button>
       <button
-        className="compact-button"
+        className="forecast-grid-editor-action"
+        aria-label="Cancel"
+        aria-keyshortcuts="Escape"
+        title="Cancel (Escape)"
         type="button"
         disabled={action.busy}
         onClick={() => {
@@ -412,10 +482,22 @@ function AmountCell(props: {
           requestAnimationFrame(() => button.current?.focus());
         }}
       >
-        Cancel
+        ×
       </button>
-      {error ? <p role="alert">{error}</p> : null}
-      {action.error ? <Failure error={action.error} /> : null}
+      {error ? (
+        <p ref={revealEditorError} id={errorId} role="alert">
+          {error}
+        </p>
+      ) : null}
+      {attempted && action.error ? (
+        <div
+          ref={revealEditorError}
+          id={`${errorId}-failure`}
+          className="forecast-grid-editor-error"
+        >
+          <Failure error={action.error} />
+        </div>
+      ) : null}
     </form>
   );
 }

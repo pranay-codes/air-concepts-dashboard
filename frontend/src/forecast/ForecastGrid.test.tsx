@@ -222,7 +222,22 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
   );
   fireEvent.click(groupEdit);
   const groupAmount = screen.getByRole("textbox", { name: /Customer A company amount/ });
-  fireEvent.change(groupAmount, { target: { value: "77" } });
+  fireEvent.change(groupAmount, { target: { value: "99" } });
+  fireEvent.keyDown(groupAmount, { key: "Escape" });
+  expect(screen.queryByRole("textbox", { name: /Customer A company amount/ })).toBeNull();
+  expect(saveAmount).not.toHaveBeenCalled();
+  fireEvent.click(screen.getAllByRole("button", { name: /Edit Customer A company amount/ })[1]!);
+  let reopenedAmount = screen.getByRole("textbox", { name: /Customer A company amount/ });
+  saveAmount.mockRejectedValueOnce(new Error("Network error"));
+  fireEvent.change(reopenedAmount, { target: { value: "10" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(await screen.findByRole("alert")).toBeInTheDocument();
+  await waitFor(() => expect(reopenedAmount).toHaveFocus());
+  fireEvent.keyDown(reopenedAmount, { key: "Escape" });
+  fireEvent.click(screen.getAllByRole("button", { name: /Edit Customer A company amount/ })[1]!);
+  reopenedAmount = screen.getByRole("textbox", { name: /Customer A company amount/ });
+  expect(screen.queryByRole("alert")).toBeNull();
+  fireEvent.change(reopenedAmount, { target: { value: "77" } });
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   await waitFor(() =>
     expect(saveAmount).toHaveBeenCalledWith(
@@ -315,7 +330,7 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
   fireEvent.click(openingButtons[0]!);
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   const input = screen.getByRole("textbox", { name: /Opening balance for/ });
-  expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
   fireEvent.change(input, { target: { value: "invalid" } });
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   expect(screen.getByRole("alert")).toHaveTextContent("Enter a cash balance");
