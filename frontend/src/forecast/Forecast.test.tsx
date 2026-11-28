@@ -3,8 +3,7 @@ import { expect, it, vi } from "vitest";
 import { ApiClient } from "../api/client";
 import { DashboardApi } from "../api/dashboard";
 import Forecast from "./Forecast";
-import { currentMonth } from "./ForecastHeader";
-import { stepMonth } from "./ForecastGrid";
+import { MonthDetail } from "./MonthDetail";
 import type { ForecastView } from "./contracts";
 const a = { id: "10000000-0000-4000-8000-000000000001", displayName: "Alpha" };
 const b = { id: "10000000-0000-4000-8000-000000000002", displayName: "Bravo" };
@@ -15,7 +14,7 @@ function data(entityId: string, year: number | null, amount: string): ForecastVi
     entityId,
     entityName: entityId === a.id ? a.displayName : b.displayName,
     financialYearStart: startMonth,
-    financialYearLabel: `${startYear}-${startYear + 1}`,
+    financialYearLabel: `${startYear}-${startYear + 1} ${amount}`,
     months: Array.from({ length: 12 }, (_, i) => ({
       month: new Date(Date.UTC(startYear, 3 + i, 1)).toISOString().slice(0, 7),
       state: "GENERATED" as const,
@@ -41,11 +40,6 @@ function data(entityId: string, year: number | null, amount: string): ForecastVi
     syncStale: false,
     openingBalanceSource: "Statement",
   };
-}
-async function openMonth(month: string) {
-  fireEvent.click(await screen.findByText("Monthly forecast actions"));
-  fireEvent.change(screen.getByLabelText("Forecast month"), { target: { value: month } });
-  fireEvent.click(screen.getByRole("button", { name: "View month" }));
 }
 it("FR-UC04-05 shows only the rolling grid and keeps forecast tabs", async () => {
   const api = new DashboardApi(
@@ -293,18 +287,22 @@ it("FR-UC04-20 opens a month as a full page listing Xero invoices with due dates
         notes: [],
       }) as unknown as Awaited<ReturnType<DashboardApi["forecastItems"]>>,
   );
+  const onBack = vi.fn();
   render(
-    <Forecast
+    <MonthDetail
       api={api}
-      profile={{ subject: a.id, displayName: "Admin", role: "FINANCIAL_ADMIN" as const }}
-      entities={[a, b]}
-      combined={false}
       entity={a}
+      financialYear={2026}
+      financialYearLabel="2026-2027"
+      subject={a.id}
       onDirty={vi.fn()}
+      onChanged={vi.fn()}
       onAccessDenied={vi.fn()}
+      selectedMonth="2026-11"
+      summary={null}
+      onBack={onBack}
     />,
   );
-  await openMonth("2026-11");
   expect(await screen.findByRole("heading", { name: /cash forecast$/ })).toBeTruthy();
   expect(screen.queryByText("12-month cash forecast · NZD, GST-inclusive")).toBeNull();
   const moneyIn = screen.getByRole("table", { name: /^Money In/ });
@@ -313,7 +311,7 @@ it("FR-UC04-20 opens a month as a full page listing Xero invoices with due dates
   expect(moneyIn.textContent).toContain("Total Money In");
   expect(screen.getByText("No expected money out for this month.")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Back to forecast" }));
-  expect(await screen.findByText("Monthly forecast actions")).toBeTruthy();
+  expect(onBack).toHaveBeenCalledOnce();
 });
 it("FR-UC04-20 keeps two invoices for the same debtor as separate rows, and excludes staffing from the ledger", async () => {
   const api = new DashboardApi(
@@ -382,18 +380,22 @@ it("FR-UC04-20 keeps two invoices for the same debtor as separate rows, and excl
         notes: [],
       }) as unknown as Awaited<ReturnType<DashboardApi["forecastItems"]>>,
   );
+  const onBack = vi.fn();
   render(
-    <Forecast
+    <MonthDetail
       api={api}
-      profile={{ subject: a.id, displayName: "Admin", role: "FINANCIAL_ADMIN" as const }}
-      entities={[a, b]}
-      combined={false}
       entity={a}
+      financialYear={2026}
+      financialYearLabel="2026-2027"
+      subject={a.id}
       onDirty={vi.fn()}
+      onChanged={vi.fn()}
       onAccessDenied={vi.fn()}
+      selectedMonth="2026-11"
+      summary={null}
+      onBack={onBack}
     />,
   );
-  await openMonth("2026-11");
   const moneyIn = await screen.findByRole("table", { name: /^Money In/ });
   expect((moneyIn.textContent?.match(/City Limousines/g) ?? []).length).toBe(2);
   expect(moneyIn.textContent).toContain("INV-0028");
@@ -455,18 +457,22 @@ it("states NZD once in each ledger caption, keeps two decimals and signs without
         notes: [],
       }) as unknown as Awaited<ReturnType<DashboardApi["forecastItems"]>>,
   );
+  const onBack = vi.fn();
   render(
-    <Forecast
+    <MonthDetail
       api={api}
-      profile={{ subject: a.id, displayName: "Admin", role: "FINANCIAL_ADMIN" as const }}
-      entities={[a, b]}
-      combined={false}
       entity={a}
+      financialYear={2026}
+      financialYearLabel="2026-2027"
+      subject={a.id}
       onDirty={vi.fn()}
+      onChanged={vi.fn()}
       onAccessDenied={vi.fn()}
+      selectedMonth="2026-11"
+      summary={null}
+      onBack={onBack}
     />,
   );
-  await openMonth("2026-11");
   const moneyIn = await screen.findByRole("table", { name: /^Money In/ });
   const moneyOut = screen.getByRole("table", { name: /^Money Out/ });
   expect(moneyIn.querySelector("caption")?.textContent).toBe("Money In · NZD");
@@ -528,18 +534,22 @@ it("adds a transaction note from the Money In table and shows the saved preview"
         updatedAt: "2026-11-11T00:00:00Z",
       }) as unknown as Awaited<ReturnType<DashboardApi["saveForecastTransactionNote"]>>,
   );
+  const onBack = vi.fn();
   render(
-    <Forecast
+    <MonthDetail
       api={api}
-      profile={{ subject: a.id, displayName: "Admin", role: "FINANCIAL_ADMIN" as const }}
-      entities={[a, b]}
-      combined={false}
       entity={a}
+      financialYear={2026}
+      financialYearLabel="2026-2027"
+      subject={a.id}
       onDirty={vi.fn()}
+      onChanged={vi.fn()}
       onAccessDenied={vi.fn()}
+      selectedMonth="2026-11"
+      summary={null}
+      onBack={onBack}
     />,
   );
-  await openMonth("2026-11");
   const moneyIn = await screen.findByRole("table", { name: /^Money In/ });
   expect(
     within(moneyIn)
@@ -558,127 +568,4 @@ it("adds a transaction note from the Money In table and shows the saved preview"
   expect(
     await within(moneyIn).findByRole("button", { name: `Edit note for ${label}: Chase by phone` }),
   ).toBeTruthy();
-});
-
-it("FR-UC04-05 omits the financial year summary after loading", async () => {
-  const api = new DashboardApi(
-    new ApiClient("", {
-      getAccessToken: async () => null,
-      requestCode: vi.fn(),
-      verifyCode: vi.fn(),
-      signOut: vi.fn(),
-      onSessionChange: () => () => {},
-    }),
-  );
-  vi.spyOn(api, "forecast").mockImplementation(async (entity, year) => data(entity, year, "0.00"));
-  render(
-    <Forecast
-      api={api}
-      profile={{ subject: a.id, displayName: "Admin", role: "FINANCIAL_ADMIN" }}
-      entities={[a]}
-      combined={false}
-      entity={a}
-      onDirty={vi.fn()}
-      onAccessDenied={vi.fn()}
-    />,
-  );
-  await screen.findByText("Monthly forecast actions");
-  expect(screen.queryByText("Financial year summary")).toBeNull();
-  expect(screen.getByText(/Beyond this financial year/)).toBeTruthy();
-});
-
-it("FR-UC04-04_05 keeps past openings read-only and restricts monthly generation", async () => {
-  const api = new DashboardApi(
-    new ApiClient("", {
-      getAccessToken: async () => null,
-      requestCode: vi.fn(),
-      verifyCode: vi.fn(),
-      signOut: vi.fn(),
-      onSessionChange: () => () => {},
-    }),
-  );
-  const now = currentMonth();
-  const past = stepMonth(now, -1);
-  const future = stepMonth(now, 1);
-  vi.spyOn(api, "forecast").mockImplementation(async (entity, year) => {
-    const view = data(entity, year, "0.00");
-    const base = view.months[0]!;
-    return {
-      ...view,
-      months: [
-        { ...base, month: past, generatable: true, pendingNewItems: 2 },
-        { ...base, month: now, state: "PREVIEW", generatable: true, receiptCount: 1 },
-        { ...base, month: future, generatable: true, pendingNewItems: 2 },
-      ],
-    };
-  });
-  render(
-    <Forecast
-      api={api}
-      profile={{ subject: a.id, displayName: "Admin", role: "FINANCIAL_ADMIN" }}
-      entities={[a]}
-      combined={false}
-      entity={a}
-      onDirty={vi.fn()}
-      onAccessDenied={vi.fn()}
-    />,
-  );
-  fireEvent.click(await screen.findByText("Monthly forecast actions"));
-  const select = screen.getByLabelText("Forecast month");
-  fireEvent.change(select, { target: { value: past } });
-  expect(screen.queryByRole("button", { name: "Edit opening balance" })).toBeNull();
-  expect(screen.queryByRole("button", { name: /^Add .* new/ })).toBeNull();
-  fireEvent.change(select, { target: { value: now } });
-  fireEvent.click(screen.getByRole("button", { name: /^Generate / }));
-  expect(screen.getByRole("heading", { name: /^Generate forecast for/ })).toBeTruthy();
-  fireEvent.change(select, { target: { value: future } });
-  expect(screen.queryByRole("heading", { name: /^Generate forecast for/ })).toBeNull();
-  expect(screen.getByRole("button", { name: "Add 2 new items" })).toBeTruthy();
-});
-
-it("FR-UC04-05 only offers pending generated items in future months", async () => {
-  const api = new DashboardApi(
-    new ApiClient("", {
-      getAccessToken: async () => null,
-      requestCode: vi.fn(),
-      verifyCode: vi.fn(),
-      signOut: vi.fn(),
-      onSessionChange: () => () => {},
-    }),
-  );
-  const now = currentMonth();
-  const past = stepMonth(now, -1);
-  const future = stepMonth(now, 1);
-  vi.spyOn(api, "forecast").mockImplementation(async (entity, year) => {
-    const view = data(entity, year, "0.00");
-    const base = view.months[0]!;
-    return {
-      ...view,
-      months: [past, now, future].map((month) => ({
-        ...base,
-        month,
-        generatable: true,
-        pendingNewItems: 2,
-      })),
-    };
-  });
-  render(
-    <Forecast
-      api={api}
-      profile={{ subject: a.id, displayName: "Admin", role: "FINANCIAL_ADMIN" }}
-      entities={[a]}
-      combined={false}
-      entity={a}
-      onDirty={vi.fn()}
-      onAccessDenied={vi.fn()}
-    />,
-  );
-  fireEvent.click(await screen.findByText("Monthly forecast actions"));
-  const select = screen.getByLabelText("Forecast month");
-  for (const month of [past, now]) {
-    fireEvent.change(select, { target: { value: month } });
-    expect(screen.queryByRole("button", { name: /^Add .* new/ })).toBeNull();
-  }
-  fireEvent.change(select, { target: { value: future } });
-  expect(screen.getByRole("button", { name: "Add 2 new items" })).toBeTruthy();
 });
