@@ -148,8 +148,9 @@ export async function forecastBoundary(page: Page) {
         });
         return;
       } else if (path.includes("/months/")) {
+        const selectedMonth = path.split("/").at(-2) ?? start;
         result = {
-          month: path.split("/").at(-2),
+          month: selectedMonth,
           state: "PREVIEW",
           generatable: false,
           notes: [],
@@ -163,8 +164,8 @@ export async function forecastBoundary(page: Page) {
                   category: "ACCREC",
                   number: "INV-001",
                   label: "Forecast customer",
-                  date: `${start}-15`,
-                  bucket: start,
+                  date: `${selectedMonth}-15`,
+                  bucket: selectedMonth,
                   amount: "115.00",
                   rule: "DUE_DATE",
                   overdue: false,

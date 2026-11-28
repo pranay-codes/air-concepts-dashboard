@@ -135,12 +135,15 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       .getByRole("combobox", { name: "Forecast month", exact: true })
       .selectOption("2026-11");
     await page.getByRole("button", { name: "Edit opening balance", exact: true }).click();
-    await page.getByLabel("Opening cash balance (NZD)").fill("1000.00");
+    await page.getByLabel("Opening cash balance (NZD)").fill("1200.00");
     await page.getByLabel("Balance source (optional)").fill("Synthetic statement");
     await page.getByRole("button", { name: "Save opening balance", exact: true }).click();
+    await expect.poll(() => state.opening.get(ENTITY_A)).toBe("1200.00");
     const monthTrigger = page.getByRole("button", { name: "View month", exact: true });
     await monthTrigger.click();
     await expect(page.getByRole("heading", { name: /cash forecast$/ })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Money In" }).getByText(/INV-001/)).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`uc4-detail-${width}.png`), fullPage: true });
     await page.getByRole("button", { name: "Back to forecast", exact: true }).click();
     await expect(monthTrigger).toBeFocused();
     // Exclusion is an invoice-level action on the Xero items tab.

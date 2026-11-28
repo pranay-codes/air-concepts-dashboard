@@ -548,9 +548,9 @@ it("FR-UC04-04_05 keeps past openings read-only and restricts monthly generation
     return {
       ...view,
       months: [
-        { ...base, month: past },
+        { ...base, month: past, generatable: true, pendingNewItems: 2 },
         { ...base, month: now, state: "PREVIEW", generatable: true, receiptCount: 1 },
-        { ...base, month: future, generatable: true, pendingNewItems: 0 },
+        { ...base, month: future, generatable: true, pendingNewItems: 2 },
       ],
     };
   });
@@ -569,10 +569,58 @@ it("FR-UC04-04_05 keeps past openings read-only and restricts monthly generation
   const select = screen.getByLabelText("Forecast month");
   fireEvent.change(select, { target: { value: past } });
   expect(screen.queryByRole("button", { name: "Edit opening balance" })).toBeNull();
+  expect(screen.queryByRole("button", { name: /^Add .* new/ })).toBeNull();
   fireEvent.change(select, { target: { value: now } });
   fireEvent.click(screen.getByRole("button", { name: /^Generate / }));
   expect(screen.getByRole("heading", { name: /^Generate forecast for/ })).toBeTruthy();
   fireEvent.change(select, { target: { value: future } });
   expect(screen.queryByRole("heading", { name: /^Generate forecast for/ })).toBeNull();
-  expect(screen.queryByRole("button", { name: /^Add .* new/ })).toBeNull();
+  expect(screen.getByRole("button", { name: "Add 2 new items" })).toBeTruthy();
+});
+
+it("FR-UC04-05 only offers pending generated items in future months", async () => {
+  const api = new DashboardApi(
+    new ApiClient("", {
+      getAccessToken: async () => null,
+      requestCode: vi.fn(),
+      verifyCode: vi.fn(),
+      signOut: vi.fn(),
+      onSessionChange: () => () => {},
+    }),
+  );
+  const now = currentMonth();
+  const past = stepMonth(now, -1);
+  const future = stepMonth(now, 1);
+  vi.spyOn(api, "forecast").mockImplementation(async (entity, year) => {
+    const view = data(entity, year, "0.00");
+    const base = view.months[0]!;
+    return {
+      ...view,
+      months: [past, now, future].map((month) => ({
+        ...base,
+        month,
+        generatable: true,
+        pendingNewItems: 2,
+      })),
+    };
+  });
+  render(
+    <Forecast
+      api={api}
+      profile={{ subject: a.id, displayName: "Admin", role: "FINANCIAL_ADMIN" }}
+      entities={[a]}
+      combined={false}
+      entity={a}
+      onDirty={vi.fn()}
+      onAccessDenied={vi.fn()}
+    />,
+  );
+  fireEvent.click(await screen.findByText("Monthly forecast actions"));
+  const select = screen.getByLabelText("Forecast month");
+  for (const month of [past, now]) {
+    fireEvent.change(select, { target: { value: month } });
+    expect(screen.queryByRole("button", { name: /^Add .* new/ })).toBeNull();
+  }
+  fireEvent.change(select, { target: { value: future } });
+  expect(screen.getByRole("button", { name: "Add 2 new items" })).toBeTruthy();
 });
