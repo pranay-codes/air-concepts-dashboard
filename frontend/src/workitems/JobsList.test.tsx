@@ -522,6 +522,7 @@ describe("GL-01 and GL-03 Jobs list", () => {
     render(<JobsList api={api} entity={entities[0]!} profile={profile} onAccessDenied={vi.fn()} />);
     fireEvent.click((await screen.findAllByRole("button", { name: "Q-100" }))[0]!);
     const close = await screen.findByRole("button", { name: "Close as lost" });
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Q-100" })).toHaveFocus());
     close.focus();
     fireEvent.click(close);
     const dialog = screen.getByRole("dialog", { name: "Close as lost" });
