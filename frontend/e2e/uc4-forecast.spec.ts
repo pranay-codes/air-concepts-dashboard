@@ -197,7 +197,8 @@ test("FR-UC04-06_07 failed forecast load retains context and Retry recovers", as
   await page.getByRole("button", { name: "Retry", exact: true }).click();
   await expect(page.getByRole("region", { name: "Cash forecast table" })).toBeVisible();
   await expect(page.getByRole("alert")).toHaveCount(0);
-  await expect(page.getByRole("group", { name: "Financial year" })).toBeVisible();
+  await expect(page.getByLabel("Go to month")).toBeVisible();
+  await expect(page.getByRole("group", { name: "Financial year" })).toHaveCount(0);
 });
 test("FR-UC04-03_13 manual and staffing edits, deactivation and entity selection", async ({
   page,
