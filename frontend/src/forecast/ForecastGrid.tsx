@@ -55,6 +55,7 @@ export function ForecastGrid(props: {
           <button
             type="button"
             aria-label="Previous month"
+            title="Previous month"
             onClick={() => setStart((value) => stepMonth(value, -1))}
           >
             ‹
@@ -62,6 +63,7 @@ export function ForecastGrid(props: {
           <button
             type="button"
             aria-label="Next month"
+            title="Next month"
             onClick={() => setStart((value) => stepMonth(value, 1))}
           >
             ›
