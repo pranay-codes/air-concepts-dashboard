@@ -7,6 +7,7 @@ import { Failure, Loading } from "../ui/Feedback";
 import { formatDecimal } from "../ui/format";
 import { cents, decimal } from "./contracts";
 import { TransactionNoteEditor } from "./TransactionNoteEditor";
+import { ManualGridActions } from "./ManualGridActions";
 import { currentMonth } from "./ForecastHeader";
 import { monthName, signClass } from "./ForecastTable";
 
@@ -638,6 +639,10 @@ function FragmentRows({
                   });
               }}
             >
+              <div className="forecast-grid-manual-heading">
+                <h3>Add a manual {direction === "IN" ? "receipt" : "payment"}</h3>
+                <p>Enter the amount and choose where the line appears in the forecast.</p>
+              </div>
               <label>
                 Description{" "}
                 <input
@@ -693,8 +698,8 @@ function FragmentRows({
                 </select>
               </label>
               <div className="forecast-grid-manual-actions">
-                <button type="submit" disabled={manualAction.busy}>
-                  Save line
+                <button type="submit" className="primary" disabled={manualAction.busy}>
+                  {manualAction.busy ? "Saving…" : "Save line"}
                 </button>
                 <button type="button" onClick={() => setAdding(false)}>
                   Cancel
@@ -773,6 +778,17 @@ function FragmentRows({
                 <th scope="row">
                   <div className="forecast-grid-item">
                     <span>{row.contact}</span>
+                    {row.source === "MANUAL" &&
+                    Object.keys(row.amounts).some((month) => month >= currentMonth()) ? (
+                      <ManualGridActions
+                        api={api}
+                        entityId={entityId}
+                        itemId={row.documentId}
+                        label={row.contact}
+                        onSaved={onSaved}
+                        onAccessDenied={onAccessDenied}
+                      />
+                    ) : null}
                     <TransactionNoteEditor
                       label={row.source === "COMPANY" ? `${row.company} company` : row.contact}
                       note={

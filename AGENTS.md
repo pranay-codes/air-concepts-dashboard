@@ -1,6 +1,7 @@
 # Air Concepts Financial Admin Dashboard: Agent Rules
 
 ## Learned Rules
+- The forecast manual-line form should stand out from the grid while retaining a compact, consistent layout (human correction, 28 November 2026).
 - Forecast cell editing should use compact controls and support Enter to save and Escape to cancel (human correction, 28 November 2026).
 - Forecast grid values and blank dashes are the edit targets; do not show separate Edit buttons beside amounts (human correction, 28 November 2026).
 - Forecast amounts, including blanks, are editable for current and future months; past months are read-only. Company overrides are independent of individual rows and determine the company contribution to totals (human clarification, 27 November 2026).

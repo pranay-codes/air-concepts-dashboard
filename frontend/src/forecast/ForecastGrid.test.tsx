@@ -250,6 +250,11 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
   expect(screen.getByText("Unknown contact - INV-901")).toBeInTheDocument();
   expect(screen.getByText("Unknown contact - INV-902")).toBeInTheDocument();
   expect(screen.getByRole("row", { name: /Old manual name/ })).toHaveTextContent("8.00");
+  expect(screen.getByRole("button", { name: "Edit Existing manual" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Remove Existing manual" })).toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Edit Supplier B - BILL-456" }),
+  ).not.toBeInTheDocument();
   expect(screen.getByRole("row", { name: /Existing manual/ }).nextElementSibling).toBe(
     company.closest("tr"),
   );
