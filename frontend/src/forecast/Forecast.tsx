@@ -41,8 +41,8 @@ type ForecastTab = (typeof tabs)[number];
 const tabId = (name: ForecastTab) => `forecast-tab-${name.toLowerCase().replace(/\s+/g, "-")}`;
 function EntityForecast(props: Props & { entity: Entity }) {
   const { api, entity, onDirty: notifyDirty, onAccessDenied } = props;
-  // null asks the server for the financial year that contains today; navigation then uses the year it reports.
-  const [requestedYear, setRequestedYear] = useState<number | null>(null);
+  // The server selects the current financial year.
+  const requestedYear = null;
   const [tab, setTab] = useState<(typeof tabs)[number]>("Forecast");
   const [dialog, setDialog] = useState<"export" | null>(null);
   const [revision, setRevision] = useState(0);
@@ -112,20 +112,12 @@ function EntityForecast(props: Props & { entity: Entity }) {
     const name = tabs[next];
     if (!name) return;
     event.preventDefault();
-    // `document` is shadowed by the dirty-document state above, so the DOM lookup uses window.document.
     if (selectTab(name)) window.document.getElementById(tabId(name))?.focus();
   }
   return (
     <div aria-busy={resource.status === "loading" || resource.status === "refreshing"}>
       <ForecastHeader
         entityName={props.entity.displayName}
-        financialYearLabel={resource.data?.financialYearLabel ?? null}
-        canStep={loadedYear !== null}
-        onStep={(delta) => {
-          if (loadedYear === null || !canLeave()) return;
-          leaveCurrentView();
-          setRequestedYear(loadedYear + delta);
-        }}
         lastSync={resource.data?.lastSuccessfulSyncAt}
         stale={resource.data?.syncStale}
         busy={action.busy}

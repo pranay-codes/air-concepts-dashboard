@@ -35,7 +35,7 @@ function data(entityId: string, year: number | null, amount: string): ForecastVi
     exceptions: [],
     beyondWindow: { receipts: amount, payments: "0.00" },
     exclusions: [],
-    lastSuccessfulSyncAt: "2026-11-10T00:00:00Z",
+    lastSuccessfulSyncAt: `2026-11-${amount === "111.00" ? "11" : amount === "222.00" ? "22" : amount === "333.00" ? "23" : "10"}T00:00:00Z`,
     lastRun: { status: "SUCCEEDED" },
     syncStale: false,
     openingBalanceSource: "Statement",
@@ -64,6 +64,9 @@ it("FR-UC04-05 shows only the rolling grid and keeps forecast tabs", async () =>
     />,
   );
   await screen.findByRole("button", { name: "Create forecast" });
+  expect(screen.queryByRole("group", { name: "Financial year" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Previous month" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Next month" })).toBeTruthy();
   for (const name of ["Forecast", "Xero items", "Manual items", "Staffing", "History"])
     expect(screen.getByRole("tab", { name })).toBeTruthy();
   for (const text of [
@@ -127,14 +130,14 @@ it("FR-UC04-13 clears the previous entity synchronously while the next entity is
     onAccessDenied: vi.fn(),
   };
   const view = render(<Forecast {...common} entity={a} />);
-  await screen.findAllByText(/111\.00/);
+  await screen.findAllByText(/11 Nov 2026/);
   view.rerender(<Forecast {...common} entity={b} />);
-  expect(screen.queryAllByText(/111\.00/)).toHaveLength(0);
+  expect(screen.queryAllByText(/11 Nov 2026/)).toHaveLength(0);
   await waitFor(() => expect(resolveB).toBeDefined());
   await act(async () => {
     resolveB?.(data(b.id, bYear, "222.00"));
   });
-  expect(await screen.findAllByText(/222\.00/)).not.toHaveLength(0);
+  expect(await screen.findAllByText(/22 Nov 2026/)).not.toHaveLength(0);
 });
 it("FR-UC04-22 exposes section navigation as tabs with a labelled panel and arrow-key switching", async () => {
   const api = new DashboardApi(
@@ -160,7 +163,7 @@ it("FR-UC04-22 exposes section navigation as tabs with a labelled panel and arro
       onAccessDenied={vi.fn()}
     />,
   );
-  await screen.findAllByText(/111\.00/);
+  await screen.findAllByText(/11 Nov 2026/);
   const tablist = screen.getByRole("tablist", { name: "Forecast sections" });
   const forecastTab = within(tablist).getByRole("tab", { name: "Forecast" });
   const xeroTab = within(tablist).getByRole("tab", { name: "Xero items" });
@@ -186,7 +189,7 @@ it("FR-UC04-22 exposes section navigation as tabs with a labelled panel and arro
   expect(forecastTab.getAttribute("aria-selected")).toBe("true");
 });
 
-for (const switchContext of ["entity", "period"] as const) {
+for (const switchContext of ["entity", "tab"] as const) {
   it(`FR-UC04-13_05 aborts ${switchContext} requests and discards their late responses`, async () => {
     const api = new DashboardApi(
       new ApiClient("", {
@@ -201,7 +204,7 @@ for (const switchContext of ["entity", "period"] as const) {
     let oldYear: number | null = null;
     let oldSignal: AbortSignal | undefined;
     let calls = 0;
-    // The superseded request is the first call for an entity switch, and the second call (after the first load) for a period switch.
+    // The superseded request is the first call for an entity switch, and the second call (after the first load) for a tab switch.
     const pendingCall = switchContext === "entity" ? 1 : 2;
     vi.spyOn(api, "forecast").mockImplementation(async (entity, year, signal) => {
       calls += 1;
@@ -227,19 +230,19 @@ for (const switchContext of ["entity", "period"] as const) {
       await waitFor(() => expect(finishOld).toBeDefined());
       view.rerender(<Forecast {...common} entity={b} />);
     } else {
-      await screen.findAllByText(/111\.00/);
-      fireEvent.click(screen.getByRole("button", { name: "Previous financial year" }));
+      await screen.findAllByText(/11 Nov 2026/);
+      fireEvent.click(screen.getByRole("tab", { name: "Xero items" }));
       await waitFor(() => expect(finishOld).toBeDefined());
-      fireEvent.click(screen.getByRole("button", { name: "Next financial year" }));
+      fireEvent.click(screen.getByRole("tab", { name: "Forecast" }));
     }
-    await screen.findAllByText(/222\.00/);
+    await screen.findAllByText(/22 Nov 2026/);
     expect(oldSignal?.aborted).toBe(true);
-    if (switchContext === "period") expect(oldYear).toBe(2025);
+    if (switchContext === "tab") expect(oldYear).toBeNull();
     await act(async () => {
       finishOld?.(data(a.id, oldYear, "333.00"));
     });
-    expect(screen.queryAllByText(/333\.00/)).toHaveLength(0);
-    expect(screen.getAllByText(/222\.00/)).not.toHaveLength(0);
+    expect(screen.queryAllByText(/23 Nov 2026/)).toHaveLength(0);
+    expect(screen.getAllByText(/22 Nov 2026/)).not.toHaveLength(0);
   });
 }
 it("FR-UC04-20 opens a month as a full page listing Xero invoices with due dates and a total", async () => {
