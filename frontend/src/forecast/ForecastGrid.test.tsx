@@ -352,7 +352,11 @@ it("shows customer and supplier rows and refreshes only after creation succeeds"
   fireEvent.click(screen.getByRole("button", { name: "Create forecast" }));
   await screen.findByText(/Future months have been refreshed/);
   await waitFor(() => expect(grid).toHaveBeenCalledTimes(4));
-  fireEvent.click(screen.getByRole("button", { name: "Add manual line to Money In" }));
+  const addLine = screen.getByRole("button", { name: "Add manual line to Money In" });
+  expect(addLine).toHaveAttribute("aria-expanded", "false");
+  fireEvent.click(addLine);
+  expect(addLine).toHaveAttribute("aria-expanded", "true");
+  expect(screen.getByRole("form", { name: "Add manual line to Money In" })).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Description"), { target: { value: "Deposit" } });
   fireEvent.change(screen.getByLabelText("Amount (NZD)"), { target: { value: "75.00" } });
   fireEvent.change(screen.getByLabelText("Place before"), {

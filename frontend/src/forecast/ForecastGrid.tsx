@@ -582,8 +582,10 @@ function FragmentRows({
           {direction === "IN" ? "Money In" : "Money Out"}{" "}
           <button
             type="button"
+            className="forecast-grid-add-line"
             aria-label={`Add manual line to ${direction === "IN" ? "Money In" : "Money Out"}`}
-            onClick={() => setAdding(true)}
+            aria-expanded={adding}
+            onClick={() => setAdding(!adding)}
           >
             Add manual line
           </button>
@@ -594,6 +596,7 @@ function FragmentRows({
           <td colSpan={9}>
             <form
               className="forecast-grid-manual"
+              aria-label={`Add manual line to ${direction === "IN" ? "Money In" : "Money Out"}`}
               onSubmit={(event) => {
                 event.preventDefault();
                 const value = decimal(amount);
@@ -689,12 +692,14 @@ function FragmentRows({
                   ))}
                 </select>
               </label>
-              <button type="submit" disabled={manualAction.busy}>
-                Save line
-              </button>
-              <button type="button" onClick={() => setAdding(false)}>
-                Cancel
-              </button>
+              <div className="forecast-grid-manual-actions">
+                <button type="submit" disabled={manualAction.busy}>
+                  Save line
+                </button>
+                <button type="button" onClick={() => setAdding(false)}>
+                  Cancel
+                </button>
+              </div>
               {validation ? <p role="alert">{validation}</p> : null}
               {manualAction.error ? <Failure error={manualAction.error} /> : null}
             </form>
