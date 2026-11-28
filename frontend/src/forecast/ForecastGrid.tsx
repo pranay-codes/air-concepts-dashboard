@@ -66,6 +66,17 @@ export function ForecastGrid(props: {
           >
             ›
           </button>
+          <label className="forecast-month-picker">
+            Go to month
+            <input
+              type="month"
+              value={start}
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                if (/^\d{4}-(0[1-9]|1[0-2])$/.test(value)) setStart(value);
+              }}
+            />
+          </label>
         </div>
         <button
           type="button"

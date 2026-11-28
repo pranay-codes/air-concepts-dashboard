@@ -12,6 +12,41 @@ describe("forecast grid month navigation", () => {
   });
 });
 
+it("FR-UC04-05 jumps to a selected month and keeps the month arrows in sync", async () => {
+  const api = new DashboardApi(
+    new ApiClient("", {
+      getAccessToken: async () => null,
+      requestCode: vi.fn(),
+      verifyCode: vi.fn(),
+      signOut: vi.fn(),
+      onSessionChange: () => () => {},
+    }),
+  );
+  const grid = vi.spyOn(api, "forecastGrid").mockImplementation(() => new Promise(() => {}));
+  render(
+    <ForecastGrid
+      api={api}
+      entityId="entity-a"
+      subject="user"
+      revision={0}
+      onAccessDenied={vi.fn()}
+      onChanged={vi.fn()}
+    />,
+  );
+  const picker = screen.getByLabelText("Go to month");
+  fireEvent.change(picker, { target: { value: "2024-11" } });
+  await waitFor(() =>
+    expect(grid).toHaveBeenLastCalledWith("entity-a", "2024-11", expect.any(AbortSignal)),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Next month" }));
+  await waitFor(() =>
+    expect(grid).toHaveBeenLastCalledWith("entity-a", "2024-12", expect.any(AbortSignal)),
+  );
+  expect(picker).toHaveValue("2024-12");
+  fireEvent.change(picker, { target: { value: "" } });
+  expect(picker).toHaveValue("2024-12");
+});
+
 it("frUc04_15 explains why current-month items were not added", async () => {
   const api = new DashboardApi(
     new ApiClient("", {
