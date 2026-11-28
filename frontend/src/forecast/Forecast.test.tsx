@@ -305,7 +305,7 @@ it("FR-UC04-20 opens a month as a full page listing Xero invoices with due dates
   );
   expect(await screen.findByRole("heading", { name: /cash forecast$/ })).toBeTruthy();
   expect(screen.queryByText("12-month cash forecast · NZD, GST-inclusive")).toBeNull();
-  const moneyIn = screen.getByRole("table", { name: /^Money In/ });
+  const moneyIn = await screen.findByRole("table", { name: /^Money In/ });
   expect(moneyIn.textContent).toContain("INV-0028 · City Limousines");
   expect(moneyIn.textContent).toContain("Was due 25 Nov 2026 (overdue)");
   expect(moneyIn.textContent).toContain("Total Money In");
