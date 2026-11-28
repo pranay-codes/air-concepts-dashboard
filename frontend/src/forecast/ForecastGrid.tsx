@@ -7,6 +7,7 @@ import { Failure, Loading } from "../ui/Feedback";
 import { formatDecimal } from "../ui/format";
 import { cents, decimal } from "./contracts";
 import { TransactionNoteEditor } from "./TransactionNoteEditor";
+import { ManualGridActions } from "./ManualGridActions";
 import { currentMonth } from "./ForecastHeader";
 import { monthName, signClass } from "./ForecastTable";
 
@@ -773,6 +774,17 @@ function FragmentRows({
                 <th scope="row">
                   <div className="forecast-grid-item">
                     <span>{row.contact}</span>
+                    {row.source === "MANUAL" &&
+                    Object.keys(row.amounts).some((month) => month >= currentMonth()) ? (
+                      <ManualGridActions
+                        api={api}
+                        entityId={entityId}
+                        itemId={row.documentId}
+                        label={row.contact}
+                        onSaved={onSaved}
+                        onAccessDenied={onAccessDenied}
+                      />
+                    ) : null}
                     <TransactionNoteEditor
                       label={row.source === "COMPANY" ? `${row.company} company` : row.contact}
                       note={

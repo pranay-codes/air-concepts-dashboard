@@ -751,6 +751,12 @@
   white-space: normal;
   overflow-wrap: anywhere;
 }
+.forecast-grid-manual-action {
+  min-height: 1.5rem;
+  padding: 0 0.25rem;
+  font-size: inherit;
+  line-height: 1.2;
+}
 .forecast-grid-disclosure {
   min-height: 24px;
   padding: 0 0.2rem;
