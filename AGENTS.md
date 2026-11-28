@@ -1,6 +1,7 @@
 # Air Concepts Financial Admin Dashboard: Agent Rules
 
 ## Learned Rules
+- Manual forecast row edit and remove actions should be visually subtle while remaining visible and accessible (human correction, 28 November 2026).
 - The forecast manual-line form should stand out from the grid while retaining a compact, consistent layout (human correction, 28 November 2026).
 - Forecast cell editing should use compact controls and support Enter to save and Escape to cancel (human correction, 28 November 2026).
 - Forecast grid values and blank dashes are the edit targets; do not show separate Edit buttons beside amounts (human correction, 28 November 2026).

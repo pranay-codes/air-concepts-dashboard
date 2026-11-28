@@ -764,10 +764,26 @@
   overflow-wrap: anywhere;
 }
 .forecast-grid-manual-action {
+  min-width: 1.5rem;
   min-height: 1.5rem;
   padding: 0 0.25rem;
-  font-size: inherit;
+  border: 0;
+  background: transparent;
+  color: var(--accent, #0f6b7f);
+  font: inherit;
+  font-weight: 400;
   line-height: 1.2;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.forecast-grid-manual-action:hover:not(:disabled) {
+  background: var(--selected, #e7f2f5);
+  text-decoration-style: solid;
+}
+.forecast-grid-manual-action:disabled {
+  color: var(--secondary, #5f6c72);
+  background: transparent;
+  text-decoration: none;
 }
 .forecast-grid-disclosure {
   min-height: 24px;
