@@ -7,7 +7,7 @@ import { useResource } from "../api/useResource";
 import { useAction } from "../api/useAction";
 import { Loading, Failure, Notice } from "../ui/Feedback";
 import { formatMoney } from "../ui/format";
-import { ForecastTable } from "./ForecastTable";
+import { monthName } from "./ForecastTable";
 import { ForecastGrid } from "./ForecastGrid";
 import { currentMonth, ForecastHeader } from "./ForecastHeader";
 import { GenerationReview } from "./GenerationReview";
@@ -76,6 +76,8 @@ function EntityForecast(props: Props & { entity: Entity }) {
   } | null>(null);
   const [document, setDocument] = useState<{ id: string; mode: AdjustmentMode } | null>(null);
   const [review, setReview] = useState<ForecastMonth | null>(null);
+  const [actionMonth, setActionMonth] = useState<string>(currentMonth());
+  const [actionsOpen, setActionsOpen] = useState(false);
   const [revision, setRevision] = useState(0);
   const [dirty, setDirty] = useState(false);
   const onDirty = useCallback(
@@ -261,56 +263,118 @@ function EntityForecast(props: Props & { entity: Entity }) {
                   onAccessDenied={onAccessDenied}
                   onChanged={changed}
                 />
-                <details open>
-                  <summary>Financial year summary</summary>
-                  {review ? (
-                    <GenerationReview
-                      month={review}
-                      busy={generation.busy}
-                      error={generation.error}
-                      onConfirm={() => confirmGeneration(review)}
-                      onCancel={() => setReview(null)}
-                    />
-                  ) : null}
-                  <ForecastTable
-                    months={resource.data.months}
-                    onOpen={(value) => {
-                      monthOpener.current = window.document.activeElement as HTMLElement | null;
-                      setSelectedMonth(value);
-                    }}
-                    onOpening={(month) => {
-                      setOpeningMonth(month);
-                      setDialog("opening");
-                    }}
-                    onGenerate={(month) => setReview(month)}
-                    canGenerate={(month) =>
-                      month.state === "PREVIEW" || month.month > currentMonth()
-                    }
-                  />
-                  <p>
-                    Beyond this financial year: money in{" "}
-                    {formatMoney(resource.data.beyondWindow.receipts, "NZD")}, money out{" "}
-                    {formatMoney(resource.data.beyondWindow.payments, "NZD")}.
-                  </p>
-                  {resource.data.exclusions.length ? (
-                    <details className="forecast-panel">
-                      <summary>Excluded documents ({resource.data.exclusions.length})</summary>
-                      {resource.data.exclusions.map((row) => (
-                        <p key={row.documentId}>
-                          {row.number ?? row.documentId}: {row.reason}{" "}
-                          {row.documentId ? (
-                            <button
-                              type="button"
-                              onClick={() => setDocument({ id: row.documentId!, mode: "exclude" })}
-                            >
-                              Include again
-                            </button>
-                          ) : null}
-                        </p>
+                <details
+                  className="forecast-panel"
+                  open={actionsOpen}
+                  onToggle={(event) => setActionsOpen(event.currentTarget.open)}
+                >
+                  <summary>Monthly forecast actions</summary>
+                  <label>
+                    Forecast month{" "}
+                    <select
+                      disabled={generation.busy}
+                      value={
+                        resource.data.months.some((row) => row.month === actionMonth)
+                          ? actionMonth
+                          : (resource.data.months[0]?.month ?? "")
+                      }
+                      onChange={(event) => {
+                        setActionMonth(event.target.value);
+                        setReview(null);
+                      }}
+                    >
+                      {resource.data.months.map((month) => (
+                        <option key={month.month} value={month.month}>
+                          {monthName(month.month)}
+                        </option>
                       ))}
-                    </details>
-                  ) : null}
+                    </select>
+                  </label>{" "}
+                  {(() => {
+                    const month =
+                      resource.data.months.find((row) => row.month === actionMonth) ??
+                      resource.data.months[0];
+                    if (!month) return null;
+                    return (
+                      <>
+                        <button
+                          type="button"
+                          data-forecast-month={month.month}
+                          onClick={() => {
+                            monthOpener.current = window.document
+                              .activeElement as HTMLElement | null;
+                            setSelectedMonth(month.month);
+                          }}
+                        >
+                          View month
+                        </button>{" "}
+                        {month.month >= currentMonth() ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpeningMonth(month);
+                              setDialog("opening");
+                            }}
+                          >
+                            Edit opening balance
+                          </button>
+                        ) : null}{" "}
+                        <p>
+                          {month.state === "PREVIEW"
+                            ? "Preview"
+                            : month.state === "GENERATED"
+                              ? "Generated"
+                              : "Not generated"}
+                          {month.containsOverdue ? " - Includes overdue cash" : ""}
+                          {month.closing?.startsWith("-") ? " - Negative closing balance" : ""}
+                        </p>
+                        {month.generatable &&
+                        (month.state === "PREVIEW" ||
+                          (month.state === "GENERATED" &&
+                            month.month > currentMonth() &&
+                            month.pendingNewItems > 0)) ? (
+                          <button type="button" onClick={() => setReview(month)}>
+                            {month.state === "PREVIEW"
+                              ? `Generate ${monthName(month.month)}`
+                              : `Add ${month.pendingNewItems} new ${month.pendingNewItems === 1 ? "item" : "items"}`}
+                          </button>
+                        ) : null}
+                      </>
+                    );
+                  })()}
                 </details>
+                {review ? (
+                  <GenerationReview
+                    month={review}
+                    busy={generation.busy}
+                    error={generation.error}
+                    onConfirm={() => confirmGeneration(review)}
+                    onCancel={() => setReview(null)}
+                  />
+                ) : null}
+                <p>
+                  Beyond this financial year: money in{" "}
+                  {formatMoney(resource.data.beyondWindow.receipts, "NZD")}, money out{" "}
+                  {formatMoney(resource.data.beyondWindow.payments, "NZD")}.
+                </p>
+                {resource.data.exclusions.length ? (
+                  <details className="forecast-panel">
+                    <summary>Excluded documents ({resource.data.exclusions.length})</summary>
+                    {resource.data.exclusions.map((row) => (
+                      <p key={row.documentId}>
+                        {row.number ?? row.documentId}: {row.reason}{" "}
+                        {row.documentId ? (
+                          <button
+                            type="button"
+                            onClick={() => setDocument({ id: row.documentId!, mode: "exclude" })}
+                          >
+                            Include again
+                          </button>
+                        ) : null}
+                      </p>
+                    ))}
+                  </details>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -341,8 +405,7 @@ function EntityForecast(props: Props & { entity: Entity }) {
         <p>
           Money in and money out use outstanding Xero balances and the forecast dates shown in each
           month. Split schedules replace the single document amount. Excluded items contribute
-          nothing. In the financial year summary, overdue cash is placed in the month that is
-          current when that month is generated.
+          nothing.
         </p>
         <p>
           The invoice and bill grid keeps past snapshots unchanged and refreshes future snapshots
@@ -350,8 +413,7 @@ function EntityForecast(props: Props & { entity: Entity }) {
           items stay as they are, and unpaid items due that month or overdue are added. From day 11,
           the current month is not created or changed. In the last 10 days, everything still overdue
           is also added to the next month. An item can then appear in both months and count in both
-          balances; enter the next month&apos;s opening bank balance to avoid counting it twice. The
-          financial year summary uses its existing separately generated monthly forecasts.
+          balances; enter the next month&apos;s opening bank balance to avoid counting it twice.
         </p>
         <p>
           Manual cash amounts and gross staffing costs are GST-inclusive where GST applies; tax is

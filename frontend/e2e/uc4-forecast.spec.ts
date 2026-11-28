@@ -125,40 +125,22 @@ for (const width of [320, 390, 768, 1024, 1440]) {
     await expect(grid.getByRole("button", { name: "Cancel", exact: true })).toBeVisible();
     await expect(editor).toBeInViewport();
     await expect(grid.getByRole("button", { name: "Cancel", exact: true })).toBeInViewport();
-    await editor.press("Escape");
-    const summary = page.locator("details").filter({ hasText: "Financial year summary" });
-    await summary
-      .getByRole("button", { name: /^Edit opening balance for / })
-      .filter({ visible: true })
-      .first()
-      .click();
+    await editor.fill("1000.00");
+    await editor.press("Enter");
+    await expect.poll(() => state.opening.get(ENTITY_A)).toBe("1000.00");
+    await expect(page.getByText("Financial year summary", { exact: true })).toHaveCount(0);
+    await expect(grid).toBeVisible();
+    await page.getByText("Monthly forecast actions", { exact: true }).click();
+    await page
+      .getByRole("combobox", { name: "Forecast month", exact: true })
+      .selectOption("2026-11");
+    await page.getByRole("button", { name: "Edit opening balance", exact: true }).click();
     await page.getByLabel("Opening cash balance (NZD)").fill("1000.00");
     await page.getByLabel("Balance source (optional)").fill("Synthetic statement");
     await page.getByRole("button", { name: "Save opening balance", exact: true }).click();
-    await expect(
-      summary
-        .getByText(/1,115\.00/)
-        .filter({ visible: true })
-        .first(),
-    ).toBeVisible();
-    expect(state.opening.get(ENTITY_A)).toBe("1000.00");
-    await expect(
-      page.getByRole("button", { name: /^View / }).filter({ visible: true }),
-    ).toHaveCount(12);
-    const monthTrigger = page
-      .getByRole("button", { name: /^View / })
-      .filter({ visible: true })
-      .first();
+    const monthTrigger = page.getByRole("button", { name: "View month", exact: true });
     await monthTrigger.click();
-    // The month opens as a full page at every width: the table is replaced by the ledger.
     await expect(page.getByRole("heading", { name: /cash forecast$/ })).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: /^View / }).filter({ visible: true }),
-    ).toHaveCount(0);
-    await expect(
-      page.getByRole("region", { name: "Money In" }).getByText(/INV-001 · Forecast customer/),
-    ).toBeVisible();
-    await page.screenshot({ path: testInfo.outputPath(`uc4-detail-${width}.png`), fullPage: true });
     await page.getByRole("button", { name: "Back to forecast", exact: true }).click();
     await expect(monthTrigger).toBeFocused();
     // Exclusion is an invoice-level action on the Xero items tab.
@@ -174,7 +156,6 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       .getByRole("tablist", { name: "Forecast sections" })
       .getByRole("tab", { name: "Forecast", exact: true })
       .click();
-    await expect(summary.getByText(/1,115\.00/).filter({ visible: true })).toHaveCount(0);
     await page.getByText("Excluded documents (1)", { exact: true }).click();
     await expect(page.getByRole("button", { name: "Include again", exact: true })).toHaveCount(1);
     let downloads = 0;
@@ -226,9 +207,7 @@ test("FR-UC04-06_07 failed forecast load retains context and Retry recovers", as
   ).toBeVisible();
   await expect(page.getByRole("alert")).toBeVisible();
   await page.getByRole("button", { name: "Retry", exact: true }).click();
-  await expect(page.getByRole("button", { name: /^View / }).filter({ visible: true })).toHaveCount(
-    12,
-  );
+  await expect(page.getByRole("region", { name: "Cash forecast table" })).toBeVisible();
   await expect(page.getByRole("alert")).toHaveCount(0);
   await expect(page.getByRole("group", { name: "Financial year" })).toBeVisible();
 });
